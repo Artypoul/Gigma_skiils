@@ -5,7 +5,7 @@
 - **Claude Code** — через маркетплейс `.claude-plugin/marketplace.json` → плагины в `plugins/`.
 - **Codex** — через папку **`.codex/skills/`** (маркетплейс Codex не читает). Эти скилы — **копии** плагинов из `plugins/`.
 
-**Канон — `plugins/`.** `.codex/skills/` и `.codex/reference/` держать в синхроне с ним при правках (формат `SKILL.md` одинаковый, поэтому копия 1:1).
+**Канон — `plugins/`.** `.codex/skills/` и `.codex/reference/` — зеркало; синхронизировать одной командой: **`bash sync-codex.sh`** (пересобирает `.codex` из `plugins/`).
 
 ## Роли (скилы в `.codex/skills/`)
 
@@ -15,7 +15,7 @@
 - Фазы: `ecommerce-discovery`, `ecommerce-solution-fit`, `ecommerce-commercial-proposal`, `ecommerce-launch-plan`.
 - Факты сервиса: `.codex/reference/ecommerce-capabilities.md`.
 - Канон API Gigma (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt
-- Операционные «руки» (создание тенанта, загрузка каталога) — плагин `gigma-erp` (его скилы тоже в `plugins/`).
+- Операционные «руки»: скилы `create-tenant`, `load-nomenclature` (плагин `gigma-erp`) — тоже зеркалятся в `.codex/skills/`.
 
 ### Консультант для пользователей VPN-сервиса «Твой ВПС»
 Помогает подключить VPN и решить проблемы, при поломке — эскалирует в Telegram **@artypoul**.
