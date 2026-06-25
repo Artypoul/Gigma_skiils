@@ -11,6 +11,11 @@
       "name": "gigma-erp",
       "source": "./plugins/gigma-erp",
       "description": "Операционные скилы Gigma ERP: создание тенанта (проекта) и загрузка справочников номенклатуры через API."
+    },
+    {
+      "name": "gigma-consultant",
+      "source": "./plugins/gigma-consultant",
+      "description": "Роль «Консультант по интернет-магазинам (e-commerce)» для Codex: полный цикл от выявления потребностей до запуска магазина на Gigma — discovery, подбор решения, КП, план внедрения. Передаёт технику операционным скилам gigma-erp."
     }
   ]
 }

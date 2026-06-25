@@ -1,0 +1,5 @@
+{
+  "name": "gigma-consultant",
+  "description": "Роль «Консультант Gigma по интернет-магазинам (e-commerce)»: полный цикл от выявления потребностей до запущенного магазина. Скилы — ecommerce-consultant (дирижёр-персона), ecommerce-discovery (бриф), ecommerce-solution-fit (подбор решения + архитектура), ecommerce-commercial-proposal (КП), ecommerce-launch-plan (план запуска). Опирается на reference/ecommerce-capabilities.md и передаёт технику операционным скилам плагина gigma-erp.",
+  "version": "0.1.0"
+}
