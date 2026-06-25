@@ -87,3 +87,9 @@ Headless-архитектура: API api.gigma.ru + витрина-сайт + Yo
 ## Что дальше
 
 КП согласовано → скил **ecommerce-launch-plan**: разложить состав работ в пошаговый запуск и передать в операционные скилы.
+
+## Документация Gigma
+
+- Портал: https://artypoul-docs-gigma-7b80.twc1.net
+- Правила для агента (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt
+- OpenAPI: https://artypoul-docs-gigma-7b80.twc1.net/openapi.json · Swagger «Try It»: https://artypoul-docs-gigma-7b80.twc1.net/api-docs/

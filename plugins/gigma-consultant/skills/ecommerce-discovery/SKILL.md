@@ -72,3 +72,9 @@ allowed-tools: Read Write
 ## Что дальше
 
 Бриф готов → переходи к скилу **ecommerce-solution-fit**: разложить эти ответы на конкретные возможности Gigma и честно отметить ограничения.
+
+## Документация Gigma
+
+- Портал: https://artypoul-docs-gigma-7b80.twc1.net
+- Правила для агента (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt
+- OpenAPI: https://artypoul-docs-gigma-7b80.twc1.net/openapi.json · Swagger «Try It»: https://artypoul-docs-gigma-7b80.twc1.net/api-docs/

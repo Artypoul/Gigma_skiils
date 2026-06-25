@@ -68,3 +68,9 @@ allowed-tools: Read Grep Bash Write
 ## Что дальше
 
 Магазин развёрнут и тестовый заказ прошёл → вернуться к роли **ecommerce-consultant** для сопровождения / следующего этапа с клиентом.
+
+## Документация Gigma
+
+- Портал: https://artypoul-docs-gigma-7b80.twc1.net
+- Правила для агента (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt · сценарий §17.3, тела §18, баги §19
+- OpenAPI: https://artypoul-docs-gigma-7b80.twc1.net/openapi.json · Swagger «Try It»: https://artypoul-docs-gigma-7b80.twc1.net/api-docs/

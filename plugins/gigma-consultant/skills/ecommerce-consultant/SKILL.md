@@ -52,3 +52,9 @@ Gigma — **headless** платформа: один бэкенд `https://api.gi
 - Этапы 1 и 6 исполняют скилы `create-tenant` и `load-nomenclature` из **отдельного плагина `gigma-erp`** — он должен быть установлен рядом; без него «руки» недоступны.
 - Реальную **стоимость** Gigma не выдумывай — в КП это поле согласуется с прайсом Gigma/владельцем (см. ecommerce-commercial-proposal).
 - Точные контракты API — всегда из канонических источников (`erp-rules.txt`, `openapi.json`), не из памяти.
+
+## Документация Gigma
+
+- Портал: https://artypoul-docs-gigma-7b80.twc1.net
+- Правила для агента (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt
+- OpenAPI: https://artypoul-docs-gigma-7b80.twc1.net/openapi.json · Swagger «Try It»: https://artypoul-docs-gigma-7b80.twc1.net/api-docs/

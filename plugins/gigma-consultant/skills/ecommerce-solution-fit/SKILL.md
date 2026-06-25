@@ -71,3 +71,9 @@ Gigma — **headless**: «движок» отдельно, «витрина» о
 ## Что дальше
 
 Решение согласовано по сути → скил **ecommerce-commercial-proposal** (оформить в КП). Клиент готов запускаться → **ecommerce-launch-plan**.
+
+## Документация Gigma
+
+- Портал: https://artypoul-docs-gigma-7b80.twc1.net
+- Правила для агента (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt
+- OpenAPI: https://artypoul-docs-gigma-7b80.twc1.net/openapi.json · Swagger «Try It»: https://artypoul-docs-gigma-7b80.twc1.net/api-docs/
