@@ -1,0 +1,16 @@
+{
+  "name": "gigma-skills",
+  "owner": {
+    "name": "Artypoul"
+  },
+  "metadata": {
+    "description": "Открытый маркетплейс скилов Gigma для импорта в проекты — операционные runbook'и по работе с Gigma ERP (api.gigma.ru)."
+  },
+  "plugins": [
+    {
+      "name": "gigma-erp",
+      "source": "./plugins/gigma-erp",
+      "description": "Операционные скилы Gigma ERP: создание тенанта (проекта) и загрузка справочников номенклатуры через API."
+    }
+  ]
+}
