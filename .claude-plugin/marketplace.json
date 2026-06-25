@@ -16,6 +16,11 @@
       "name": "gigma-consultant",
       "source": "./plugins/gigma-consultant",
       "description": "Роль «Консультант по интернет-магазинам (e-commerce)» для Codex: полный цикл от выявления потребностей до запуска магазина на Gigma — discovery, подбор решения, КП, план внедрения. Передаёт технику операционным скилам gigma-erp."
+    },
+    {
+      "name": "vps-support",
+      "source": "./plugins/vps-support",
+      "description": "Роль «Консультант для пользователей VPN-сервиса Твой ВПС»: помогает подключить VPN в HAPP и аналогах, диагностирует проблемы и эскалирует Артёму. Скилы vps-support / vps-connect / vps-troubleshoot."
     }
   ]
 }
