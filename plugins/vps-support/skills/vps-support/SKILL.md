@@ -68,4 +68,4 @@ allowed-tools: Read Grep
 
 - Карта фактов и канал связи: [`reference/vps-service-facts.md`](../../reference/vps-service-facts.md)
 - Кабинет сервиса: `/home` (ссылка-подписка, статус), `/support` (обращение), `/select-plan` (тариф)
-- Приложение HAPP: https://happ.su
+- Приложение HAPP: https://happ.info

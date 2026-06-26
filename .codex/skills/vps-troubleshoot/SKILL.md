@@ -70,4 +70,4 @@ allowed-tools: Read Grep
 ## Документация и контакты
 
 - Карта фактов и канал связи: [`reference/vps-service-facts.md`](../../reference/vps-service-facts.md)
-- HAPP: https://happ.su
+- HAPP: https://happ.info
