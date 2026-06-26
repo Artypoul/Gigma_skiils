@@ -1,5 +1,5 @@
 {
   "name": "gigma-erp",
-  "description": "Операционные скилы Gigma ERP (api.gigma.ru): create-tenant — создать новый тенант/проект; load-nomenclature — массово залить справочник номенклатуры через импорт.",
-  "version": "0.1.0"
+  "description": "Операционные скилы Gigma ERP (api.gigma.ru): create-tenant — создать тенант/проект; load-nomenclature — залить каталог номенклатуры; setup-storefront — настроить витрину под ключ (филиал+склад+App Token+остатки). Референс API/контрактов/багов — reference/erp-api.md.",
+  "version": "0.2.0"
 }

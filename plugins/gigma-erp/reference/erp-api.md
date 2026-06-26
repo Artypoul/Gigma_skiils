@@ -1,0 +1,80 @@
+# Референс API Gigma ERP (api.gigma.ru)
+
+Факты проверены по коду `itecho-erp-backend` (Laravel 12) и боевыми вызовами. Канон правил — https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt. Не выдумывать — сверять с кодом.
+
+## Базовый URL и панель
+
+- API: `https://api.gigma.ru/api` (доступен **без VPN**; VPN нужен только для прямого доступа к БД).
+- Панель: `https://cloud.gigma.ru`. Витрина (Application) в панели называется **«site»** → `/sites/{id}`; склад → `/warehouses/list-warehouses/{id}`.
+
+## Три слоя авторизации
+
+| Слой | Как передаётся | Кто | Для чего |
+|---|---|---|---|
+| **Owner / сотрудник** | `Authorization: Bearer <userToken>` | `auth:user` | Админка: проекты, филиалы, склады, номенклатура, витрины, остатки |
+| **App Token (витрина)** | заголовок `Token: <appToken>` | `token` (middleware) | Публичная витрина: каталог, цены, precalculate, contact_form, вход клиента |
+| **Клиент** | `Authorization: Bearer <counterpartyToken>` | `auth:counterparty` | Личный кабинет: заказы (store/index/show), карты, подписки |
+
+Owner-токен получают как сотрудника проекта: `POST /api/send_password {login}` → код (письмо ИЛИ `SELECT password FROM passwords WHERE login=… ORDER BY id DESC LIMIT 1`) → `POST /api/login {login,password,device}` → `user.access_token.value` (вид `2992|…`).
+
+## Owner-эндпоинты (Bearer userToken, `auth:user`)
+
+```
+GET  /api/user                              профиль владельца (project_id, права)
+GET  /api/branches_list                     филиалы
+POST /api/branches                          создать филиал (юр.лицо)
+GET  /api/sales_strategies                  стратегии продаж (1=продать остатки, 2=макс прибыль)
+GET  /api/storage_units                     единицы (14=м², 15=шт, 16=п.м, 17=кг, 18=м)
+GET  /api/warehouses                        склады
+POST /api/warehouses                        создать склад
+GET  /api/applications                      витрины
+POST /api/applications                      создать витрину (генерит App Token)
+PUT  /api/applications/{id}                 правка витрины (привязка склада, активация токена)
+POST /api/warehouses/{wid}/nomenclatures    добавить остаток (товар на склад)
+GET  /api/nomenclatures?per_page=1000       номенклатура проекта
+POST /api/nomenclatures/import              импорт каталога xlsx (см. скил load-nomenclature)
+```
+
+## Публичная витрина (заголовок `Token`, App Token)
+
+```
+GET  /api/counterparty/products?page=N      каталог (пагинация; ShortProductResource)
+GET  /api/counterparty/products/{id}        карточка товара
+GET  /api/counterparty/prices               {min_price,max_price}
+GET  /api/counterparty/categories | brands | delivery_types | payment_types
+POST /api/counterparty/orders/precalculate  сумма корзины без заказа (throttle 30/мин)
+POST /api/counterparty/contact_form         ЗАЯВКА-лид (аноним по ФИО+телефону)
+POST /api/counterparty/send_password|login  вход клиента
+POST /api/counterparty/callback_auth/init|status  вход по звонку
+```
+
+## Клиент (Bearer counterpartyToken, `auth:counterparty`)
+
+```
+GET    /api/counterparty/                    профиль; PUT правка; DELETE
+GET    /api/counterparty/orders              история; POST создать заказ; GET /{order}
+GET    /api/counterparty/payment-methods     сохранённые карты; DELETE /{id}
+.../subscriptions...                         подписки
+```
+
+## Контракты денег/заказа (критично)
+
+- **`OrderPricingService::calculate`** считает цену по списку `products:[{id,quantity}]`. Для **КАЖДОЙ** позиции ищет `Inventory` (остаток) на складах витрины; нет остатка → **422 `CODE_INVENTORY_NOT_FOUND`**. Это касается и услуг (работ) — им тоже нужен остаток, чтобы пройти precalculate/order.
+- **Количество — целое ≥1** (`integer|min:1`). Дробные не пройдут; округлять `ceil`.
+- **Цена** строки = `nomenclature.price` (если у склада `is_price_from_inventories=false`) ЛИБО `warehouseNomenclature.markupPrice` (если `true` — остаток со своей ценой+наценкой). Клиент свою цену слать не может.
+- **Упаковка**: `quantity_pack = intdiv(quantity, pieces_per_pack)`, fallback pack=1. При `wholesale=true` количество должно быть кратно упаковке и ≥ упаковки (`CODE_WHOLESALE_*`).
+- **`contact_form`** (заявка): требует `first_name`,`last_name`,`phone`(numeric 10-12),`products`; считает цену (нужен склад), проверяет наличие (`quantity>inventory.quantity` → 422), создаёт `Counterparty(CLIENT)`, **резервирует остаток на 24ч**, `delivery_type_id=2` захардкожен (тип должен существовать); при `payment_type_id=IS_BANK_CARD` → YooKassa `payment_link`+статус `IS_PAYMENT_WAITING`, иначе `IS_CREATED`.
+
+## Модель данных
+
+- **Nomenclature** (карточка товара/услуги): `provider_code` (=артикул поставщика, напр. Леруа), `price` (цена продажи), `cost_price` (себестоимость), `markup`, `discount`, `pieces_per_pack`, `is_product` (услуга = false), `type/kind`, `category_id`. Услуги и товары — в одной таблице.
+- **Inventory = таблица `warehouse_nomenclatures`** (в панели «inventories»): остаток = `nomenclature_id` + `warehouse_id` + `quantity` + `price` + `vat`. Артикула тут НЕТ — он на карточке. **`price` — NOT NULL** в БД (хотя Request говорит nullable → пустой даёт 500).
+- **Application (витрина)**: `token` (App Token, `Str::random(32)`), `is_token_active`, `wholesale`, `branch_id`, привязанные склады, `sales_strategy_id`. В каталоге видны ТОЛЬКО товары, у которых есть остаток на складе витрины.
+- **Warehouse**: `is_price_from_inventories` (источник цены), `city_id` (**NOT NULL**), привязан к складам через витрину.
+
+## Известные баги/грабли ERP (обходить)
+
+1. **`ApplicationController::store` неверно привязывает склад**: `$warehouseId = isset($data['warehouse_id']) ?? null;` → всегда `true` → `sync(true)` цепляет склад **id=1**. Обход: привязывать склад через **`PUT /applications/{id}`** (метод `update` делает sync правильно).
+2. **Склад: `city_id` NOT NULL**, а город парсится из адреса примитивно — ищется кусок, начинающийся с **«г »**. Адрес без `г <Город>` (напр. «уточняется», «Новосибирск») → 500. Давать `"address":"г Новосибирск"`.
+3. **`warehouse_nomenclatures.price` NOT NULL** без дефолта, но Request помечает `price` как nullable → пустой price даёт 500 (QueryException), а не 422. Всегда слать `price` при добавлении остатка.
+4. **Кириллица в JSON через шелл** часто бьётся → тело не доходит (валидация «все поля required»). Писать JSON в UTF-8 файл и слать `curl --data-binary @file.json`.

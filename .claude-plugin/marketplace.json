@@ -10,7 +10,7 @@
     {
       "name": "gigma-erp",
       "source": "./plugins/gigma-erp",
-      "description": "Операционные скилы Gigma ERP: создание тенанта (проекта) и загрузка справочников номенклатуры через API."
+      "description": "Операционные скилы Gigma ERP через API: create-tenant (новый проект), load-nomenclature (импорт каталога), setup-storefront (витрина+склад+App Token+остатки под ключ). Референс эндпоинтов/контрактов/багов — reference/erp-api.md."
     },
     {
       "name": "gigma-consultant",
