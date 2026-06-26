@@ -3,7 +3,11 @@
 Этот репозиторий — каталог скилов-консультантов. Две системы читают его по-разному:
 
 - **Claude Code** — через маркетплейс `.claude-plugin/marketplace.json` → плагины в `plugins/`.
-- **Codex** — через папку **`.codex/skills/`** (маркетплейс Codex не читает). Эти скилы — **копии** плагинов из `plugins/`.
+- **Codex** — двумя путями:
+  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`). Манифесты проходят `validate_plugin.py`.
+  2. **Зеркало** `.codex/skills/` — копии скилов, видны когда Codex запущен в этом репо (фолбэк без установки).
+
+Скилы (`SKILL.md`) общие для Claude и Codex. ⚠ Frontmatter `description`/`when_to_use` со значением, содержащим `: ` (двоеточие-пробел), **обязательно в кавычках** — иначе строгий YAML-парсер Codex отвергает скил.
 
 **Канон — `plugins/`.** `.codex/skills/` и `.codex/reference/` — зеркало; синхронизировать одной командой: **`bash sync-codex.sh`** (пересобирает `.codex` из `plugins/`).
 

@@ -1,0 +1,24 @@
+{
+  "name": "gigma-consultant",
+  "version": "0.1.0",
+  "description": "Роль «Консультант по интернет-магазинам (e-commerce)» на платформе Gigma: полный цикл от выявления потребностей до запуска магазина.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": ["gigma", "e-commerce", "интернет-магазин", "консультант", "КП", "внедрение"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Gigma: консультант e-commerce",
+    "shortDescription": "Подбор решения и запуск интернет-магазина на Gigma",
+    "longDescription": "Ведёт клиента полный цикл: бриф → подбор решения → КП → план внедрения → передача в операционные скилы gigma-erp.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": ["Interactive"],
+    "defaultPrompt": [
+      "Подбери решение для интернет-магазина на Gigma",
+      "Составь КП на запуск магазина",
+      "Сделай план внедрения магазина"
+    ]
+  }
+}

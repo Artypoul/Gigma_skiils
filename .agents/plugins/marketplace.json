@@ -1,0 +1,44 @@
+{
+  "name": "gigma-skills",
+  "interface": {
+    "displayName": "Gigma Skills"
+  },
+  "plugins": [
+    {
+      "name": "gigma-erp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/gigma-erp"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "gigma-consultant",
+      "source": {
+        "source": "local",
+        "path": "./plugins/gigma-consultant"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "vps-support",
+      "source": {
+        "source": "local",
+        "path": "./plugins/vps-support"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

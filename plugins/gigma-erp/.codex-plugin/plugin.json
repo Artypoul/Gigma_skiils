@@ -1,0 +1,23 @@
+{
+  "name": "gigma-erp",
+  "version": "0.1.0",
+  "description": "Операционные скилы Gigma ERP: создание тенанта (проекта) и загрузка справочников номенклатуры через API.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": ["gigma", "erp", "тенант", "номенклатура", "импорт", "каталог"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Gigma ERP: операции",
+    "shortDescription": "Создание тенанта и загрузка каталога в Gigma ERP",
+    "longDescription": "«Руки» для Gigma ERP: create-tenant (новый проект) и load-nomenclature (импорт каталога номенклатуры).",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Создай новый тенант в Gigma",
+      "Загрузи каталог номенклатуры в проект"
+    ]
+  }
+}
