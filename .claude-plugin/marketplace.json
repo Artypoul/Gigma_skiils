@@ -4,7 +4,7 @@
     "name": "Artypoul"
   },
   "metadata": {
-    "description": "Открытый маркетплейс скилов Gigma для импорта в проекты — операционные runbook'и по работе с Gigma ERP (api.gigma.ru)."
+    "description": "Открытый маркетплейс скилов Art: Gigma ERP операции и e-commerce консультации, GLAIM agent bridge/frontend chat, а также поддержка сервиса Твой ВПС."
   },
   "plugins": [
     {
@@ -21,6 +21,11 @@
       "name": "vps-support",
       "source": "./plugins/vps-support",
       "description": "Роль «Консультант по подписке сервиса Твой ВПС»: помогает управлять подпиской и установить/настроить приложение для подключения (HAPP и аналоги), при поломке эскалирует в Telegram @artypoul. Нейтральные формулировки (личный сервер по подписке, не «VPN/обход блокировок»). Скилы vps-support / vps-connect / vps-troubleshoot."
+    },
+    {
+      "name": "glaim",
+      "source": "./plugins/glaim",
+      "description": "Скилы GLAIM для agent bridge: connect-chat-frontend подключает web/miniapp frontend к source-chat API через backend/BFF, с session/message/events/stop/reset flow и защитой source secret."
     }
   ]
 }

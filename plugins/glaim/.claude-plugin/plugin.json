@@ -1,0 +1,5 @@
+{
+  "name": "glaim",
+  "description": "Скилы GLAIM для agent bridge: подключение frontend-чата к source-chat API через безопасный backend/BFF, без утечки source secret и agent/control токенов.",
+  "version": "0.1.0"
+}
