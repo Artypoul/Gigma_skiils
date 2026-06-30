@@ -56,6 +56,40 @@ Token: <application_token>
 5. Заказ: `POST /api/counterparty/orders`.
 6. Оплата: использовать `order.payment_link`, если backend вернул ссылку.
 
+## Existing storefront preflight
+
+Когда задача — подключить фронт к уже существующей витрине/Application, агент не должен создавать новую витрину.
+
+1. Получить `appId`/App Token от владельца или найти owner-токеном:
+
+```http
+GET /api/applications
+GET /api/applications/{appId}
+Authorization: Bearer <user.access_token.value>
+```
+
+2. Проверить в ответе:
+
+- `id` и `name` — это нужный сайт/витрина;
+- `token` — тот App Token, который пойдёт во frontend config;
+- `is_token_active` = `true`;
+- `warehouses[]` содержит нужный склад;
+- `branch_id` соответствует нужному юрлицу/проекту.
+
+3. Проверить публичный контур ровно тем токеном, который будет на фронте:
+
+```http
+GET /api/counterparty/products?per_page=2
+GET /api/counterparty/prices
+GET /api/counterparty/categories
+GET /api/counterparty/menus/<menu-code>
+GET /api/counterparty/blocks/<block-code>
+Token: <application_token>
+Accept: application/json
+```
+
+Если каталог пустой, токен выключен, склад не привязан или контент не находится по `code`/`slug`, сначала исправить витрину через `setup-storefront`. Frontend не должен обходить это моками, alias routes или хардкодом контента.
+
 ## Процесс по кнопкам
 
 ### 0. Старт приложения / загрузка витрины
