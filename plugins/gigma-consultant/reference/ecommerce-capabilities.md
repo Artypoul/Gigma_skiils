@@ -34,7 +34,7 @@ Gigma — **headless** платформа. Один бэкенд `https://api.gi
 | Личный кабинет клиента | ✅ | `/api/counterparty` (профиль), избранное (`/api/counterparty/products/favourites`), история заказов (`/api/counterparty/orders`) | сброс пароля — звонком |
 | Контент-страницы (о доставке, оплате, о нас) | ✅ | `POST /api/pages` (по `slug`) + `page_types` | — |
 | Баннеры / слайдер на главной | ⚠ read-only в API | витрина читает `GET /api/counterparty/slides` | программного create слайдов нет — заводятся через UI Itecho |
-| Меню и навигация витрины | ✅ | пункты — `POST /api/applications/{id}/menu_items`; витрина читает `GET /api/counterparty/menus/{code}` | сам ресурс `/api/menus` — GET-only (это меню сотрудника) |
+| Меню и навигация витрины | ✅ | пункты — `POST /api/applications/{id}/menu_items`; витрина читает `GET /api/counterparty/menus/{slug}` | сам ресурс `/api/menus` — GET-only (это меню сотрудника) |
 | Динамические блоки (промо-секции) | ✅ | `POST /api/applications/{id}/blocks`; витрина читает `GET /api/counterparty/blocks/{code}` | — |
 | Уведомления клиенту | ⚠ частично | `GET /api/counterparty/notifications` (опрашивать) | **вебхуков наружу НЕТ** — только polling каждые 30–60 сек |
 | Скидки / промокоды | ✅ | `discounts` (`promo_code`, `magic_link`, `audience`, статистика) | ⚠ `POST /api/promotions` **баговый (500)** — использовать `discounts` |

@@ -7,7 +7,7 @@ allowed-tools: Bash Read Write Grep
 
 # Настройка витрины Gigma ERP под ключ
 
-Цель: чтобы публичный фронт по **App Token** видел каталог с ценами, контент сайта и мог оформлять заказы. Делается **owner-токеном через API** (без VPN). Полная карта эндпоинтов/контрактов/багов — `reference/erp-api.md`.
+Цель: чтобы публичный фронт по **App Token** видел каталог с ценами, контент сайта и мог оформлять заказы. Делается **owner-токеном через API** (без VPN). Полная карта эндпоинтов/контрактов/багов — `../../reference/erp-api.md`.
 
 Цепочка: **филиал → склад → витрина (App Token) → остатки → контент → проверка каталога и контента**. Без склада+остатков товары в каталоге НЕ видны (каталог join'ит инвентарь). Без `application_id` страницы/меню/блоки не будут привязаны к нужному сайту.
 
@@ -94,9 +94,9 @@ POST /api/applications/{appId}/blocks
 {"block_type_id":1,"name":"Главный текст","identifier":"home-main-text","link":null,"avatar_id":null,"file_id":null,"text":"Текст блока","parent_id":null}
 ```
 
-- `code` у страниц и блоков числовой; если не нужен внешний числовой код, не шли его — для страниц backend сгенерит сам. `slug` у страниц уникален; если страница уже есть — сначала найти её через `GET /api/tables/pages?application_id=<appId>&query=<slug>` и обновить `PUT /api/pages/{id}`.
-- Пункты меню живут внутри application: `POST /api/applications/{appId}/menu_items`; `slug` должен совпадать с роутом фронта или slug страницы.
-- Блоки живут внутри application: `POST /api/applications/{appId}/blocks`; `block_type_id` брать из `GET /api/block_types`. Для текста обычно `1`/`2`, для картинки нужен предварительный `POST /api/files` и `file_id`. Для стабильной фронтовой привязки задавай `identifier` и проверяй через `/api/counterparty/blocks/id/{identifier}`; `/blocks/{code}` используй только когда задан числовой `code`.
+- `code` у страниц и блоков числовой; если не нужен внешний числовой код, не шли его — для страниц backend сгенерит сам. `slug` у страниц уникален. Перед созданием страницы получи `GET /api/tables/pages?application_id=<appId>` и найди нужный `slug` в ответе локально; `query=<slug>` не использовать, потому что backend ищет `query` только по `title`/`description`/`content`. Если страница уже есть — обновить `PUT /api/pages/{id}`.
+- Пункты меню живут внутри application: `POST /api/applications/{appId}/menu_items`; `slug` должен совпадать с роутом фронта или slug страницы. Публичная проверка меню — `GET /api/counterparty/menus/{slug}`; без slug backend ищет `navpanel`.
+- Блоки живут внутри application: `POST /api/applications/{appId}/blocks`; `block_type_id` брать из `GET /api/block_types`. Для текста обычно `1`/`2`, для картинки нужен предварительный `POST /api/files` и `file_id`. Если задан числовой `code`, публичная проверка — `/api/counterparty/blocks/{code}`. `/api/counterparty/blocks/id/{identifier}` используй только когда у блока реально задан строковый `identifier`; это не database id и не `code`.
 - Баннеры/слайды через API не создавать: публичный фронт читает `GET /api/counterparty/slides`, но программного create нет — это ручная настройка в UI Itecho.
 
 ## 6. Проверка (как будет ходить фронт)
@@ -105,10 +105,11 @@ POST /api/applications/{appId}/blocks
 curl -s -H "Token: <appToken>" -H "Accept: application/json" \
   "https://api.gigma.ru/api/counterparty/products?per_page=2"
 curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/prices"
-curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/menus/<menu-code>"
+curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/menus/<menu-slug>"
+curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/blocks/<block-code>"
 curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/blocks/id/<block-identifier>"
 ```
-Должны вернуться товары с `price` и непустой `total`, `prices` → `{min_price,max_price}`. Для контента должен вернуться объект меню/блока нужного сайта. Если каталог пуст — нет остатков (шаг 4) или токен не активен (шаг 3). Если контент пуст — объект создан не на тот `application_id` или фронт запрашивает не тот `code`/`slug`.
+Должны вернуться товары с `price` и непустой `total`, `prices` → `{min_price,max_price}`. Для контента должен вернуться объект меню/блока нужного сайта. Блок проверяй либо по числовому `code`, либо по строковому `identifier`, если он задан. Если каталог пуст — нет остатков (шаг 4) или токен не активен (шаг 3). Если контент пуст — объект создан не на тот `application_id` или фронт запрашивает не тот `code`/`slug`/`identifier`.
 
 ## Грабли (кратко)
 
