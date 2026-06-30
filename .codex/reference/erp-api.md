@@ -46,7 +46,7 @@ GET  /api/counterparty/products?page=N      каталог (пагинация; 
 GET  /api/counterparty/products/{id}        карточка товара
 GET  /api/counterparty/prices               {min_price,max_price}
 GET  /api/counterparty/categories | brands | delivery_types | payment_types
-GET  /api/counterparty/menus/{code}         меню/навигация сайта
+GET  /api/counterparty/menus/{slug?}        меню/навигация сайта; default slug = navpanel
 GET  /api/counterparty/blocks/{code}        динамические блоки сайта
 POST /api/counterparty/orders/precalculate  сумма корзины без заказа (throttle 30/мин)
 POST /api/counterparty/contact_form         ЗАЯВКА-лид (аноним по ФИО+телефону)
@@ -85,5 +85,5 @@ GET    /api/counterparty/payment-methods     сохранённые карты; 
 2. **Склад: `city_id` NOT NULL**, а город парсится из адреса примитивно — ищется кусок, начинающийся с **«г »**. Адрес без `г <Город>` (напр. «уточняется», «Новосибирск») → 500. Давать `"address":"г Новосибирск"`.
 3. **`warehouse_nomenclatures.price` NOT NULL** без дефолта, но Request помечает `price` как nullable → пустой price даёт 500 (QueryException), а не 422. Всегда слать `price` при добавлении остатка.
 4. **Кириллица в JSON через шелл** часто бьётся → тело не доходит (валидация «все поля required»). Писать JSON в UTF-8 файл и слать `curl --data-binary @file.json`.
-5. **Контент без правильного `application_id`** создаётся, но фронт нужного сайта его не увидит. Всегда проверять `GET /api/tables/pages?application_id=<appId>` и публичные `GET /api/counterparty/menus/{code}` / `blocks/{code}` с App Token.
+5. **Контент без правильного `application_id`** создаётся, но фронт нужного сайта его не увидит. Всегда проверять `GET /api/tables/pages?application_id=<appId>` и публичные `GET /api/counterparty/menus/{slug}` / `blocks/{code}` с App Token. Для страниц `query=<slug>` не использовать как lookup по slug: backend ищет `query` только по `title`/`description`/`content`.
 6. **Слайды/баннеры** публично читаются через `GET /api/counterparty/slides`, но программного create в API нет — заводятся через UI Itecho.
