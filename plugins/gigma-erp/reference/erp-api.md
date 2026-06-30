@@ -13,7 +13,7 @@
 |---|---|---|---|
 | **Owner / сотрудник** | `Authorization: Bearer <userToken>` | `auth:user` | Админка: проекты, филиалы, склады, номенклатура, витрины, остатки |
 | **App Token (витрина)** | заголовок `Token: <appToken>` | `token` (middleware) | Публичная витрина: каталог, цены, precalculate, contact_form, вход клиента |
-| **Клиент** | `Authorization: Bearer <counterpartyToken>` | `auth:counterparty` | Личный кабинет: заказы (store/index/show), карты, подписки |
+| **Клиент** | `Authorization: Bearer <counterpartyToken>`; для заказов/карт/подписок вместе с `Token: <appToken>` | `auth:counterparty` | Личный кабинет и действия в контексте витрины |
 
 Owner-токен получают как сотрудника проекта: `POST /api/send_password {login}` → код (письмо ИЛИ `SELECT password FROM passwords WHERE login=… ORDER BY id DESC LIMIT 1`) → `POST /api/login {login,password,device}` → `user.access_token.value` (вид `2992|…`).
 
@@ -58,9 +58,9 @@ POST /api/counterparty/callback_auth/init|status  вход по звонку
 
 ```
 GET    /api/counterparty/                    профиль; PUT правка; DELETE
-GET    /api/counterparty/orders              история; POST создать заказ; GET /{order}
-GET    /api/counterparty/payment-methods     сохранённые карты; DELETE /{id}
-.../subscriptions...                         подписки
+GET    /api/counterparty/orders              история; POST создать заказ; GET /{order}; нужен Token + Bearer
+GET    /api/counterparty/payment-methods     сохранённые карты; DELETE /{id}; нужен Token + Bearer
+.../subscriptions...                         подписки; нужен Token + Bearer
 ```
 
 ## Контракты денег/заказа (критично)

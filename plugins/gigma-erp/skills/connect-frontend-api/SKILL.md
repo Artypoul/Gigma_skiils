@@ -25,7 +25,8 @@ allowed-tools: Bash Read Grep
    - timeout и единый error parser.
 4. Выбрать auth flow:
    - публичный каталог/витрина по `Token: <application_token>`;
-   - клиентский кабинет/заказ по `Authorization: Bearer <counterparty.access_token.value>`;
+   - профиль клиента по `Authorization: Bearer <counterparty.access_token.value>`;
+   - клиентские действия внутри витрины (заказы, избранное, карты, подписки) по двум заголовкам: `Token: <application_token>` + `Authorization: Bearer <counterparty.access_token.value>`;
    - ERP admin по `Authorization: Bearer <user.access_token.value>`.
 5. Сначала проверить happy path в браузере/тесте: старт приложения → каталог → карточка → вход → precalculate → order → payment link.
 
@@ -72,6 +73,6 @@ Header: Token: <application_token>
 
 - API client не содержит hardcoded mock base URL.
 - В requests есть `Accept: application/json`.
-- Для App Token используется header `Token`, для user/counterparty — `Authorization: Bearer`.
+- Для App Token используется header `Token`, для user/counterparty — `Authorization: Bearer`; для заказов/избранного/карт/подписок клиента нужны оба заголовка.
 - E2E покрывает минимум один товар и один заказ до создания/оплаты.
 - UI обрабатывает `401`, `403`, `404`, `422`, `429`.

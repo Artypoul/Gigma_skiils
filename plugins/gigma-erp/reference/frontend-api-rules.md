@@ -23,6 +23,7 @@ Content-Type: application/json
 |---|---|
 | Витрина/App Token | `Token: <application_token>` |
 | E-Commerce клиент | `Authorization: Bearer <counterparty.access_token.value>` |
+| E-Commerce клиент внутри витрины | `Token: <application_token>` + `Authorization: Bearer <counterparty.access_token.value>` |
 | ERP сотрудник | `Authorization: Bearer <user.access_token.value>` |
 
 Sanctum token имеет вид `<id>|<secret>`. Хранить целиком.
@@ -83,7 +84,7 @@ GET /api/counterparty/products?per_page=2
 GET /api/counterparty/prices
 GET /api/counterparty/categories
 GET /api/counterparty/menus/<menu-code>
-GET /api/counterparty/blocks/<block-code>
+GET /api/counterparty/blocks/id/<block-identifier>
 Token: <application_token>
 Accept: application/json
 ```
@@ -113,7 +114,7 @@ Accept: application/json
 | Страны/фильтры, если нужны | GET | `/api/counterparty/countries` | `Token` | `countries[]` |
 | Диапазон цен, если нужен | GET | `/api/counterparty/prices` | `Token` | `min_price`, `max_price` |
 | Способы доставки | GET | `/api/counterparty/delivery_types` | `Token` | `deliveryTypes[]` |
-| Способы оплаты | GET | `/api/counterparty/payment_types` | `Token` или counterparty Bearer | `paymentTypes[]` |
+| Способы оплаты | GET | `/api/counterparty/payment_types` | `Token` | `paymentTypes[]` |
 
 Не дергать справочники перед каждым кликом: загрузить один раз и кешировать в состоянии приложения.
 
@@ -211,9 +212,17 @@ Content-Type: application/json
 counterparty.access_token.value
 ```
 
-Дальше клиентские requests идут с:
+Дальше клиентские requests делятся на два типа:
 
 ```http
+Authorization: Bearer <counterparty.access_token.value>
+Accept: application/json
+```
+
+Так ходят профиль и logout. А действия, которые остаются в контексте конкретной витрины (заказы, избранное, saved payment methods, subscriptions), требуют оба заголовка:
+
+```http
+Token: <application_token>
 Authorization: Bearer <counterparty.access_token.value>
 Accept: application/json
 ```
@@ -244,11 +253,11 @@ Content-Type: application/json
 
 | UI / кнопка | Method | Endpoint | Auth |
 |---|---|---|---|
-| Профиль | GET | `/api/counterparty` | counterparty Bearer |
-| Выйти | POST | `/api/counterparty/logout` | counterparty Bearer |
-| Мои заказы | GET | `/api/counterparty/orders` | counterparty Bearer |
-| Детали заказа | GET | `/api/counterparty/orders/{order_id}` | counterparty Bearer |
-| Уведомления, если включены | GET | `/api/counterparty/notifications` | counterparty Bearer |
+| Профиль | GET | `/api/counterparty` | Bearer |
+| Выйти | POST | `/api/counterparty/logout` | Bearer |
+| Мои заказы | GET | `/api/counterparty/orders` | Token + Bearer |
+| Детали заказа | GET | `/api/counterparty/orders/{order_id}` | Token + Bearer |
+| Уведомления, если включены | GET | `/api/counterparty/notifications` | Token |
 
 Logout body:
 
@@ -260,9 +269,9 @@ Logout body:
 
 | UI / кнопка | Method | Endpoint | Body | Auth |
 |---|---|---|---|---|
-| Добавить в избранное | POST | `/api/counterparty/products/favourites` | `{ "product_id": 123 }` | counterparty Bearer |
-| Список избранного | GET | `/api/counterparty/products/favourites` | - | counterparty Bearer |
-| Удалить из избранного | DELETE | `/api/counterparty/products/favourites/{id}` | - | counterparty Bearer |
+| Добавить в избранное | POST | `/api/counterparty/products/favourites` | `{ "product_id": 123 }` | Token + Bearer |
+| Список избранного | GET | `/api/counterparty/products/favourites` | - | Token + Bearer |
+| Удалить из избранного | DELETE | `/api/counterparty/products/favourites/{id}` | - | Token + Bearer |
 
 Если пользователь не залогинен, UI должен предложить вход, а не слать Bearer-запрос без токена.
 
@@ -272,6 +281,7 @@ Logout body:
 
 ```http
 POST /api/counterparty/orders
+Token: <application_token>
 Authorization: Bearer <counterparty.access_token.value>
 Content-Type: application/json
 ```
@@ -321,6 +331,7 @@ Content-Type: application/json
 
 ```http
 GET /api/counterparty/orders/{order_id}
+Token: <application_token>
 Authorization: Bearer <counterparty.access_token.value>
 ```
 
@@ -344,10 +355,13 @@ Authorization: Bearer <counterparty.access_token.value>
 | Login | POST | `/api/counterparty/login` | `Token` |
 | Miniapp login | POST | `/api/counterparty/miniapps/{provider}/contact_auth` | `Token` |
 | Current counterparty | GET | `/api/counterparty` | Bearer |
-| Create order | POST | `/api/counterparty/orders` | Bearer |
-| Orders list | GET | `/api/counterparty/orders` | Bearer |
-| Order details | GET | `/api/counterparty/orders/{id}` | Bearer |
+| Create order | POST | `/api/counterparty/orders` | Token + Bearer |
+| Orders list | GET | `/api/counterparty/orders` | Token + Bearer |
+| Order details | GET | `/api/counterparty/orders/{id}` | Token + Bearer |
 | Logout | POST | `/api/counterparty/logout` | Bearer |
+| Favourites | GET/POST/DELETE | `/api/counterparty/products/favourites...` | Token + Bearer |
+| Saved payment methods | GET/DELETE | `/api/counterparty/payment-methods...` | Token + Bearer |
+| Subscriptions | GET/POST/PATCH | `/api/counterparty/subscriptions...` | Token + Bearer |
 
 ## Order contract reminders
 

@@ -73,7 +73,6 @@ POST /api/applications/{appId}/blocks
 
 ```json
 {
-  "code": "delivery",
   "application_id": 39,
   "is_page": true,
   "page_type_id": 1,
@@ -92,12 +91,12 @@ POST /api/applications/{appId}/blocks
 ```
 
 ```json
-{"block_type_id":1,"name":"Главный текст","link":null,"avatar_id":null,"file_id":null,"text":"Текст блока","parent_id":null}
+{"block_type_id":1,"name":"Главный текст","identifier":"home-main-text","link":null,"avatar_id":null,"file_id":null,"text":"Текст блока","parent_id":null}
 ```
 
-- `slug` у страниц уникален; если страница уже есть — сначала найти её через `GET /api/tables/pages?application_id=<appId>&query=<slug>` и обновить `PUT /api/pages/{id}`.
+- `code` у страниц и блоков числовой; если не нужен внешний числовой код, не шли его — для страниц backend сгенерит сам. `slug` у страниц уникален; если страница уже есть — сначала найти её через `GET /api/tables/pages?application_id=<appId>&query=<slug>` и обновить `PUT /api/pages/{id}`.
 - Пункты меню живут внутри application: `POST /api/applications/{appId}/menu_items`; `slug` должен совпадать с роутом фронта или slug страницы.
-- Блоки живут внутри application: `POST /api/applications/{appId}/blocks`; `block_type_id` брать из `GET /api/block_types`. Для текста обычно `1`/`2`, для картинки нужен предварительный `POST /api/files` и `file_id`.
+- Блоки живут внутри application: `POST /api/applications/{appId}/blocks`; `block_type_id` брать из `GET /api/block_types`. Для текста обычно `1`/`2`, для картинки нужен предварительный `POST /api/files` и `file_id`. Для стабильной фронтовой привязки задавай `identifier` и проверяй через `/api/counterparty/blocks/id/{identifier}`; `/blocks/{code}` используй только когда задан числовой `code`.
 - Баннеры/слайды через API не создавать: публичный фронт читает `GET /api/counterparty/slides`, но программного create нет — это ручная настройка в UI Itecho.
 
 ## 6. Проверка (как будет ходить фронт)
@@ -107,7 +106,7 @@ curl -s -H "Token: <appToken>" -H "Accept: application/json" \
   "https://api.gigma.ru/api/counterparty/products?per_page=2"
 curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/prices"
 curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/menus/<menu-code>"
-curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/blocks/<block-code>"
+curl -s -H "Token: <appToken>" "https://api.gigma.ru/api/counterparty/blocks/id/<block-identifier>"
 ```
 Должны вернуться товары с `price` и непустой `total`, `prices` → `{min_price,max_price}`. Для контента должен вернуться объект меню/блока нужного сайта. Если каталог пуст — нет остатков (шаг 4) или токен не активен (шаг 3). Если контент пуст — объект создан не на тот `application_id` или фронт запрашивает не тот `code`/`slug`.
 
