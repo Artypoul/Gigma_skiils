@@ -1,7 +1,7 @@
 {
   "name": "gigma-skills",
   "interface": {
-    "displayName": "Gigma Skills"
+    "displayName": "Gigma / GLAIM Skills"
   },
   "plugins": [
     {
@@ -33,6 +33,18 @@
       "source": {
         "source": "local",
         "path": "./plugins/vps-support"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "glaim",
+      "source": {
+        "source": "local",
+        "path": "./plugins/glaim"
       },
       "policy": {
         "installation": "AVAILABLE",
