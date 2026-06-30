@@ -83,13 +83,18 @@ Authorization: Bearer <user.access_token.value>
 GET /api/counterparty/products?per_page=2
 GET /api/counterparty/prices
 GET /api/counterparty/categories
-GET /api/counterparty/menus/<menu-code>
-GET /api/counterparty/blocks/id/<block-identifier>
+GET /api/counterparty/pages
+GET /api/counterparty/slides
+GET /api/counterparty/menus/<slug>
+GET /api/counterparty/blocks/<code>
+GET /api/counterparty/blocks/id/<identifier>
 Token: <application_token>
 Accept: application/json
 ```
 
 Если каталог пустой, токен выключен, склад не привязан или контент не находится по `code`/`slug`, сначала исправить витрину через `setup-storefront`. Frontend не должен обходить это моками, alias routes или хардкодом контента.
+
+Для контентных блоков главный публичный путь — `GET /api/counterparty/blocks/{code}`. В текущем backend поле `code` у блока числовое; например `blocks/1` и `blocks/2`. Путь `GET /api/counterparty/blocks/id/{identifier}` ищет поле `identifier`, а не database `id` и не `code`, поэтому `blocks/id/1` вернёт 404, если у блока `identifier` пустой.
 
 ## Процесс по кнопкам
 
@@ -115,15 +120,21 @@ Accept: application/json
 | Диапазон цен, если нужен | GET | `/api/counterparty/prices` | `Token` | `min_price`, `max_price` |
 | Способы доставки | GET | `/api/counterparty/delivery_types` | `Token` | `deliveryTypes[]` |
 | Способы оплаты | GET | `/api/counterparty/payment_types` | `Token` | `paymentTypes[]` |
+| Страницы сайта | GET | `/api/counterparty/pages` | `Token` | `pages[]` |
+| Слайды | GET | `/api/counterparty/slides` | `Token` | `slides[]` |
+| Меню | GET | `/api/counterparty/menus/{slug}` | `Token` | menu tree |
+| Контентный блок | GET | `/api/counterparty/blocks/{code}` | `Token` | `block` + `children[]` |
 
 Не дергать справочники перед каждым кликом: загрузить один раз и кешировать в состоянии приложения.
+
+Публичного endpoint'а "получить все блоки сайта" нет. Фронт должен знать нужные `code`/`identifier` из настройки витрины или получить их через owner API на этапе конфигурации. Не использовать `/blocks/id/{...}` для database id: это поиск по `identifier`.
 
 ### 1. Каталог
 
 Когда пользователь открывает каталог, фильтрует или ищет:
 
 ```http
-GET /api/counterparty/products?per_page=20&page=1&query=<text>&category_id[]=<id>&brand_id[]=<id>&sale=true
+GET /api/counterparty/products?per_page=20&page=1&query=<text>&category_id[]=<id>&brand_id[]=<id>
 Token: <application_token>
 ```
 
@@ -133,6 +144,8 @@ UI сохраняет:
 - pagination/meta, если backend вернул;
 - `product.id` для карточки и корзины;
 - `price` как строку/decimal-display, не как источник критичной математики.
+
+Поддерживаемые фильтры текущего backend: `category_id[]`, `brand_id[]`, `country_id[]`, `query`, `price_from`, `price_to`, `order_by`, `tag_id[]`. Не добавлять `sale=true`: публичный request его не принимает.
 
 ### 2. Карточка товара
 
@@ -347,9 +360,14 @@ Authorization: Bearer <counterparty.access_token.value>
 | App brands | GET | `/api/counterparty/brands` | `Token` |
 | App countries | GET | `/api/counterparty/countries` | `Token` |
 | Delivery types | GET | `/api/counterparty/delivery_types` | `Token` |
-| Payment types | GET | `/api/counterparty/payment_types` | `Token` или Bearer |
+| Payment types | GET | `/api/counterparty/payment_types` | `Token` |
 | Products list | GET | `/api/counterparty/products` | `Token` |
 | Product card | GET | `/api/counterparty/products/{id}` | `Token` |
+| Pages | GET | `/api/counterparty/pages`, `/api/counterparty/pages/{slug}` | `Token` |
+| Slides | GET | `/api/counterparty/slides` | `Token` |
+| Menu | GET | `/api/counterparty/menus/{slug?}` | `Token` |
+| Block by code | GET | `/api/counterparty/blocks/{code}` | `Token` |
+| Block by identifier | GET | `/api/counterparty/blocks/id/{identifier}` | `Token` |
 | Cart precalculate | POST | `/api/counterparty/orders/precalculate` | `Token` |
 | Send password | POST | `/api/counterparty/send_password` | `Token` |
 | Login | POST | `/api/counterparty/login` | `Token` |
