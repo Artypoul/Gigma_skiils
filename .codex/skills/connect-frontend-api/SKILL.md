@@ -1,6 +1,6 @@
 ---
 name: connect-frontend-api
-description: "Подключить frontend, storefront, miniapp или сайт к Gigma ERP / E-Commerce API, в том числе к уже существующей витрине/Application по App Token. Используй когда нужно настроить API client, base URL, headers, App Token, counterparty auth, каталог, корзину, оформление заказа, оплату, обработку 401/422/429 или сверить фронтовую интеграцию с Docs-gigma."
+description: "Подключить frontend, storefront, miniapp или сайт к Gigma ERP / E-Commerce API, в том числе к уже существующей витрине/Application по App Token. Используй когда нужно настроить API client, base URL, headers, App Token, counterparty auth, каталог, корзину, заказ, оплату, страницы, меню, слайды, контентные блоки, обработку 401/422/429 или сверить фронтовую интеграцию с Docs-gigma."
 allowed-tools: Bash Read Grep
 ---
 
@@ -8,11 +8,11 @@ allowed-tools: Bash Read Grep
 
 Цель: frontend должен ходить в Gigma API по каноническим endpoint'ам, не придумывать aliases и корректно разделять App Token, Bearer token ERP-пользователя и Bearer token counterparty.
 
-Источник правды: `Docs-gigma/static/erp-rules.txt` и онлайн-дока `https://artypoul-docs-gigma-7b80.twc1.net/`. Краткая выжимка для агента — `reference/frontend-api-rules.md`.
+Источник правды: `Docs-gigma/static/erp-rules.txt` и онлайн-дока `https://artypoul-docs-gigma-7b80.twc1.net/`. Краткая выжимка для агента — `../../reference/frontend-api-rules.md`.
 
 ## Порядок работы
 
-1. Открыть `reference/frontend-api-rules.md`.
+1. Открыть `../../reference/frontend-api-rules.md`.
    - Обязательно использовать разделы "Процесс по кнопкам" и "Endpoint map".
    - Если фронт нужно подключить к уже существующей витрине, сначала пройти раздел "Existing storefront preflight".
 2. Если нужен точный контракт endpoint'а, читать OpenAPI/Docs-gigma, а не угадывать путь:
@@ -28,7 +28,8 @@ allowed-tools: Bash Read Grep
    - профиль клиента по `Authorization: Bearer <counterparty.access_token.value>`;
    - клиентские действия внутри витрины (заказы, избранное, карты, подписки) по двум заголовкам: `Token: <application_token>` + `Authorization: Bearer <counterparty.access_token.value>`;
    - ERP admin по `Authorization: Bearer <user.access_token.value>`.
-5. Сначала проверить happy path в браузере/тесте: старт приложения → каталог → карточка → вход → precalculate → order → payment link.
+5. Если задача про контент сайта, блоки, меню, страницы или слайды — сначала проверить content path: `pages`, `slides`, `menus/{slug}`, `blocks/{code}`. Не уходить в каталог/товары, пока пользователь спрашивает про контент.
+6. Если задача про e-commerce покупки — проверить commerce path: старт приложения → каталог → карточка → вход → precalculate → order → payment link.
 
 ## Уже существующая витрина
 
@@ -39,7 +40,9 @@ GET /api/applications
 GET /api/applications/{appId}
 ```
 
-Проверить: `id`, `name`, `token`, `is_token_active:true`, склады в `warehouses[]`, нужный `branch_id`. Затем публично проверить тем же App Token: `GET /api/counterparty/products`, `prices`, нужные `menus/{code}`/`blocks/{code}`. Если токен выключен, склад не тот или каталог/контент пустой — это задача `setup-storefront`, а не фронтовой фикс.
+Проверить: `id`, `name`, `token`, `is_token_active:true`, склады в `warehouses[]`, нужный `branch_id`. Затем публично проверить тем же App Token: `GET /api/counterparty/products`, `prices`, `pages`, `slides`, нужные `menus/{slug}` и `blocks/{code}`. Для блоков `/blocks/id/{identifier}` — это identifier, не database id и не code. Если токен выключен, склад не тот или каталог/контент пустой — это задача `setup-storefront`, а не фронтовой фикс.
+
+Публичного списка всех блоков нет. Если пользователь не дал `code`/`identifier`, попросить известные коды блоков или owner-доступ для `GET /api/applications/{application}/blocks`; не перебирать случайные alias routes.
 
 ## Жёсткие правила
 
@@ -54,7 +57,7 @@ GET /api/applications/{appId}
 
 ## Минимальный E-Commerce flow
 
-Подробная версия с UI-действиями и endpoint'ами лежит в `reference/frontend-api-rules.md`.
+Подробная версия с UI-действиями и endpoint'ами лежит в `../../reference/frontend-api-rules.md`.
 
 Коротко: старт приложения по App Token → справочники → каталог → карточка → auth клиента → precalculate → order → payment link → polling заказа.
 
