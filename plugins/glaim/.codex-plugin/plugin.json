@@ -1,24 +1,36 @@
 {
   "name": "glaim",
-  "version": "0.1.0",
-  "description": "Скилы GLAIM: подключение frontend-чата к agent bridge/source-chat API, безопасная работа с source secret, session/message/events flow и проверка интеграции.",
+  "version": "0.1.0+codex.20260701063104",
+  "description": "Скилы GLAIM: прямое подключение miniapp, сайта или frontend-чата к GLAIM source-chat API, работа с source token, session/message/events flow и проверка интеграции.",
   "author": {
     "name": "Artypoul"
   },
   "license": "MIT",
-  "keywords": ["glaim", "agent", "bridge", "chat", "frontend", "miniapp", "source", "api"],
+  "keywords": [
+    "glaim",
+    "agent",
+    "bridge",
+    "chat",
+    "frontend",
+    "miniapp",
+    "source",
+    "api"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "GLAIM: agent bridge",
     "shortDescription": "Frontend-чат и агентный мост",
-    "longDescription": "Помогает подключать web/miniapp frontend к GLAIM source-chat API через безопасный backend/BFF: session, messages, events, stop/reset, idempotency, markdown events и защита source secret.",
+    "longDescription": "Помогает подключать miniapp, сайт, витрину или web chat напрямую к GLAIM source-chat API: session, messages, events, stop/reset, idempotency, markdown events, source token в X-Source-Secret и проверка token blast radius.",
     "developerName": "Artypoul",
     "category": "Productivity",
-    "capabilities": ["Interactive", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
     "defaultPrompt": [
       "Подключи frontend-чат к GLAIM",
       "Проверь интеграцию чата с GLAIM API",
-      "Сделай BFF для GLAIM source-chat"
+      "Настрой source-token доступ к GLAIM chat API"
     ]
   }
 }

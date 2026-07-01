@@ -1,0 +1,31 @@
+flowchart TB
+  subgraph Client["Miniapp / site / frontend source"]
+    FE["Chat UI"]
+    CFG["runtime config<br/>GLAIM_BASE_URL<br/>GLAIM_SOURCE<br/>GLAIM_SOURCE_TOKEN"]
+  end
+
+  subgraph GLAIM["GLAIM backend"]
+    Chat["source-chat routes<br/>/api/v2/sources/{source}/chat/*"]
+    Tokens["source token validator<br/>source + project + app"]
+    OtherSource["other source routes<br/>not part of chat UI"]
+    AgentRoutes["agent lifecycle routes<br/>/jobs/claim /ws/agent"]
+  end
+
+  subgraph Agent["Локальный агент-курьер"]
+    Courier["agent worker"]
+  end
+
+  CFG --> FE
+  FE -->|"allowed<br/>X-Source-Secret"| Chat
+  Chat --> Tokens
+  Courier -->|"job execution channel"| AgentRoutes
+
+  FE -. "forbidden<br/>not chat API" .-> AgentRoutes
+  FE -. "avoid<br/>check source token blast radius" .-> OtherSource
+  Courier -. "not chat backend" .-> FE
+
+  classDef allowed fill:#E8F5E9,stroke:#2E7D32,color:#111111
+  classDef forbidden fill:#FFEBEE,stroke:#C62828,color:#111111
+  classDef neutral fill:#E3F2FD,stroke:#1565C0,color:#111111
+  class Chat,Tokens,OtherSource,AgentRoutes neutral
+  class FE,CFG,Courier neutral

@@ -7,25 +7,50 @@
 Все routes ниже идут под `/api/v2`. Source key в path должен совпадать с
 `^[A-Za-z0-9_.-]+$`.
 
+## Visual references
+
+- `chat-frontend-diagrams.md` — страница с готовыми PNG-превью всех схем.
+- `chat-frontend-flow.mmd/.svg/.png` — каноническая архитектура: miniapp/site/frontend ходит в GLAIM source-chat API, локальный агент только исполняет job.
+- `chat-auth-boundaries.mmd/.svg/.png` — source-token-only границы: frontend ходит только в chat routes.
+- `chat-runtime-sequence.mmd/.svg/.png` — последовательность session -> message -> queue -> agent -> events.
+- `chat-ui-state-machine.mmd/.svg/.png` — минимальная state machine для ChatGPT-like UI.
+
 ## Security model
 
-Production схема:
+Основная схема сохранена отдельно в `chat-frontend-flow.mmd`,
+`chat-frontend-flow.svg` и `chat-frontend-flow.png`.
+
+Production канон:
 
 ```text
-frontend / miniapp -> source backend / BFF -> GLAIM
+miniapp / site / web chat / other frontend source -> GLAIM source-chat API
 ```
 
-`X-Source-Secret` является server-to-server секретом. Не отдавать его в браузер,
-query string, client logs, crash reports или localStorage.
+Gigma backend, ERP backend или BFF не являются частью канонической цепочки.
+Агент не должен вставлять `miniapp -> Gigma backend -> GLAIM` или другой
+backend-hop как обязательную схему подключения чата.
 
-Control-plane token routes (`/source-tokens`) требуют:
+Пользовательский chat API авторизуется source token'ом через
+заголовок:
 
 ```http
-Authorization: Bearer <app-agent-token>
-X-Control-Secret: <control-plane-secret>
+X-Source-Secret: <source-token>
 ```
 
-Эти routes не относятся к пользовательскому чату и не вызываются из frontend.
+Miniapp/site/frontend вызывает GLAIM напрямую с `X-Source-Secret`. В таком
+режиме source token становится клиентским credential'ом чата: не коммитить его в
+repo, не передавать в query string, не логировать и использовать только для
+source-chat routes.
+
+Production-доступ из публичного клиента разрешён только если source token
+chat-scoped или GLAIM жёстко ограничивает этот token только
+`/sources/{source}/chat/*`. Если текущий source token может открывать другие
+`/sources/{source}/*` routes, сначала нужно выделить chat-scoped source token
+или ограничить доступ на стороне GLAIM.
+
+Этот frontend contract описывает только пользовательский chat path. Выпуск,
+ротация и отзыв source token не являются частью frontend-чата и не должны
+появляться на схеме подключения чата.
 
 ## Common scope
 
@@ -56,15 +81,15 @@ X-Control-Secret: <control-plane-secret>
 GLAIM сам upsert'ит `projects`, `apps`, `channel_bindings` по этому scope.
 
 Не хранить `source_conversation_ref` как один глобальный env для всего frontend.
-Это граница диалога: формируй его на BFF из текущего пользователя, комнаты,
-чата или внешнего conversation id. Один общий ref для разных пользователей
-склеит их в одну session.
+Это граница диалога: формируй его во frontend/miniapp из текущего пользователя,
+комнаты, чата или внешнего conversation id. Один общий ref для разных
+пользователей склеит их в одну session.
 
 ## Open or create session
 
 ```http
 POST /api/v2/sources/{source}/chat/session
-X-Source-Secret: <server-side-source-secret>
+X-Source-Secret: <source-token>
 Accept: application/json
 Content-Type: application/json
 ```
@@ -94,7 +119,7 @@ Response:
 
 ```http
 POST /api/v2/sources/{source}/chat/messages
-X-Source-Secret: <server-side-source-secret>
+X-Source-Secret: <source-token>
 Accept: application/json
 Content-Type: application/json
 ```
@@ -152,7 +177,7 @@ Idempotency: GLAIM строит ключ
 
 ```http
 GET /api/v2/sources/{source}/chat/sessions/{session_id}/events
-X-Source-Secret: <server-side-source-secret>
+X-Source-Secret: <source-token>
 Accept: application/json
 ```
 
@@ -204,7 +229,7 @@ internal progress are not exposed as raw text.
 
 ```http
 POST /api/v2/sources/{source}/chat/sessions/{session_id}/stop
-X-Source-Secret: <server-side-source-secret>
+X-Source-Secret: <source-token>
 Accept: application/json
 Content-Type: application/json
 ```
@@ -226,7 +251,7 @@ when there was nothing active.
 
 ```http
 POST /api/v2/sources/{source}/chat/sessions/{session_id}/reset
-X-Source-Secret: <server-side-source-secret>
+X-Source-Secret: <source-token>
 Accept: application/json
 Content-Type: application/json
 ```
@@ -239,14 +264,14 @@ start polling from the returned `next_after_id`.
 
 ## Error map
 
-- `401 missing_source_secret`: BFF did not send `X-Source-Secret`.
+- `401 missing_source_secret`: client did not send `X-Source-Secret`.
 - `401 invalid_source_token`: source secret does not match source/project/app.
 - `403 session_not_owned` / `event_cursor_not_owned`: scope/session/cursor mismatch.
 - `404 session_not_found` / `event_cursor_not_found`: stale local state.
 - `422`: request validation, bad UUID, extra fields, empty message, malformed or oversized context, `workspace_missing`, `workspace_ambiguous`.
 
 Validation responses intentionally do not echo raw input. Preserve that property
-in BFF/frontend error handling.
+in frontend/adapter error handling.
 
 ## Frontend state machine
 
@@ -265,9 +290,12 @@ action, generate a new UUID.
 
 ## Verification checklist
 
-- Source secret is absent from built frontend assets.
-- Browser devtools network calls target BFF routes, not GLAIM source-chat routes, in production.
-- BFF sends `X-Source-Secret` header, never query credentials.
+- GLAIM is the chat backend; miniapp/site/frontend calls GLAIM directly.
+- No Gigma backend, ERP backend or BFF hop is inserted as the mandatory chat path.
+- Browser devtools network calls target GLAIM `/api/v2/sources/{source}/chat/*` routes.
+- Client sends `X-Source-Secret` header, never query credentials.
+- Source token is absent from git, query string and client logs.
+- Production source token is chat-scoped or server-restricted to `/sources/{source}/chat/*`.
 - Retry of the same send is idempotent.
 - Event polling uses `after_id` and does not duplicate rendered events.
 - Markdown is rendered only for `format:"markdown"`.
