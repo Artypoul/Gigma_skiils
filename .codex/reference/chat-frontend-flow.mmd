@@ -1,0 +1,26 @@
+flowchart TB
+  U["Пользователь"] --> FE["Miniapp / site / frontend source"]
+
+  FE -->|"X-Source-Secret: source token<br/>/api/v2/sources/{source}/chat/*"| G["GLAIM<br/>source-chat API"]
+
+  G -->|"validate source token<br/>source + project + app"| ST["source_tokens"]
+  G -->|"scope<br/>project / app / conversation"| S["sessions<br/>messages<br/>events"]
+
+  S -->|"enqueue job"| J["job queue"]
+  J -->|"claim job"| A["локальный агент-курьер"]
+  A -->|"progress / final"| J
+  J -->|"public events"| S
+
+  S -->|"events polling"| G
+  G -->|"assistant response"| FE
+
+  FE -. "нельзя" .-> AG["agent lifecycle endpoints<br/>/jobs/claim<br/>/ws/agent"]
+
+  classDef client fill:#F3E8FF,stroke:#7E22CE,color:#111111
+  classDef backend fill:#E0F2FE,stroke:#0369A1,color:#111111
+  classDef storage fill:#DCFCE7,stroke:#15803D,color:#111111
+  classDef forbidden fill:#FEE2E2,stroke:#B91C1C,color:#111111
+  class FE,U client
+  class G,J,A backend
+  class ST,S storage
+  class AG forbidden

@@ -1,0 +1,19 @@
+stateDiagram-v2
+  [*] --> Booting
+  Booting --> Ready: session opened
+  Booting --> Failed: auth or workspace error
+
+  Ready --> Sending: user sends message
+  Sending --> WaitingAgent: 202 accepted
+  Sending --> Failed: network or validation error
+
+  WaitingAgent --> Ready: assistant_final or error event
+  WaitingAgent --> Stopping: stop requested
+  Stopping --> Ready: stopped or no_active_job
+
+  Ready --> Resetting: reset requested
+  WaitingAgent --> Resetting: reset requested
+  Resetting --> Ready: new session_id
+
+  Failed --> Sending: retry same client_message_id
+  Failed --> Ready: user edits or cancels

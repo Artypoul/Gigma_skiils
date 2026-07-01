@@ -1,0 +1,32 @@
+sequenceDiagram
+  participant User as Пользователь
+  participant FE as Miniapp / site / frontend
+  participant G as GLAIM source-chat API
+  participant T as source_tokens
+  participant Store as sessions/messages/events
+  participant Queue as job queue
+  participant Agent as локальный агент-курьер
+
+  User->>FE: открывает чат
+  FE->>G: POST /sources/{source}/chat/session<br/>X-Source-Secret
+  G->>T: validate source token + scope
+  G->>Store: upsert project/app/binding/session
+  G-->>FE: session_id + next_after_id
+
+  User->>FE: отправляет сообщение
+  FE->>G: POST /sources/{source}/chat/messages<br/>client_message_id
+  G->>T: validate source token + scope
+  G->>Store: persist user_message event
+  G->>Queue: enqueue job for agent
+  G-->>FE: 202 job_id/run_id/created
+
+  Agent->>Queue: claim assigned job
+  Agent->>G: progress / final events
+  G->>Store: persist public event projection
+
+  loop пока работа активна
+    FE->>G: GET /sessions/{session_id}/events?after_id=...
+    G->>T: validate source token + scope
+    G->>Store: read public events
+    G-->>FE: events + next_after_id
+  end
