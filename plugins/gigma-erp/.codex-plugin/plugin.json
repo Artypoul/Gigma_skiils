@@ -1,17 +1,17 @@
 {
   "name": "gigma-erp",
-  "version": "0.3.0",
-  "description": "Операционные скилы Gigma ERP: создание тенанта, загрузка каталога, настройка витрины/сайта с контентной привязкой, miniapp auth и подключение frontend к API. Референс эндпоинтов/контрактов/багов — reference/erp-api.md.",
+  "version": "0.4.0",
+  "description": "Операционные скилы Gigma ERP: создание тенанта, загрузка каталога, настройка витрины/сайта с контентной привязкой, MCP agent access, miniapp auth и подключение frontend к API. Референс эндпоинтов/контрактов/багов — reference/erp-api.md.",
   "author": {
     "name": "Artypoul"
   },
   "license": "MIT",
-  "keywords": ["gigma", "erp", "тенант", "номенклатура", "импорт", "каталог", "витрина", "сайт", "контент", "страницы", "меню", "блоки", "склад", "app-token", "miniapp", "auth", "frontend", "api"],
+  "keywords": ["gigma", "erp", "тенант", "номенклатура", "импорт", "каталог", "витрина", "сайт", "контент", "страницы", "меню", "блоки", "склад", "app-token", "mcp", "agent", "agent-token", "miniapp", "auth", "frontend", "api"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Gigma ERP: операции",
-    "shortDescription": "Тенант, каталог, витрина и frontend API",
-    "longDescription": "«Руки» для Gigma ERP: create-tenant (новый проект), load-nomenclature (импорт каталога), setup-storefront (витрина+склад+App Token+остатки+страницы+меню+блоки под ключ), miniapp-auth (counterparty авторизация для MAX/Telegram miniapps), connect-frontend-api (подключение storefront/frontend к API). Карта API — reference/erp-api.md.",
+    "shortDescription": "Тенант, каталог, витрина, MCP agents и frontend API",
+    "longDescription": "«Руки» для Gigma ERP: create-tenant (новый проект), load-nomenclature (импорт каталога), setup-storefront (витрина+склад+App Token+остатки+страницы+меню+блоки под ключ), mcp-agent-access (agent-user + Sanctum token для внешнего MCP-сервера), miniapp-auth (counterparty авторизация для MAX/Telegram miniapps), connect-frontend-api (подключение storefront/frontend к API). Карта API — reference/erp-api.md.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
@@ -19,6 +19,7 @@
       "Создай новый тенант в Gigma",
       "Загрузи каталог номенклатуры в проект",
       "Настрой витрину/сайт, контент и App Token",
+      "Создай MCP-агента и выдай token для сервера",
       "Добавь авторизацию miniapp для counterparty",
       "Подключи frontend к Gigma API"
     ]
