@@ -13,7 +13,7 @@
 
 ## PR / monster review
 
-После каждого `git push` или создания PR запускать polling ревью: ждать monster review / Codex review / Claude review, если они подключены, смотреть GitHub comments/reviews и inbox. Блокеры и реальные замечания чинить в той же ветке, пушить follow-up commit и снова ждать re-review. Не объявлять PR готовым, пока последний review-цикл не подтвердил, что блокеров нет; если автоматический monster недоступен, явно сказать об этом и провести локальный monster-review ролями.
+После создания PR и после каждого `git push` в PR-ветку запускать polling ревью: ждать monster review / Codex review / Claude review, если они подключены, смотреть GitHub comments/reviews и inbox. Блокеры и реальные замечания чинить в той же ветке, пушить follow-up commit и снова ждать re-review. Не объявлять PR готовым, пока последний review-цикл не подтвердил, что блокеров нет; если автоматический monster недоступен, явно сказать об этом и провести локальный monster-review ролями.
 
 ## Роли (скилы в `.codex/skills/`)
 
