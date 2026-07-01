@@ -42,10 +42,11 @@ Miniapp/site/frontend вызывает GLAIM напрямую с `X-Source-Secre
 repo, не передавать в query string, не логировать и использовать только для
 source-chat routes.
 
-Перед production-доступом из публичного клиента проверить blast radius:
-текущий source token в GLAIM может открывать не только chat routes, но и другие
-`/sources/{source}/*` routes. Безопасная модель — выделить chat-scoped source
-token или ограничить доступ на стороне GLAIM.
+Production-доступ из публичного клиента разрешён только если source token
+chat-scoped или GLAIM жёстко ограничивает этот token только
+`/sources/{source}/chat/*`. Если текущий source token может открывать другие
+`/sources/{source}/*` routes, сначала нужно выделить chat-scoped source token
+или ограничить доступ на стороне GLAIM.
 
 Этот frontend contract описывает только пользовательский chat path. Выпуск,
 ротация и отзыв source token не являются частью frontend-чата и не должны
@@ -293,7 +294,8 @@ action, generate a new UUID.
 - No Gigma backend, ERP backend or BFF hop is inserted as the mandatory chat path.
 - Browser devtools network calls target GLAIM `/api/v2/sources/{source}/chat/*` routes.
 - Client sends `X-Source-Secret` header, never query credentials.
-- Source token is absent from git, query string and client logs; token blast radius is checked before production.
+- Source token is absent from git, query string and client logs.
+- Production source token is chat-scoped or server-restricted to `/sources/{source}/chat/*`.
 - Retry of the same send is idempotent.
 - Event polling uses `after_id` and does not duplicate rendered events.
 - Markdown is rendered only for `format:"markdown"`.
