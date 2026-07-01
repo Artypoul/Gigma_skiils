@@ -20,7 +20,7 @@ allowed-tools: Bash Read Grep
 
 ## Перед любым write
 
-1. Получить заранее выданный least-privileged human Bearer token с agent permissions, не App Token витрины. Не добывать owner token через БД/таблицу `passwords` для обычной настройки MCP; это только break-glass с явным разрешением владельца.
+1. Получить заранее выданный least-privileged human Bearer token с agent permissions, не App Token витрины. Если такого token нет, используй `request-agent-access`: self-service заявка уйдёт owner/admin на почту, а агент после approve заберёт свой `agent_token`. Не добывать owner token через БД/таблицу `passwords` для обычной настройки MCP; это только break-glass с явным разрешением владельца.
 2. Проверить `GET /api/user`: actor не должен быть agent-user, проект верный.
 3. Согласовать с владельцем:
    - имя и `login` агента;
@@ -96,6 +96,7 @@ Accept: application/json
 ## Жёсткие запреты
 
 - Не использовать `/api/login` или `/api/send_password` для agent-user: password flow для агентов запрещён.
+- Не просить owner Bearer token, если достаточно self-service approve через `request-agent-access`.
 - Не строить generic REST/curl proxy tool вроде "вызови любой ERP endpoint". Каждый MCP tool должен иметь allowlist конкретных `method + path` и свою проверку прав.
 - Не выдавать агенту права сильнее прав текущего human actor.
 - Не выпускать токен для агента, чьи роль/permissions сильнее текущего actor.

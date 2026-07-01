@@ -15,7 +15,9 @@
 | **App Token (витрина)** | заголовок `Token: <appToken>` | `token` (middleware) | Публичная витрина: каталог, цены, precalculate, contact_form, вход клиента |
 | **Клиент** | `Authorization: Bearer <counterpartyToken>`; для заказов/карт/подписок вместе с `Token: <appToken>` | `auth:counterparty` | Личный кабинет и действия в контексте витрины |
 
-Owner-токен получают как сотрудника проекта: `POST /api/send_password {login}` → код (письмо ИЛИ `SELECT password FROM passwords WHERE login=… ORDER BY id DESC LIMIT 1`) → `POST /api/login {login,password,device}` → `user.access_token.value` (вид `2992|…`).
+Owner-токен получают как сотрудника проекта: `POST /api/send_password {login}` → код из письма owner/admin → `POST /api/login {login,password,device}` → `user.access_token.value` (вид `2992|…`). Чтение кода из БД/таблицы `passwords` — только break-glass с явным разрешением владельца, не обычная настройка агента.
+
+Для MCP/AI-агента без owner-токена использовать self-service заявку: `POST /api/agent-access-requests` → письмо owner/admin → `status` polling → `consume` → `agent_token.value` (см. `agent-access-request.md`). Это предпочтительнее, чем просить owner password/OTP.
 
 ## Owner-эндпоинты (Bearer userToken, `auth:user`)
 
@@ -43,6 +45,20 @@ POST /api/pages                             создать контент-стр
 POST /api/applications/{id}/menu_items       создать пункт меню сайта
 POST /api/applications/{id}/blocks           создать динамический блок сайта
 ```
+
+## Public MCP agent access request
+
+```
+POST /api/agent-access-requests                    создать заявку на owner/admin email
+GET  /api/agent-access-requests/{publicId}/review  HTML review page из письма
+POST /api/agent-access-requests/{publicId}/review  детали заявки по approval_token
+POST /api/agent-access-requests/{publicId}/approve owner/admin approve
+POST /api/agent-access-requests/{publicId}/decline owner/admin decline
+POST /api/agent-access-requests/{publicId}/status  статус по request_token
+POST /api/agent-access-requests/{publicId}/consume одноразовая выдача agent_token.value
+```
+
+`request_token`, `approval_token`, `agent_token.value` не класть в query string, чат, PR body, shell history или клиентские логи.
 
 ## Публичная витрина (заголовок `Token`, App Token)
 
@@ -83,7 +99,7 @@ GET    /api/counterparty/payment-methods     сохранённые карты; 
 - **Application (витрина)**: `token` (App Token, `Str::random(32)`), `is_token_active`, `wholesale`, `branch_id`, привязанные склады, `sales_strategy_id`. В каталоге видны ТОЛЬКО товары, у которых есть остаток на складе витрины.
 - **Warehouse**: `is_price_from_inventories` (источник цены), `city_id` (**NOT NULL**), привязан к складам через витрину.
 - **Page/MenuItem/Block (контент сайта)**: контент привязывается к `application_id`/`applications/{id}`. Агент должен создавать страницы, пункты меню и блоки на тот же `Application`, чей App Token отдаётся фронту.
-- **Agent-user для MCP**: технический `User` с `is_agent=true`, обычными role/permissions и Sanctum Bearer token. Внешний MCP-сервер ходит в обычный ERP REST API; отдельного `/api/mcp/*` слоя нет. Подробно: `agent-mcp-access.md`.
+- **Agent-user для MCP**: технический `User` с `is_agent=true`, обычными role/permissions и Sanctum Bearer token. Внешний MCP-сервер ходит в обычный ERP REST API; отдельного `/api/mcp/*` слоя нет. Подробно: `agent-mcp-access.md`; self-service через почту owner/admin — `agent-access-request.md`.
 
 ## Известные баги/грабли ERP (обходить)
 

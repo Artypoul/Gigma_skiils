@@ -24,7 +24,7 @@
 - Факты сервиса: `.codex/reference/ecommerce-capabilities.md`.
 - Канон API Gigma (источник правды): https://artypoul-docs-gigma-7b80.twc1.net/erp-rules.txt
 - Операционные «руки»: скилы `create-tenant`, `load-nomenclature` (плагин `gigma-erp`) — тоже зеркалятся в `.codex/skills/`.
-- MCP agents: скил `mcp-agent-access` подключает внешний MCP-сервер через ERP agent-user и обычный Sanctum Bearer token; старый `/api/mcp/*` слой не возвращать.
+- MCP agents: скил `request-agent-access` получает agent token через self-service заявку на почту owner/admin, а `mcp-agent-access` подключает внешний MCP-сервер через ERP agent-user и обычный Sanctum Bearer token; старый `/api/mcp/*` слой не возвращать.
 - Miniapps auth: скил `miniapp-auth` фиксирует канонический counterparty route, проверку signed contact и запрет на лишние публичные alias routes.
 - Frontend API: скил `connect-frontend-api` подключает storefront/frontend/miniapp к Gigma API по канону `Docs-gigma`.
 
