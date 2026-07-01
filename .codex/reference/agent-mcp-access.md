@@ -21,6 +21,8 @@ Accept: application/json
 
 В Laravel нет нового `/api/mcp/*`, отдельной таблицы `agents` и отдельного auth provider.
 
+MCP server must not expose a generic REST/curl proxy for ERP. Every MCP tool needs an explicit `method + path` allowlist and its own positive/negative permission check, because some legacy ERP routes are guarded by `auth:user` but not by fine-grained permissions.
+
 ## Permissions
 
 Новые permissions с `guard_name=user`:
@@ -54,6 +56,8 @@ Accept: application/json
 | GET | `/api/agents/{agent}/tokens` | `manage-agent-tokens` + manage boundary | Список token metadata |
 | POST | `/api/agents/{agent}/tokens` | `manage-agent-tokens` + manage boundary | Выпустить token |
 | DELETE | `/api/agents/{agent}/tokens/{token}` | `manage-agent-tokens` + manage boundary | Отозвать token агента |
+
+For revoke, `{token}` is the token metadata id (`agent_token.id`, `personal_access_tokens.id`). Never put the plain `agent_token.value` into the URL.
 
 ## Create agent payload
 
@@ -139,9 +143,14 @@ Create response wrapper: `agent_token`.
 
 `value` is returned only on create. `GET /api/agents/{agent}/tokens` returns metadata without `value`, `token` or hash.
 
+Use `agent_token.id` from create/list responses when revoking a token. Never use the plain `<id>|<secret>` token value as the `{token}` route parameter.
+
 ## Forbidden flows
 
 - `POST /api/login` and `POST /api/send_password` reject `is_agent=true`.
+- Do not obtain setup owner/human tokens by reading production DB login codes or the `passwords` table during normal MCP setup. Use a pre-issued least-privileged human token with `create-agents`, `edit-agents` and/or `manage-agent-tokens`. DB/OTP access is break-glass only with explicit owner approval.
+- Do not log `Authorization` headers, OTPs, owner tokens or `agent_token.value`.
+- Do not create owner/admin agent roles by default. If a break-glass owner/admin agent is approved, use short TTL, endpoint allowlist, no generic tools and immediate rotation.
 - Human user endpoints reject agent rows as human users:
   - `/api/users/{agent}`;
   - `/api/users/{agent}/integrations`;
@@ -156,12 +165,14 @@ Create response wrapper: `agent_token`.
 1. Human owner/admin creates or selects agent-user.
 2. Agent has minimal `role_id`, `branch_id`, `department_id` and direct permissions for the intended tools.
 3. Human actor creates token once and stores plain value in MCP secret storage.
-4. MCP tools map to regular ERP endpoints and always send `Authorization: Bearer <agent_token>`.
+4. MCP tools map to regular ERP endpoints by explicit method+path allowlist and always send `Authorization: Bearer <agent_token>`.
 5. Every write tool should have its own confirmation/payload preview outside ERP.
-6. Verify with `GET /api/user`, then one allowed endpoint and one forbidden endpoint.
+6. Verify with `GET /api/user`, then every exposed tool endpoint with an allowed action and a nearby denied action.
 7. If token leaks or scope changes, revoke token or `DELETE /api/agents/{agent}`.
 
 ## Backend files
+
+Paths below are in the external repo `itecho-erp-backend`, not in this marketplace repo.
 
 - `routes/api.php`
 - `app/Http/Controllers/AgentController.php`
@@ -180,7 +191,7 @@ Create response wrapper: `agent_token`.
 
 ## Graphify hooks
 
-Use Graphify as navigation only, then confirm in source:
+Use Graphify from an updated `itecho-erp-backend` checkout. If the graph is stale and agent nodes are missing, update the backend graph or fall back to source-first checks. Use Graphify as navigation only, then confirm in source:
 
 ```bash
 graphify explain "AgentController"
