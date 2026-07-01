@@ -83,7 +83,11 @@ def validate_marketplaces(plugin_names: set[str]) -> None:
             if not isinstance(source_path, str):
                 fail(f"{rel(codex_path)} plugin {name!r} missing source.path")
                 continue
-            if not (ROOT / source_path).resolve().is_dir():
+            expected_path = (PLUGIN_DIR / name).resolve()
+            resolved_path = (ROOT / source_path).resolve()
+            if resolved_path != expected_path:
+                fail(f"{rel(codex_path)} plugin {name!r} source.path must be ./plugins/{name}")
+            if not resolved_path.is_dir():
                 fail(f"{rel(codex_path)} plugin {name!r} source path does not exist: {source_path}")
         if seen != plugin_names:
             fail(f"{rel(codex_path)} plugins {sorted(seen)} do not match plugin dirs {sorted(plugin_names)}")
@@ -101,7 +105,11 @@ def validate_marketplaces(plugin_names: set[str]) -> None:
             name = require_string(entry, "name", claude_path)
             seen.add(name)
             source = require_string(entry, "source", claude_path)
-            if not (ROOT / source).resolve().is_dir():
+            expected_path = (PLUGIN_DIR / name).resolve()
+            resolved_path = (ROOT / source).resolve()
+            if resolved_path != expected_path:
+                fail(f"{rel(claude_path)} plugin {name!r} source must be ./plugins/{name}")
+            if not resolved_path.is_dir():
                 fail(f"{rel(claude_path)} plugin {name!r} source path does not exist: {source}")
             require_string(entry, "description", claude_path)
         if seen != plugin_names:
@@ -252,6 +260,7 @@ def validate_glaim_guardrails() -> None:
     ]
     search_roots = [
         ROOT / "AGENTS.md",
+        ROOT / ".agents",
         ROOT / ".claude-plugin",
         ROOT / ".codex",
         ROOT / "plugins" / "glaim",
