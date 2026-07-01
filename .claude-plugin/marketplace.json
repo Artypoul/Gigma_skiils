@@ -10,7 +10,7 @@
     {
       "name": "gigma-erp",
       "source": "./plugins/gigma-erp",
-      "description": "Операционные скилы Gigma ERP через API: create-tenant (новый проект), load-nomenclature (импорт каталога), setup-storefront (витрина+склад+App Token+остатки+контент под ключ), miniapp-auth и connect-frontend-api. Референс эндпоинтов/контрактов/багов — reference/erp-api.md."
+      "description": "Операционные скилы Gigma ERP через API: create-tenant (новый проект), load-nomenclature (импорт каталога), setup-storefront (витрина+склад+App Token+остатки+контент под ключ), mcp-agent-access, miniapp-auth и connect-frontend-api. Референс эндпоинтов/контрактов/багов — reference/erp-api.md."
     },
     {
       "name": "gigma-consultant",

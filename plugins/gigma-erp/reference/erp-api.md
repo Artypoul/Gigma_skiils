@@ -30,6 +30,11 @@ POST /api/warehouses                        создать склад
 GET  /api/applications                      витрины
 POST /api/applications                      создать витрину (генерит App Token)
 PUT  /api/applications/{id}                 правка витрины (привязка склада, активация токена)
+GET  /api/agents | /api/tables/agents       agent-users для внешних MCP-серверов
+POST /api/agents                            создать agent-user (см. agent-mcp-access.md)
+PATCH|DELETE /api/agents/{id}               обновить / отключить agent-user
+GET|POST /api/agents/{id}/tokens            metadata / выпуск Sanctum token агента
+DELETE /api/agents/{id}/tokens/{token}      отзыв token агента
 POST /api/warehouses/{wid}/nomenclatures    добавить остаток (товар на склад)
 GET  /api/nomenclatures?per_page=1000       номенклатура проекта
 POST /api/nomenclatures/import              импорт каталога xlsx (см. скил load-nomenclature)
@@ -78,6 +83,7 @@ GET    /api/counterparty/payment-methods     сохранённые карты; 
 - **Application (витрина)**: `token` (App Token, `Str::random(32)`), `is_token_active`, `wholesale`, `branch_id`, привязанные склады, `sales_strategy_id`. В каталоге видны ТОЛЬКО товары, у которых есть остаток на складе витрины.
 - **Warehouse**: `is_price_from_inventories` (источник цены), `city_id` (**NOT NULL**), привязан к складам через витрину.
 - **Page/MenuItem/Block (контент сайта)**: контент привязывается к `application_id`/`applications/{id}`. Агент должен создавать страницы, пункты меню и блоки на тот же `Application`, чей App Token отдаётся фронту.
+- **Agent-user для MCP**: технический `User` с `is_agent=true`, обычными role/permissions и Sanctum Bearer token. Внешний MCP-сервер ходит в обычный ERP REST API; отдельного `/api/mcp/*` слоя нет. Подробно: `agent-mcp-access.md`.
 
 ## Известные баги/грабли ERP (обходить)
 
