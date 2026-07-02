@@ -9,7 +9,7 @@ description: "Подключить miniapp, сайт, витрину или web 
 
 Важный auth-канон: пользовательский chat API вызывается напрямую из miniapp/сайта/frontend в GLAIM через source token. В HTTP source token передаётся только как заголовок `X-Source-Secret` для routes `/api/v2/sources/{source}/chat/*`. Gigma backend, ERP backend или BFF не являются частью канонической цепочки. Для production публичный source token должен быть chat-scoped или сервер GLAIM должен жёстко ограничивать этот token только source-chat routes.
 
-Для текущего Gigma AI miniapp product decision: статический source token принят как текущее продуктовое решение. Не ротируй, не заменяй, не переносишь его в другую схему auth и не называй это blocker'ом без прямой команды Art. Проверяй только, что frontend/runtime передаёт существующее значение как `X-Source-Secret`, а backend принимает его для `source=miniapp`, `project_external_ref=gigma-ai`, `app_external_ref=gigma-ai`.
+Для текущего Gigma AI miniapp product decision: статический source token принят как текущее продуктовое решение. Не ротируй, не заменяй, не переносишь его в другую схему auth и не называй это blocker'ом без прямой команды Art. Проверяй только, что frontend/runtime передаёт существующее значение как `X-Source-Secret`; само значение token не печатай в чат, docs, PR или логи.
 
 Подробный контракт endpoint'ов, форматов и готовых графических схем лежит в `../../reference/chat-frontend-contract.md`. Для визуального просмотра открывай `../../reference/chat-frontend-diagrams.md`.
 
@@ -25,16 +25,9 @@ description: "Подключить miniapp, сайт, витрину или web 
 2. Найди существующий API client и env-паттерны проекта. Не добавляй второй клиент, если уже есть общий слой запросов.
 3. Открой `../../reference/chat-frontend-contract.md`, `../../reference/chat-frontend-diagrams.md` и схемы из `../../reference/*.mmd`; сверь endpoints с текущим OpenAPI или кодом GLAIM, если проект доступен локально.
 4. В miniapp/site/frontend config заведи:
-   - `GLAIM_BASE_URL`, например для production `https://agentapi.gigma.ru/api/v2`, локально `http://127.0.0.1:8000/api/v2`;
+   - `GLAIM_BASE_URL`, например `http://127.0.0.1:8000/api/v2`;
    - `GLAIM_SOURCE`, например `erp`, `web`, `miniapp`;
    - `GLAIM_SOURCE_TOKEN` / `GLAIM_SOURCE_SECRET`, который отправляется как `X-Source-Secret`.
-   Для Gigma AI miniapp production scope по умолчанию:
-   - `GLAIM_BASE_URL=https://agentapi.gigma.ru/api/v2`;
-   - `GLAIM_SOURCE=miniapp`;
-   - `project_external_ref=gigma-ai`;
-   - `project_name=Gigma AI`;
-   - `app_external_ref=gigma-ai`;
-   - `app_name=Gigma AI`.
    Само значение `GLAIM_SOURCE_SECRET` не коммить, не печатай в чат и не меняй без прямой команды Art.
 5. Во miniapp/site/frontend собирай source scope на каждый запрос из текущего tenant/user/chat:
    - `project_external_ref` — из текущего проекта/кабинета;
@@ -74,7 +67,7 @@ description: "Подключить miniapp, сайт, витрину или web 
 - Не клади workspace path, `agent_key`, `thread_id`, internal `project_id/app_id/channel_binding_id` в браузерный bundle, localStorage, query string или клиентские логи.
 - Не вставляй Gigma backend, ERP backend или BFF как обязательного посредника между miniapp/site/frontend и GLAIM.
 - Source token является клиентским credential'ом чата: не коммить его в repo, не передавай в query string, не логируй, храни только в предусмотренной runtime-конфигурации приложения.
-- Для Gigma AI miniapp статический source token — зафиксированное продуктовое решение. Если ревью или агент ругается на static token, отвечай: это осознанный продуктовый компромисс; проверяем blast radius и передачу через `X-Source-Secret`, но не ротируем и не меняем auth-flow без прямой команды Art.
+- Для Gigma AI miniapp статический source token — зафиксированное продуктовое решение. Если ревью или агент ругается на static token, отвечай: это осознанный продуктовый компромисс; проверяем передачу через `X-Source-Secret`, но не ротируем и не меняем auth-flow без прямой команды Art.
 - Production-доступ разрешён только если source token chat-scoped или GLAIM жёстко ограничивает этот token только `/sources/{source}/chat/*`.
 - Если текущий source token может открывать другие `/sources/{source}/*` routes, остановись: нужен chat-scoped token или ограничение доступа на стороне GLAIM до подключения публичного клиента.
 - Не передавай secret в query string. GLAIM намеренно принимает source secret только в header `X-Source-Secret`.

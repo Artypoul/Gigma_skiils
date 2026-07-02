@@ -48,22 +48,11 @@ chat-scoped или GLAIM жёстко ограничивает этот token т
 `/sources/{source}/*` routes, сначала нужно выделить chat-scoped source token
 или ограничить доступ на стороне GLAIM.
 
-Gigma AI miniapp production preset:
-
-```text
-GLAIM_BASE_URL=https://agentapi.gigma.ru/api/v2
-source=miniapp
-project_external_ref=gigma-ai
-project_name=Gigma AI
-app_external_ref=gigma-ai
-app_name=Gigma AI
-```
-
 Для Gigma AI miniapp статический source token сейчас является осознанным
 product decision. Не ротировать, не заменять и не переносить его в другой
-auth-flow без прямой команды Art. Проверка должна доказывать, что существующий
-runtime secret отправляется только как `X-Source-Secret` и проходит backend auth;
-само значение token в docs, PR, логах и чатах не раскрывать.
+auth-flow без прямой команды Art. Проверка должна доказывать только, что
+существующий runtime secret отправляется как `X-Source-Secret`; само значение
+token в docs, PR, логах и чатах не раскрывать.
 
 Этот frontend contract описывает только пользовательский chat path. Выпуск,
 ротация и отзыв source token не являются частью frontend-чата и не должны
