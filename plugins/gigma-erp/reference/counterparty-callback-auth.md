@@ -22,6 +22,29 @@ Content-Type: application/json
 
 Новый публичный alias route не добавлять.
 
+## Режимы интеграции
+
+### Server-wrapper, preferred
+
+Использовать, если у приложения есть свой серверный слой или оно само ставит auth cookies.
+
+Рекомендуемый публичный контракт приложения:
+
+- browser -> ваш `POST /login/callback-auth/init`
+- ваш сервер -> Gigma `POST /api/counterparty/callback_auth/init`
+- ваш сервер сохраняет `session_token` в `httpOnly` cookie или серверной сессии
+- browser получает только `callback_number` и `expires_at`
+- browser -> ваш `POST /login/callback-auth/status`
+- ваш сервер читает `session_token`, вызывает Gigma `status`, при `verified` ставит финальную auth cookie и очищает callback-session
+
+В этом режиме browser не должен видеть raw `session_token`.
+
+### Direct storefront, narrow fallback
+
+Использовать только если frontend ходит в Gigma напрямую и отдельного backend/BFF нет.
+
+В этом режиме browser сам вызывает Gigma `init` и `status`, но `session_token` держит только в памяти текущей вкладки. Не восстанавливать его из `localStorage`, `sessionStorage`, URL или обычных cookies.
+
 ## Request / response
 
 ### 1. Init
@@ -118,6 +141,13 @@ Content-Type: application/json
 - Если `client_ip` был сохранён на `init`, polling `status` с другого IP тоже даст `404`.
 - Verified-сессия после expiry больше не выдаёт токен и становится `expired`.
 
+## Session token lifecycle
+
+- Не класть `session_token` в URL, query string, analytics, client logs, `localStorage` или `sessionStorage`, если есть server-wrapper.
+- В server-wrapper режиме хранить `session_token` только в `httpOnly` cookie или server-side session storage.
+- В direct-storefront режиме держать `session_token` только в runtime state текущей вкладки и очищать после `verified`, `expired`, `already_consumed`, `404` или ручного retry.
+- Новый `init` должен перезаписывать предыдущую callback-session, чтобы активной оставалась только одна попытка входа.
+
 ## Rate limits и анти-спам
 
 - `callback_init_ip`: `200/hour` на IP.
@@ -146,6 +176,13 @@ Authorization: Bearer <access_token>
 ```
 
 Это нужно для заказов, избранного, сохранённых карт и подписок.
+
+Если приложение использует server-wrapper, именно сервер должен:
+
+1. Забрать `access_token` из Gigma `status`.
+2. Поставить свою финальную auth cookie.
+3. Очистить callback-session cookie.
+4. Вернуть browser уже безопасный redirect/result без `session_token`.
 
 ## Отличия от соседних auth flow
 
