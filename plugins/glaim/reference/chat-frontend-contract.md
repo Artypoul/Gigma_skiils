@@ -48,6 +48,14 @@ chat-scoped или GLAIM жёстко ограничивает этот token т
 `/sources/{source}/*` routes, сначала нужно выделить chat-scoped source token
 или ограничить доступ на стороне GLAIM.
 
+Для Gigma AI miniapp статический source token сейчас является осознанным
+product decision. Не ротировать, не заменять и не переносить его в другой
+auth-flow без прямой команды Art. Проверка должна доказывать только, что
+существующий runtime secret отправляется как `X-Source-Secret`; само значение
+token в docs, PR, логах и чатах не раскрывать.
+Этот блок описывает только source token decision и не задаёт base URL,
+source/project/app refs или новые endpoints.
+
 Этот frontend contract описывает только пользовательский chat path. Выпуск,
 ротация и отзыв source token не являются частью frontend-чата и не должны
 появляться на схеме подключения чата.
@@ -295,6 +303,7 @@ action, generate a new UUID.
 - Browser devtools network calls target GLAIM `/api/v2/sources/{source}/chat/*` routes.
 - Client sends `X-Source-Secret` header, never query credentials.
 - Source token is absent from git, query string and client logs.
+- For Gigma AI miniapp, the existing static source token remains unchanged unless Art explicitly asks for rotation or a new auth-flow.
 - Production source token is chat-scoped or server-restricted to `/sources/{source}/chat/*`.
 - Retry of the same send is idempotent.
 - Event polling uses `after_id` and does not duplicate rendered events.

@@ -1,6 +1,6 @@
 {
   "name": "glaim",
-  "version": "0.1.0+codex.20260701063104",
+  "version": "0.1.1+codex.20260702165500",
   "description": "Скилы GLAIM: прямое подключение miniapp, сайта или frontend-чата к GLAIM source-chat API, работа с source token, session/message/events flow и проверка интеграции.",
   "author": {
     "name": "Artypoul"
