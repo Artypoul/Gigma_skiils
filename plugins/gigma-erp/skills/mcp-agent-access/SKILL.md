@@ -1,6 +1,6 @@
 ---
 name: mcp-agent-access
-description: "Создать, проверить или подключить MCP/AI-агента к Gigma ERP через agent-user и Sanctum Bearer token. Используй когда нужно выдать токен MCP-серверу, проверить /api/agents, права view/create/edit-agents или manage-agent-tokens, отключить агента, отозвать токен или связать MCP tool calls с обычным ERP REST API."
+description: "Создать, проверить или подключить MCP/AI-агента к Gigma ERP через agent-user и Sanctum Bearer token. Используй когда нужно выдать токен MCP-серверу, получить MCP-доступ для нового агента, проверить /api/agents, права view/create/edit-agents или manage-agent-tokens, отключить агента, отозвать токен или связать MCP tool calls с обычным ERP REST API. Если agent token ещё нет, сначала используй request-agent-access."
 allowed-tools: Bash Read Grep
 ---
 
@@ -20,7 +20,7 @@ allowed-tools: Bash Read Grep
 
 ## Перед любым write
 
-1. Получить заранее выданный least-privileged human Bearer token с agent permissions, не App Token витрины. Не добывать owner token через БД/таблицу `passwords` для обычной настройки MCP; это только break-glass с явным разрешением владельца.
+1. Получить заранее выданный least-privileged human Bearer token с agent permissions, не App Token витрины. Если такого token нет, используй `request-agent-access`: self-service заявка уйдёт owner/admin на почту, а агент после approve заберёт свой `agent_token`. Не добывать owner token через БД/таблицу `passwords` для обычной настройки MCP; это только break-glass с явным разрешением владельца.
 2. Проверить `GET /api/user`: actor не должен быть agent-user, проект верный.
 3. Согласовать с владельцем:
    - имя и `login` агента;
@@ -30,6 +30,20 @@ allowed-tools: Bash Read Grep
    - какие exact method+path будут доступны каждому MCP tool;
    - где MCP-сервер безопасно сохранит plain token.
 4. Перед `POST/PATCH/DELETE` явно показать payload и дождаться подтверждения.
+
+## Если токена ещё нет
+
+Не начинать с `/api/agents` и не просить owner Bearer token. Для нового агента или нового ПК сначала выполнить self-service flow из `request-agent-access`:
+
+1. Собрать `ERP_API_BASE_URL`, `owner_email`, `agent_name`, `agent_login`, минимальные `permissions`, `purpose` и путь для локального secret storage.
+2. Создать `POST /api/agent-access-requests`.
+3. Сохранить `public_id` и `request_token` локально, не выводя `request_token`.
+4. Дождаться approve письма владельцем через status polling.
+5. Один раз вызвать `consume`, сохранить `agent_token.value`.
+6. Проверить `GET /api/user` с `Authorization: Bearer <agent_token>`.
+7. Вернуться к этому скилу и описать MCP tools как allowlist конкретных `method + path`.
+
+Граница ответственности: `request-agent-access` получает `agent_token`; этот скил настраивает/проверяет права и endpoint allowlist для MCP. Если пользователь спрашивает "как агенту получить доступ к MCP", обязательно дать обе части в таком порядке.
 
 ## Runbook
 
@@ -96,6 +110,7 @@ Accept: application/json
 ## Жёсткие запреты
 
 - Не использовать `/api/login` или `/api/send_password` для agent-user: password flow для агентов запрещён.
+- Не просить owner Bearer token, если достаточно self-service approve через `request-agent-access`.
 - Не строить generic REST/curl proxy tool вроде "вызови любой ERP endpoint". Каждый MCP tool должен иметь allowlist конкретных `method + path` и свою проверку прав.
 - Не выдавать агенту права сильнее прав текущего human actor.
 - Не выпускать токен для агента, чьи роль/permissions сильнее текущего actor.

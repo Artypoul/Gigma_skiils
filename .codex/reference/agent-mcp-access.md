@@ -1,6 +1,6 @@
 # Agent MCP access reference
 
-Факты проверены по `itecho-erp-backend` `origin/master` после merge PR #271 `feature/agent-mcp-access` (`9108eaa3`, 2026-07-01).
+Факты проверены по `itecho-erp-backend` `origin/master` после merge PR #271 `feature/agent-mcp-access` (`9108eaa3`, 2026-07-01). Self-service заявка через почту owner/admin добавлена в PR #273 (`16038537`, 2026-07-02); см. `agent-access-request.md`.
 
 ## Модель
 
@@ -58,6 +58,8 @@ MCP server must not expose a generic REST/curl proxy for ERP. Every MCP tool nee
 | DELETE | `/api/agents/{agent}/tokens/{token}` | `manage-agent-tokens` + manage boundary | Отозвать token агента |
 
 For revoke, `{token}` is the token metadata id (`agent_token.id`, `personal_access_tokens.id`). Never put the plain `agent_token.value` into the URL.
+
+Если owner/admin Bearer token заранее недоступен, не добывай его через пароль/БД. Используй self-service flow `POST /api/agent-access-requests`: агент создаёт заявку, owner подтверждает из письма, агент делает `consume` и получает `agent_token.value` один раз.
 
 ## Create agent payload
 
@@ -148,7 +150,7 @@ Use `agent_token.id` from create/list responses when revoking a token. Never use
 ## Forbidden flows
 
 - `POST /api/login` and `POST /api/send_password` reject `is_agent=true`.
-- Do not obtain setup owner/human tokens by reading production DB login codes or the `passwords` table during normal MCP setup. Use a pre-issued least-privileged human token with `create-agents`, `edit-agents` and/or `manage-agent-tokens`. DB/OTP access is break-glass only with explicit owner approval.
+- Do not obtain setup owner/human tokens by reading production DB login codes or the `passwords` table during normal MCP setup. Prefer self-service `agent-access-requests` or use a pre-issued least-privileged human token with `create-agents`, `edit-agents` and/or `manage-agent-tokens`. DB/OTP access is break-glass only with explicit owner approval.
 - Do not log `Authorization` headers, OTPs, owner tokens or `agent_token.value`.
 - Do not create owner/admin agent roles by default. If a break-glass owner/admin agent is approved, use short TTL, endpoint allowlist, no generic tools and immediate rotation.
 - Human user endpoints reject agent rows as human users:
@@ -170,6 +172,13 @@ Use `agent_token.id` from create/list responses when revoking a token. Never use
 6. Verify with `GET /api/user`, then every exposed tool endpoint with an allowed action and a nearby denied action.
 7. If token leaks or scope changes, revoke token or `DELETE /api/agents/{agent}`.
 
+Self-service alternative:
+
+1. Agent creates `POST /api/agent-access-requests` with owner email, name, login, permissions and purpose.
+2. Owner/admin approves from email review page.
+3. Agent polls `status` and calls `consume` after `approved`.
+4. MCP server stores returned `agent_token.value` in secret storage and then follows the same allowlist/testing checklist above.
+
 ## Backend files
 
 Paths below are in the external repo `itecho-erp-backend`, not in this marketplace repo.
@@ -188,6 +197,9 @@ Paths below are in the external repo `itecho-erp-backend`, not in this marketpla
 - `database/migrations/2026_07_01_010000_add_agent_fields_to_users_table.php`
 - `database/migrations/2026_07_01_010100_seed_agent_permissions.php`
 - `tests/Feature/Agents/AgentAccessTest.php`
+- `app/Http/Controllers/AgentAccessRequestController.php`
+- `app/Services/AgentAccessRequestService.php`
+- `tests/Feature/Agents/AgentAccessRequestTest.php`
 
 ## Graphify hooks
 
