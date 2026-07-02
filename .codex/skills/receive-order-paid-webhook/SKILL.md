@@ -1,6 +1,6 @@
 ---
 name: receive-order-paid-webhook
-description: "Подключить VPS/backend-сервис к входящему Gigma ERP order.paid webhook: принять POST, проверить X-Signature HMAC, timestamp и event_id, настроить ORDER_PAID_WEBHOOK_SECRET, идемпотентность и безопасные ответы. Используй когда нужно реализовать или проверить получатель webhook оплаты заказа от Gigma ERP на внешнем сервисе."
+description: "Интегрировать внешний backend/сервис с Gigma ERP order.paid webhook: принять POST об оплате заказа, проверить X-Signature HMAC, timestamp и event_id, настроить ORDER_PAID_WEBHOOK_SECRET, идемпотентность и безопасные ответы. Используй когда нужно реализовать или проверить получатель payment/order-paid webhook от Gigma ERP."
 allowed-tools: Read Grep Bash
 ---
 
@@ -8,7 +8,7 @@ allowed-tools: Read Grep Bash
 
 ## Overview
 
-Используй этот скил, когда внешний VPS/backend-сервис должен принимать событие `order.paid` из Gigma ERP. Цель: принять только настоящий webhook, не обработать дубль как новый платёж и не утечь секретами/PII в логи.
+Используй этот скил, когда внешний backend, сайт, miniapp backend, подписочный сервис или другая интеграция должна принимать событие `order.paid` из Gigma ERP. Цель: принять только настоящий webhook, не обработать дубль как новый платёж и не утечь секретами/PII в логи.
 
 Если работа идёт в `itecho-erp-backend`, не добавляй туда глобальный `ORDER_PAID_WEBHOOK_SECRET`: в ERP секрет хранится у конкретного `application_webhook`. На принимающем сервисе можно хранить тот же секрет в env `ORDER_PAID_WEBHOOK_SECRET`.
 
