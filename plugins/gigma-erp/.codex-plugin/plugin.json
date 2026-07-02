@@ -1,6 +1,6 @@
 {
   "name": "gigma-erp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Операционные скилы Gigma ERP: создание тенанта, загрузка каталога, настройка витрины/сайта с контентной привязкой, MCP agent access, self-service заявка агента через почту owner/admin, miniapp auth, подключение frontend к API и интеграция order.paid webhook. Референс эндпоинтов/контрактов/багов — reference/erp-api.md.",
   "author": {
     "name": "Artypoul"
