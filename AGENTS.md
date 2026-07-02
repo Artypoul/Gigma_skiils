@@ -26,6 +26,7 @@
 - Операционные «руки»: скилы `create-tenant`, `load-nomenclature` (плагин `gigma-erp`) — тоже зеркалятся в `.codex/skills/`.
 - MCP agents: скил `request-agent-access` получает agent token через self-service заявку на почту owner/admin, а `mcp-agent-access` подключает внешний MCP-сервер через ERP agent-user и обычный Sanctum Bearer token; старый `/api/mcp/*` слой не возвращать.
 - Miniapps auth: скил `miniapp-auth` фиксирует канонический counterparty route, проверку signed contact и запрет на лишние публичные alias routes.
+- Callback auth: скил `counterparty-callback-auth` покрывает вход клиента по звонку через `POST /api/counterparty/callback_auth/init|status`, одноразовую выдачу `access_token`, App Token header и UCaller flow.
 - Frontend API: скил `connect-frontend-api` подключает storefront/frontend/miniapp к Gigma API по канону `Docs-gigma`.
 - Payment webhooks: скил `receive-order-paid-webhook` подключает внешний backend/сервис к Gigma ERP `order.paid` webhook с HMAC-подписью, timestamp freshness и идемпотентностью по `event_id`.
 
