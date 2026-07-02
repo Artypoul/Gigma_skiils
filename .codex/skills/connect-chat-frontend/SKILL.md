@@ -11,6 +11,8 @@ description: "Подключить miniapp, сайт, витрину или web 
 
 Для текущего Gigma AI miniapp product decision: статический source token принят как текущее продуктовое решение. Не ротируй, не заменяй, не переносишь его в другую схему auth и не называй это blocker'ом без прямой команды Art. Проверяй только, что frontend/runtime передаёт существующее значение как `X-Source-Secret`; само значение token не печатай в чат, docs, PR или логи.
 
+Если задача от Art сформулирована как "source token", "статический токен", "только source token", "не менять токен", "чини PR" или "перепиши skill" в контексте этого правила, работай строго в source-token-only scope. Не добавляй base URL, source/project/app refs, новые endpoints или auth redesign без прямой команды Art. Не задавай уточняющий вопрос, когда безопасное действие очевидно: зафиксируй существующее product decision и убери лишние расширения.
+
 Подробный контракт endpoint'ов, форматов и готовых графических схем лежит в `../../reference/chat-frontend-contract.md`. Для визуального просмотра открывай `../../reference/chat-frontend-diagrams.md`.
 
 ## Порядок работы
@@ -69,7 +71,8 @@ description: "Подключить miniapp, сайт, витрину или web 
 - Source token является клиентским credential'ом чата: не коммить его в repo, не передавай в query string, не логируй, храни только в предусмотренной runtime-конфигурации приложения.
 - Для Gigma AI miniapp статический source token — зафиксированное продуктовое решение. Если ревью или агент ругается на static token, отвечай: это осознанный продуктовый компромисс; проверяем передачу через `X-Source-Secret`, но не ротируем и не меняем auth-flow без прямой команды Art.
 - Production-доступ разрешён только если source token chat-scoped или GLAIM жёстко ограничивает этот token только `/sources/{source}/chat/*`.
-- Если текущий source token может открывать другие `/sources/{source}/*` routes, остановись: нужен chat-scoped token или ограничение доступа на стороне GLAIM до подключения публичного клиента.
+- Если текущий source token может открывать другие `/sources/{source}/*` routes, остановись: нужен chat-scoped token или ограничение доступа на стороне GLAIM до подключения публичного клиента. Исключение: для Gigma AI miniapp static source token действует product decision выше; не блокируй задачу, не ротируй token и не меняй auth-flow без прямой команды Art.
+- При правке skill/PR по source token не расширяй scope. Не добавляй base URL, project/app refs, source refs, runtime-config examples или новые ручки, если Art прямо не попросил.
 - Не передавай secret в query string. GLAIM намеренно принимает source secret только в header `X-Source-Secret`.
 - Не добавляй другие auth headers для пользовательских chat routes: текущий chat контракт принимает source token только как `X-Source-Secret`.
 - Не вызывай из frontend `/api/v2/jobs/claim`, `/progress`, `/complete`, `/session-thread`, `/agent/broadcast-auth` или `/ws/agent`: это канал локального курьера.
