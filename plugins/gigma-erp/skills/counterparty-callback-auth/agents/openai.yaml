@@ -1,0 +1,4 @@
+interface:
+  display_name: "Counterparty Callback Auth"
+  short_description: "App login via counterparty callback_auth"
+  default_prompt: "Use $counterparty-callback-auth to add or verify app login via /api/counterparty/callback_auth."
