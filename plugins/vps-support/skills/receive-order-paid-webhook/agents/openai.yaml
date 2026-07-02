@@ -1,4 +1,0 @@
-interface:
-  display_name: "VPS: receive order paid webhook"
-  short_description: "Receive and verify Gigma order.paid webhooks on a VPS service"
-  default_prompt: "Implement a receiver for Gigma ERP order.paid webhooks"

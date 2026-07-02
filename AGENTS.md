@@ -27,11 +27,12 @@
 - MCP agents: скил `request-agent-access` получает agent token через self-service заявку на почту owner/admin, а `mcp-agent-access` подключает внешний MCP-сервер через ERP agent-user и обычный Sanctum Bearer token; старый `/api/mcp/*` слой не возвращать.
 - Miniapps auth: скил `miniapp-auth` фиксирует канонический counterparty route, проверку signed contact и запрет на лишние публичные alias routes.
 - Frontend API: скил `connect-frontend-api` подключает storefront/frontend/miniapp к Gigma API по канону `Docs-gigma`.
+- Payment webhooks: скил `receive-order-paid-webhook` подключает внешний backend/сервис к Gigma ERP `order.paid` webhook с HMAC-подписью, timestamp freshness и идемпотентностью по `event_id`.
 
 ### Консультант по подписке сервиса «Твой ВПС»
 Сервис — личный приватный сервер по подписке. Помогает управлять подпиской и установить/настроить приложение для подключения; при поломке — эскалирует в Telegram **@artypoul**. ⚠ Формулировки нейтральные: не позиционировать как «VPN/обход блокировок», не обсуждать доступ к запрещённому (см. reference раздел «Формулировки и правовая рамка»).
 - Вход: **`vps-support`** (дирижёр-персона).
-- Под-скилы: `vps-connect` (подключение в HAPP и аналогах), `vps-troubleshoot` (диагностика + эскалация), `receive-order-paid-webhook` (приём Gigma ERP `order.paid` webhook на VPS/backend).
+- Под-скилы: `vps-connect` (подключение в HAPP и аналогах), `vps-troubleshoot` (диагностика + эскалация).
 - Факты сервиса: `.codex/reference/vps-service-facts.md`.
 
 ### GLAIM agent bridge
