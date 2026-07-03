@@ -7,8 +7,11 @@ import argparse
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
+
+sys.dont_write_bytecode = True
 
 
 def run(cmd: list[str], cwd: Path, timeout: int = 20) -> dict[str, Any]:
@@ -60,12 +63,19 @@ def add_git_snapshot(snapshot: dict[str, Any], repo: Path) -> None:
         )
 
 
-def add_pr_snapshot(snapshot: dict[str, Any], repo: Path, pr: str | None) -> None:
+def add_pr_snapshot(
+    snapshot: dict[str, Any],
+    repo: Path,
+    pr: str | None,
+    include_comment_bodies: bool,
+) -> None:
     if not shutil.which("gh"):
         snapshot["github"] = {"available": False, "reason": "gh CLI not found"}
         return
 
-    fields = "url,state,mergedAt,mergeCommit,headRefName,baseRefName,statusCheckRollup,reviewDecision,comments,reviews"
+    fields = "url,state,mergedAt,mergeCommit,headRefName,baseRefName,statusCheckRollup,reviewDecision"
+    if include_comment_bodies:
+        fields += ",comments,reviews"
     cmd = ["gh", "pr", "view"]
     if pr:
         cmd.append(pr)
@@ -109,12 +119,20 @@ def main() -> int:
     parser.add_argument("--repo", default=".", help="Repository path.")
     parser.add_argument("--pr", help="Pull request number or URL for gh pr view.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
+    parser.add_argument(
+        "--include-comment-bodies",
+        action="store_true",
+        help=(
+            "Include raw PR comment/review bodies. Use only for local review work; "
+            "do not paste unredacted output into chat, docs or PR comments."
+        ),
+    )
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
     snapshot: dict[str, Any] = {"repo": str(repo)}
     add_git_snapshot(snapshot, repo)
-    add_pr_snapshot(snapshot, repo, args.pr)
+    add_pr_snapshot(snapshot, repo, args.pr, args.include_comment_bodies)
 
     if args.json:
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))

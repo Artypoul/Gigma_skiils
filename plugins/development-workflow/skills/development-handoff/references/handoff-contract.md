@@ -42,17 +42,18 @@ git remote -v
 If GitHub CLI is configured:
 
 ```bash
-gh pr view --json url,state,mergedAt,headRefName,baseRefName,statusCheckRollup,reviewDecision,comments,reviews
+gh pr view --json url,state,mergedAt,headRefName,baseRefName,statusCheckRollup,reviewDecision
 gh pr checks --watch --interval 10
 ```
 
 For a known PR:
 
 ```bash
-gh pr view <number> --json url,state,mergedAt,mergeCommit,headRefName,baseRefName,statusCheckRollup,reviewDecision,comments,reviews
+gh pr view <number> --json url,state,mergedAt,mergeCommit,headRefName,baseRefName,statusCheckRollup,reviewDecision
 gh pr diff <number> --name-only
-gh api repos/:owner/:repo/pulls/<number>/comments --paginate
 ```
+
+Read PR comment bodies only when needed for review/fix work. Do not paste raw bodies into chat or handoff output; summarize findings and redact secrets, tokens, credentials, private paths and long logs.
 
 ### Post-Merge
 
@@ -71,7 +72,7 @@ If the worktree is dirty, do not switch or pull until the dirty files are classi
 
 ```bash
 git fetch --all --prune
-gh pr view <number> --json url,state,headRefName,baseRefName,statusCheckRollup,comments,reviews
+gh pr view <number> --json url,state,headRefName,baseRefName,statusCheckRollup,reviewDecision
 git switch <headRefName>
 git status --short --branch
 ```

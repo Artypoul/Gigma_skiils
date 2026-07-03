@@ -13,14 +13,16 @@ Golden rule: inspect repository and PR evidence before acting from memory.
 
 When inside a git repository, run the bundled read-only helper first:
 
+Resolve bundled script paths relative to this `SKILL.md`.
+
 ```bash
-python path/to/development-handoff/scripts/handoff_snapshot.py --repo .
+python scripts/handoff_snapshot.py --repo <repo-path>
 ```
 
 If a PR number or URL is known:
 
 ```bash
-python path/to/development-handoff/scripts/handoff_snapshot.py --repo . --pr 123
+python scripts/handoff_snapshot.py --repo <repo-path> --pr 123
 ```
 
 If the helper is unavailable, gather the same facts manually:
@@ -29,7 +31,7 @@ If the helper is unavailable, gather the same facts manually:
 git status --short --branch
 git branch -vv
 git log --oneline --decorate -5
-gh pr view --json url,state,mergedAt,headRefName,baseRefName,statusCheckRollup,reviewDecision,comments,reviews
+gh pr view --json url,state,mergedAt,headRefName,baseRefName,statusCheckRollup,reviewDecision
 ```
 
 Read `references/handoff-contract.md` when you need the full template, exact command recipes, prod-ready checklist, or skill/plugin installability checks.
@@ -117,8 +119,8 @@ When there are local changes:
 
 Explicit user decisions steer the workflow until changed:
 
-- "only backend" means do not edit frontend.
-- "static token is product decision" means do not redesign auth unless asked.
+- "only <scope>" means stay inside that scope.
+- "this product decision is fixed" means do not redesign it unless asked.
 - "same PR" means no new PR.
 - "do not ask" means act from evidence when risk is low.
 

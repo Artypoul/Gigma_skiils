@@ -1,6 +1,6 @@
 {
   "name": "development-workflow",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Generic development workflow skills for Codex agents: evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks and dirty worktree safety.",
   "author": {
     "name": "Artypoul"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Development workflow",
     "shortDescription": "PR handoff and review gates",
-    "longDescription": "Helps Codex agents continue software development from evidence: branch and PR state, post-merge updates, same-PR fixes, monster review tracking, deploy checks, prod-ready checks and dirty worktree handling.",
+    "longDescription": "Helps Codex agents continue software development from evidence: branch and PR state, post-merge updates, same-PR fixes, monster review tracking, deploy checks, prod-ready checks, dirty worktree handling and redacted handoff output.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
