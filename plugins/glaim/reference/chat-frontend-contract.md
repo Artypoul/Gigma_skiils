@@ -104,14 +104,21 @@ Product-ready switching flow:
 1. The miniapp owns the thread list and stores each thread's
    `source_conversation_ref`, title/preview/unread state, cached `session_id` and
    cached `next_after_id`.
-2. When the user opens a thread, call `POST /api/v2/sources/{source}/chat/session`
-   with that thread's `source_conversation_ref`.
-3. Replace local active state with returned `session.session_id`, render returned
+2. If the product lets users route chat to different agents, also store the
+   thread's stable `default_agent_key`; local UI state is keyed by
+   `source_conversation_ref + default_agent_key`.
+3. When the user opens a thread, call `POST /api/v2/sources/{source}/chat/session`
+   with that thread's `source_conversation_ref` and, when applicable,
+   `default_agent_key`.
+4. Replace local active state with returned `session.session_id`, render returned
    `events`, and store returned `next_after_id`.
-4. Poll `GET /api/v2/sources/{source}/chat/sessions/{session_id}/events` with the
-   same source scope and `after_id=next_after_id`.
-5. When the user switches thread, stop polling the previous active thread and
-   repeat the session/events flow with the new `source_conversation_ref`.
+5. Continue polling `GET /api/v2/sources/{source}/chat/sessions/{session_id}/events`
+   with the same source scope and `after_id=next_after_id` until the page is
+   empty or the cursor is unchanged; only then is local history caught up.
+6. For live updates, keep polling with the last `next_after_id`.
+7. When the user switches thread, stop polling the previous active thread and
+   repeat the session/events flow with the new `source_conversation_ref` and
+   `default_agent_key`.
 
 Current source-chat API does not expose `GET /chat/threads`,
 `GET /chat/sessions` or `GET /chat/history`. Do not invent those endpoints in a
@@ -152,6 +159,8 @@ Response:
 
 Response `events` is the initial visible history for the selected
 `source_conversation_ref`; `next_after_id` is the cursor to continue polling.
+It can be only the first page, so frontend should keep calling `/events` with
+the latest `next_after_id` until it receives an empty page or unchanged cursor.
 Frontend should deduplicate rendered history by `event.id`.
 
 `workspace_missing` или `workspace_ambiguous` приходят как `422`: сначала нужно
@@ -366,7 +375,10 @@ action, generate a new UUID.
 - Retry of the same send is idempotent.
 - Event polling uses `after_id` and does not duplicate rendered events.
 - Thread switching is implemented by changing active `source_conversation_ref`
-  and reopening `/chat/session`, not by using executor `thread_id`.
+  and, for multi-agent UI, active `default_agent_key`; then reopening
+  `/chat/session`, not by using executor `thread_id`.
+- History catch-up continues from `session.events` through `/events?after_id=...`
+  until an empty page or stable cursor before switching to live polling.
 - No non-existent user-chat routes such as `GET /chat/threads` or
   `GET /chat/history` are added.
 - Markdown is rendered only for `format:"markdown"`.
