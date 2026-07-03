@@ -19,6 +19,8 @@ Resolve bundled script paths relative to this `SKILL.md`.
 python scripts/handoff_snapshot.py --repo <repo-path>
 ```
 
+Default helper output redacts absolute local paths and remote URLs. Use `--show-paths` only for local diagnostics and do not paste that output into chat, docs or PR comments.
+
 If a PR number or URL is known:
 
 ```bash
@@ -143,7 +145,7 @@ End meaningful work with this compact block:
 
 ```text
 HANDOFF
-Workspace:
+Workspace: <repo name or redacted local path>
 Branch:
 PR:
 State:

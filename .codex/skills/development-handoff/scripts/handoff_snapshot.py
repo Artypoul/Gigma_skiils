@@ -41,17 +41,19 @@ def run(cmd: list[str], cwd: Path, timeout: int = 20) -> dict[str, Any]:
         }
 
 
-def add_git_snapshot(snapshot: dict[str, Any], repo: Path) -> None:
+def add_git_snapshot(snapshot: dict[str, Any], repo: Path, show_paths: bool) -> None:
     commands = {
-        "root": ["git", "rev-parse", "--show-toplevel"],
         "branch": ["git", "branch", "--show-current"],
         "status": ["git", "status", "--short", "--branch"],
         "last_commit": ["git", "log", "-1", "--oneline", "--decorate"],
         "branches": ["git", "branch", "-vv"],
-        "remote": ["git", "remote", "-v"],
+        "remotes": ["git", "remote"],
         "diff_stat": ["git", "diff", "--stat"],
         "staged_diff_stat": ["git", "diff", "--cached", "--stat"],
     }
+    if show_paths:
+        commands["root"] = ["git", "rev-parse", "--show-toplevel"]
+        commands["remote_urls"] = ["git", "remote", "-v"]
     snapshot["git"] = {name: run(cmd, repo) for name, cmd in commands.items()}
 
     upstream = run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], repo)
@@ -89,7 +91,17 @@ def print_text(snapshot: dict[str, Any]) -> None:
 
     print("HANDOFF SNAPSHOT")
     print(f"repo: {snapshot['repo']}")
-    for key in ("branch", "last_commit", "status", "upstream", "ahead_behind"):
+    if snapshot.get("repo_path"):
+        print(f"repo_path: {snapshot['repo_path']}")
+    for key in (
+        "branch",
+        "last_commit",
+        "status",
+        "upstream",
+        "ahead_behind",
+        "remotes",
+        "remote_urls",
+    ):
         item = git.get(key)
         if not item:
             continue
@@ -120,6 +132,14 @@ def main() -> int:
     parser.add_argument("--pr", help="Pull request number or URL for gh pr view.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
     parser.add_argument(
+        "--show-paths",
+        action="store_true",
+        help=(
+            "Include absolute local paths and remote URLs. Use only for local diagnostics; "
+            "do not paste unredacted output into chat, docs or PR comments."
+        ),
+    )
+    parser.add_argument(
         "--include-comment-bodies",
         action="store_true",
         help=(
@@ -130,8 +150,10 @@ def main() -> int:
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
-    snapshot: dict[str, Any] = {"repo": str(repo)}
-    add_git_snapshot(snapshot, repo)
+    snapshot: dict[str, Any] = {"repo": repo.name}
+    if args.show_paths:
+        snapshot["repo_path"] = str(repo)
+    add_git_snapshot(snapshot, repo, args.show_paths)
     add_pr_snapshot(snapshot, repo, args.pr, args.include_comment_bodies)
 
     if args.json:

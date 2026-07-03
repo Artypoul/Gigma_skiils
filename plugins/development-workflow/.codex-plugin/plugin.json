@@ -1,6 +1,6 @@
 {
   "name": "development-workflow",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Generic development workflow skills for Codex agents: evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks and dirty worktree safety.",
   "author": {
     "name": "Artypoul"
