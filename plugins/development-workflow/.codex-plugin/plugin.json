@@ -1,24 +1,30 @@
 {
   "name": "development-workflow",
-  "version": "0.1.0",
-  "description": "Reusable development workflow skills for evidence-based handoff, PR continuation, review fixes, and skill catalogue safety.",
+  "version": "0.1.1",
+  "description": "Generic development workflow skills for Codex agents: evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks and dirty worktree safety.",
   "author": {
     "name": "Artypoul"
   },
   "license": "MIT",
-  "keywords": ["development", "handoff", "pr", "review", "skills", "workflow"],
+  "keywords": [
+    "development",
+    "handoff",
+    "codex",
+    "pull-request",
+    "review",
+    "merge",
+    "deploy"
+  ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Development Workflow",
-    "shortDescription": "Evidence-based PR and agent handoff",
-    "longDescription": "Helps agents continue development work from checked repository, branch, PR, review and validation evidence instead of stale chat memory.",
+    "displayName": "Development workflow",
+    "shortDescription": "PR handoff and review gates",
+    "longDescription": "Helps Codex agents continue software development from evidence: branch and PR state, post-merge updates, same-PR fixes, monster review tracking, deploy checks, prod-ready checks and dirty worktree handling.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
-      "Use $development-handoff to continue this PR from evidence.",
-      "Use $development-handoff before fixing review comments in the same PR.",
-      "Use $development-handoff to prepare a concise handoff for the next agent."
+      "Use $development-handoff after a merge, PR fix, review, deploy or interrupted agent session."
     ]
   }
 }
