@@ -1,4 +1,4 @@
 interface:
   display_name: "GLAIM: chat frontend"
-  short_description: "Safe frontend chat bridge"
-  default_prompt: "Use $connect-chat-frontend to connect a chat frontend to GLAIM safely."
+  short_description: "Safe GLAIM chat, history, and threads"
+  default_prompt: "Use $connect-chat-frontend to connect a miniapp chat to GLAIM with source token, history polling, and thread switching."
