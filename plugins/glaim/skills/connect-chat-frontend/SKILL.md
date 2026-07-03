@@ -44,7 +44,7 @@ POST /api/v2/sources/{source}/chat/sessions/{session_id}/reset
    - источник — это miniapp, сайт, витрина или другой frontend-канал;
    - один `source token` может обслуживать много miniapp/сайтов, если они разделены `app_external_ref` и `source_conversation_ref`;
    - source token идёт в `X-Source-Secret`;
-   - для production подтверди, что token chat-scoped или GLAIM ограничивает его только `/chat/*`;
+   - для production подтверди, что token chat-scoped или GLAIM ограничивает его только `/chat/*`; для Gigma AI miniapp не блокируй задачу этим пунктом, если используется зафиксированный static source token product decision;
    - не вставляй `miniapp -> Gigma backend -> GLAIM` или другой backend-hop как обязательную схему.
 2. Найди существующий API client и env-паттерны проекта. Не добавляй второй клиент, если уже есть общий слой запросов.
 3. Открой `../../reference/chat-frontend-contract.md`, `../../reference/chat-frontend-diagrams.md` и схемы из `../../reference/*.mmd`; сверь endpoints с текущим OpenAPI или кодом GLAIM, если проект доступен локально.
@@ -86,6 +86,18 @@ POST /api/v2/sources/{source}/chat/sessions/{session_id}/reset
    - повтор того же `client_message_id` не создаёт дубль;
    - events poll возвращает `assistant_progress` / `assistant_final`;
    - stop/reset не раскрывают raw agent output.
+
+## Минимальный e2e smoke
+
+Чтобы доказать подключение, агент должен пройти весь пользовательский chat loop теми же runtime values, которые использует frontend:
+
+1. `POST /api/v2/sources/{source}/chat/session` с `X-Source-Secret` и common scope.
+2. `POST /api/v2/sources/{source}/chat/messages` с `session_id`, `message`, новым `client_message_id`; для Gigma AI miniapp без `context_snapshot`.
+3. `GET /api/v2/sources/{source}/chat/sessions/{session_id}/events` с тем же scope и `after_id`.
+4. Убедиться, что ответ дошёл до публичного event stream: минимум `user_message`, дальше `assistant_progress`, `assistant_final` или публичный `error`.
+5. Повторить `messages` с тем же `client_message_id` и убедиться, что дубль не создаётся.
+
+Если `session` проходит, а `messages` даёт `context_snapshot_malformed`, не смотри `/jobs/claim`: исправь body по правилам выше. Если `messages` возвращает `202`, а `events` пустой, это уже не frontend-contract ошибка; проверь, что локальный агент-курьер подключён и забирает job своим agent channel.
 
 ## Жёсткие правила
 

@@ -327,3 +327,22 @@ action, generate a new UUID.
 - Event polling uses `after_id` and does not duplicate rendered events.
 - Markdown is rendered only for `format:"markdown"`.
 - Stop and reset update UI state without exposing internal job details.
+
+## Minimal e2e smoke
+
+Use the same `baseUrl`, `{source}`, `project_external_ref`,
+`app_external_ref`, `source_conversation_ref` and `X-Source-Secret` that the
+frontend runtime uses. Do not invent a production host or rotate the Gigma AI
+miniapp static source token while running this smoke.
+
+1. Create/open session with common scope.
+2. Send message with `session_id`, `message` and a new `client_message_id`.
+3. Poll events with the same scope and returned `next_after_id`.
+4. Confirm that public events are visible: `user_message` and then
+   `assistant_progress`, `assistant_final` or public `error`.
+5. Retry the same message request with the same `client_message_id`; expect the
+   same job and no duplicate UI message.
+
+For Gigma AI miniapp, omit `context_snapshot` in the default smoke. If
+`context_snapshot_malformed` appears, fix the message body first; `/jobs/claim`
+and `/ws/agent` are not user-chat debugging endpoints.
