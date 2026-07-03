@@ -6,7 +6,7 @@ Use this reference when a software development task crosses agent turns, PR revi
 
 ```text
 HANDOFF
-Workspace: <absolute repo path or repo name>
+Workspace: <repo name or redacted local path>
 Task: <one sentence>
 Branch: <current branch and tracking state>
 PR: <url, number, state>
@@ -36,7 +36,7 @@ Do not:
 git status --short --branch
 git branch -vv
 git log --oneline --decorate -5
-git remote -v
+git remote
 ```
 
 If GitHub CLI is configured:
@@ -53,7 +53,7 @@ gh pr view <number> --json url,state,mergedAt,mergeCommit,headRefName,baseRefNam
 gh pr diff <number> --name-only
 ```
 
-Read PR comment bodies only when needed for review/fix work. Do not paste raw bodies into chat or handoff output; summarize findings and redact secrets, tokens, credentials, private paths and long logs.
+Read PR comment bodies only when needed for review/fix work. Read remote URLs only when needed for local diagnostics. Do not paste raw bodies, remote URLs, absolute local paths, secrets, tokens, credentials, or long logs into chat or handoff output; summarize findings and redact sensitive details.
 
 ### Post-Merge
 

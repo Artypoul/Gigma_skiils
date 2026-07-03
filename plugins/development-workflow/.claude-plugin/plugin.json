@@ -1,5 +1,5 @@
 {
   "name": "development-workflow",
   "description": "Generic development workflow skills for evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks, dirty worktree safety and redacted handoff output.",
-  "version": "0.1.2"
+  "version": "0.1.3"
 }
