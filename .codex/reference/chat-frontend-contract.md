@@ -142,6 +142,23 @@ Body:
   "source_user_ref": "user-1",
   "session_id": "00000000-0000-0000-0000-000000000111",
   "message": "Проверь товары",
+  "client_message_id": "00000000-0000-0000-0000-000000000999"
+}
+```
+
+`context_snapshot` опционален. Для Gigma AI miniapp безопасный default — не
+добавлять это поле, пока у frontend нет проверенного адаптера под формат GLAIM.
+Если контекст нужен, добавляй его в тот же message body, а не отправляй
+отдельным объектом:
+
+```json
+{
+  "project_external_ref": "project-ext-1",
+  "app_external_ref": "app-ext-1",
+  "source_conversation_ref": "miniapp:user:1:application:2",
+  "source_user_ref": "user-1",
+  "session_id": "00000000-0000-0000-0000-000000000111",
+  "message": "Проверь товары",
   "client_message_id": "00000000-0000-0000-0000-000000000999",
   "context_snapshot": {
     "mode": "customer_support_chat",
@@ -276,6 +293,7 @@ start polling from the returned `next_after_id`.
 - `401 invalid_source_token`: source secret does not match source/project/app.
 - `403 session_not_owned` / `event_cursor_not_owned`: scope/session/cursor mismatch.
 - `404 session_not_found` / `event_cursor_not_found`: stale local state.
+- `422 context_snapshot_malformed`: `context_snapshot` есть в body, но не проходит backend-формат. Убери поле или отправь `null`; такой запрос отсекается до создания job.
 - `422`: request validation, bad UUID, extra fields, empty message, malformed or oversized context, `workspace_missing`, `workspace_ambiguous`.
 
 Validation responses intentionally do not echo raw input. Preserve that property
