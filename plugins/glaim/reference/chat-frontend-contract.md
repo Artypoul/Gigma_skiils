@@ -93,6 +93,43 @@ GLAIM сам upsert'ит `projects`, `apps`, `channel_bindings` по этому 
 комнаты, чата или внешнего conversation id. Один общий ref для разных
 пользователей склеит их в одну session.
 
+## Thread switching and history
+
+For user-facing miniapp chat, a "thread" is source-owned and is represented by
+`source_conversation_ref`. It is not the local executor `thread_id`; executor
+thread binding is an agent-only channel and must not be used by frontend code.
+
+Product-ready switching flow:
+
+1. The miniapp owns the thread list and stores each thread's
+   `source_conversation_ref`, title/preview/unread state, cached `session_id` and
+   cached `next_after_id`.
+2. If the product lets users route chat to different agents, also store the
+   thread's stable `default_agent_key`; local UI state is keyed by
+   `source_conversation_ref + default_agent_key`.
+3. When the user opens a thread, call `POST /api/v2/sources/{source}/chat/session`
+   with that thread's `source_conversation_ref` and, when applicable,
+   `default_agent_key`.
+4. Replace local active state with returned `session.session_id`, render returned
+   `events`, and store returned `next_after_id`.
+5. Continue polling `GET /api/v2/sources/{source}/chat/sessions/{session_id}/events`
+   with the same source scope and `after_id=next_after_id` until the page is
+   empty or the cursor is unchanged; only then is local history caught up.
+6. For live updates, keep polling with the last `next_after_id`.
+7. When the user switches thread, stop polling the previous active thread and
+   repeat the session/events flow with the new `source_conversation_ref` and
+   `default_agent_key`.
+
+Current source-chat API does not expose `GET /chat/threads`,
+`GET /chat/sessions` or `GET /chat/history`. Do not invent those endpoints in a
+frontend integration. If a product needs a cross-thread server-side list, that
+is a new backend feature; today the source/miniapp owns the list and GLAIM
+returns history for the selected source conversation.
+
+`reset` is not a thread switch. It archives the current session and creates a
+new session for the same `source_conversation_ref`. To create a new UI thread,
+the miniapp creates a new `source_conversation_ref` and opens `/chat/session`.
+
 ## Open or create session
 
 ```http
@@ -119,6 +156,12 @@ Response:
   "next_after_id": null
 }
 ```
+
+Response `events` is the initial visible history for the selected
+`source_conversation_ref`; `next_after_id` is the cursor to continue polling.
+It can be only the first page, so frontend should keep calling `/events` with
+the latest `next_after_id` until it receives an empty page or unchanged cursor.
+Frontend should deduplicate rendered history by `event.id`.
 
 `workspace_missing` или `workspace_ambiguous` приходят как `422`: сначала нужно
 настроить активный agent workspace для этого app/source.
@@ -217,6 +260,11 @@ limit=100
 ```
 
 `limit` range: `1..200`. `after_id` is optional UUID.
+Use the same `project_external_ref`, `app_external_ref` and
+`source_conversation_ref` that were used to open the active session. A stale
+`session_id` from another thread can return `403 session_not_owned` or
+`404 session_not_found`; reopen `/chat/session` for the active
+`source_conversation_ref` and replace local state.
 
 Response:
 
@@ -285,7 +333,8 @@ Body: same as stop.
 
 Response `status` is `reset`; `session.session_id` points to the new reusable
 session. Frontend must replace local `session_id`, clear local pending state and
-start polling from the returned `next_after_id`.
+start polling from the returned `next_after_id`. Reset keeps the same
+`source_conversation_ref`; it does not select a different miniapp thread.
 
 ## Error map
 
@@ -325,6 +374,13 @@ action, generate a new UUID.
 - Production source token is chat-scoped or server-restricted to `/sources/{source}/chat/*`.
 - Retry of the same send is idempotent.
 - Event polling uses `after_id` and does not duplicate rendered events.
+- Thread switching is implemented by changing active `source_conversation_ref`
+  and, for multi-agent UI, active `default_agent_key`; then reopening
+  `/chat/session`, not by using executor `thread_id`.
+- History catch-up continues from `session.events` through `/events?after_id=...`
+  until an empty page or stable cursor before switching to live polling.
+- No non-existent user-chat routes such as `GET /chat/threads` or
+  `GET /chat/history` are added.
 - Markdown is rendered only for `format:"markdown"`.
 - Stop and reset update UI state without exposing internal job details.
 
