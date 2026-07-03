@@ -4,7 +4,7 @@
 
 - **Claude Code** — через маркетплейс `.claude-plugin/marketplace.json` → плагины в `plugins/`.
 - **Codex** — двумя путями:
-  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`). Манифесты проходят `validate_plugin.py`.
+  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`). Манифесты проходят `validate_plugin.py`.
   2. **Зеркало** `.codex/skills/` — копии скилов, видны когда Codex запущен в этом репо (фолбэк без установки).
 
 Скилы (`SKILL.md`) общие для Claude и Codex. ⚠ Frontmatter `description`/`when_to_use` со значением, содержащим `: ` (двоеточие-пробел), **обязательно в кавычках** — иначе строгий YAML-парсер Codex отвергает скил.
@@ -41,6 +41,11 @@
 - Вход: **`connect-chat-frontend`** — подключение miniapp, сайта, витрины или другого frontend-источника напрямую к GLAIM source-chat API.
 - Контракт чата: `.codex/reference/chat-frontend-contract.md`.
 - Главное правило: source token — клиентский credential только для `/api/v2/sources/{source}/chat/*`; Gigma backend/BFF в канонической цепочке нет, agent token и `X-Control-Secret` во frontend не попадают.
+
+### Development workflow
+Общие скилы разработки, не привязанные к продуктовому домену.
+- Вход: **`development-handoff`** — проверяемый handoff перед продолжением PR, фиксом review, передачей агенту или работой со скилами/плагинами.
+- Главное правило: продолжать работу от фактов Git/GitHub/CI/локальных файлов, а не от устаревшей памяти чата; перед skill move/add/remove проверять ownership, версии плагинов, marketplace discovery, `.codex` sync и re-review.
 
 ## Принцип для всех
 

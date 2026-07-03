@@ -1,0 +1,24 @@
+{
+  "name": "development-workflow",
+  "version": "0.1.0",
+  "description": "Reusable development workflow skills for evidence-based handoff, PR continuation, review fixes, and skill catalogue safety.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": ["development", "handoff", "pr", "review", "skills", "workflow"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Development Workflow",
+    "shortDescription": "Evidence-based PR and agent handoff",
+    "longDescription": "Helps agents continue development work from checked repository, branch, PR, review and validation evidence instead of stale chat memory.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Use $development-handoff to continue this PR from evidence.",
+      "Use $development-handoff before fixing review comments in the same PR.",
+      "Use $development-handoff to prepare a concise handoff for the next agent."
+    ]
+  }
+}
