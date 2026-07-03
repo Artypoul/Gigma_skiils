@@ -142,7 +142,16 @@ Body:
   "source_user_ref": "user-1",
   "session_id": "00000000-0000-0000-0000-000000000111",
   "message": "Проверь товары",
-  "client_message_id": "00000000-0000-0000-0000-000000000999",
+  "client_message_id": "00000000-0000-0000-0000-000000000999"
+}
+```
+
+`context_snapshot` optional. For Gigma AI miniapp the safest default is to omit
+it until the frontend has a validated adapter for the real GLAIM snapshot
+format. If context is needed, send only small safe runtime context:
+
+```json
+{
   "context_snapshot": {
     "mode": "customer_support_chat",
     "language": "ru"
@@ -276,6 +285,7 @@ start polling from the returned `next_after_id`.
 - `401 invalid_source_token`: source secret does not match source/project/app.
 - `403 session_not_owned` / `event_cursor_not_owned`: scope/session/cursor mismatch.
 - `404 session_not_found` / `event_cursor_not_found`: stale local state.
+- `422 context_snapshot_malformed`: `context_snapshot` is present but does not match the backend format. Remove `context_snapshot` or send `null`; no agent job is created for this bad request.
 - `422`: request validation, bad UUID, extra fields, empty message, malformed or oversized context, `workspace_missing`, `workspace_ambiguous`.
 
 Validation responses intentionally do not echo raw input. Preserve that property
