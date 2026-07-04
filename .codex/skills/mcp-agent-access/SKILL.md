@@ -27,6 +27,13 @@ allowed-tools: Bash Read Grep
   - `create-agents` — создавать agent-user;
   - `edit-agents` — менять и отключать agent-user;
   - `manage-agent-tokens` — выпускать, смотреть metadata и отзывать токены.
+- Готовые business-наборы для billing-сценариев брать только из реально существующих permission names:
+  - billing read-only: `["view-orders"]`;
+  - billing operations по заказам: `["view-orders", "edit-orders"]`;
+  - billing read-only + application context: `["view-orders", "view-applications"]`;
+  - billing operations + application updates: `["view-orders", "edit-orders", "view-applications", "edit-applications"]`.
+- В текущем backend нет отдельных permission names `view-payments`, `edit-payments`, `view-subscriptions`, `edit-subscriptions`. Не запрашивай и не обещай их, пока они не появились в `GET /api/permissions`.
+- Billing webhook/admin действия проверяются не отдельным permission name, а owner/admin role boundary. Не включай их в "готовый billing-набор" как будто это обычный `edit-*` permission.
 - Бизнес-права для MCP tool'ов брать из тех же ERP permissions по целевым endpoint'ам. Для read-only сценария начинать с минимального набора вроде `view-orders`, а не с `edit-*`.
 - Если у actor нет `edit-permissions`, он не может выдать агенту permission шире собственных прав.
 
