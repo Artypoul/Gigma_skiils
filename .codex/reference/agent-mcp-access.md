@@ -25,6 +25,8 @@ MCP server must not expose a generic REST/curl proxy for ERP. Every MCP tool nee
 
 ## Permissions
 
+Полный каталог permission names брать из обычного ERP endpoint `GET /api/permissions` под human Bearer token. Это не отдельный MCP-список, а общая таблица `permissions` с `guard_name=user`.
+
 Новые permissions с `guard_name=user`:
 
 | Permission | Для чего |

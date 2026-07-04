@@ -18,6 +18,18 @@ allowed-tools: Bash Read Grep
 - Токен агента — Sanctum token формата `<id>|<secret>`, как у `auth:user`.
 - Права агента = роль + direct permissions внутри текущего `project_id`/`branch_id`.
 
+## Где взять список permissions
+
+- Не жди отдельный "MCP permission list": агент использует обычные ERP permissions из таблицы `permissions` с `guard_name=user`.
+- Канонический полный список permission names читать через `GET /api/permissions` под обычным human Bearer token. По текущему backend `PermissionPolicy::viewAny` разрешает этот список любому авторизованному `auth:user`.
+- Специальные права для управления агентами:
+  - `view-agents` — смотреть список и карточку агентов;
+  - `create-agents` — создавать agent-user;
+  - `edit-agents` — менять и отключать agent-user;
+  - `manage-agent-tokens` — выпускать, смотреть metadata и отзывать токены.
+- Бизнес-права для MCP tool'ов брать из тех же ERP permissions по целевым endpoint'ам. Для read-only сценария начинать с минимального набора вроде `view-orders`, а не с `edit-*`.
+- Если у actor нет `edit-permissions`, он не может выдать агенту permission шире собственных прав.
+
 ## Перед любым write
 
 1. Получить заранее выданный least-privileged human Bearer token с agent permissions, не App Token витрины. Если такого token нет, используй `request-agent-access`: self-service заявка уйдёт owner/admin на почту, а агент после approve заберёт свой `agent_token`. Не добывать owner token через БД/таблицу `passwords` для обычной настройки MCP; это только break-glass с явным разрешением владельца.
@@ -25,7 +37,7 @@ allowed-tools: Bash Read Grep
 3. Согласовать с владельцем:
    - имя и `login` агента;
    - `role_id`, `branch_id`, `department_id`;
-   - список `permissions`;
+   - список `permissions` из `GET /api/permissions` и целевых endpoint'ов;
    - имя токена и срок жизни;
    - какие exact method+path будут доступны каждому MCP tool;
    - где MCP-сервер безопасно сохранит plain token.
