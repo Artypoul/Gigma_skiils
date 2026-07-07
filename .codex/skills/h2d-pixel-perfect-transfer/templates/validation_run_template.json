@@ -1,0 +1,13 @@
+{
+  "result": "pass",
+  "behavior_required": true,
+  "checked_at": "2026-07-05T12:00:00+02:00",
+  "checks": [
+    {
+      "name": "node_validation",
+      "result": "pass",
+      "message": "node_validation result is pass"
+    }
+  ],
+  "issues": []
+}

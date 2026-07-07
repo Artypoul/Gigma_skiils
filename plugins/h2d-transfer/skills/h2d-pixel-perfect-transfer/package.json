@@ -1,0 +1,16 @@
+{
+  "name": "h2d-pixel-perfect-transfer-skill",
+  "version": "1.7.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "preflight": "python scripts/preflight_env.py",
+    "check:js": "node --check scripts/validate_active_viewport.js && node --check scripts/asset_paint_audit.js && node --check scripts/capture_visual_diff.js && node --check scripts/behavior_inventory.js && node --check scripts/behavior_matrix_generate.js && node --check scripts/behavior_capture_trace.js && node --check scripts/liveness_inventory.js && node --check scripts/liveness_capture_trace.js",
+    "validate:all": "python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required auto --liveness-required auto"
+  },
+  "dependencies": {
+    "playwright": "^1.45.0",
+    "pngjs": "^7.0.0"
+  },
+  "description": "H2D pixel-perfect transfer skill with mandatory source intake, liveness, animation and WebGL gates."
+}

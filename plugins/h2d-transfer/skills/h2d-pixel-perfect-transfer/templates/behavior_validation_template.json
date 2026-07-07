@@ -1,0 +1,18 @@
+{
+  "result": "pass",
+  "behavior_required": true,
+  "comparisons": [
+    {
+      "interaction_id": "390:button:get-started:click",
+      "result": "pass",
+      "checks": {
+        "url": "pass",
+        "focus": "pass",
+        "panel_visibility": "pass"
+      }
+    }
+  ],
+  "accepted_deviations": [],
+  "issues": [],
+  "safe_boundaries": []
+}

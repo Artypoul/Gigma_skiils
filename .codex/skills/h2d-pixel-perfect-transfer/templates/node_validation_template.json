@@ -1,0 +1,17 @@
+{
+  "result": "pass",
+  "threshold_px": 0.5,
+  "global_max_delta": 0.03,
+  "viewports": [
+    {
+      "viewport": 390,
+      "result": "pass",
+      "checked": 1,
+      "missing": [],
+      "extra": [],
+      "max_delta": 0.03,
+      "issues": []
+    }
+  ],
+  "issues": []
+}

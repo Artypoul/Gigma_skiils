@@ -1,0 +1,28 @@
+{
+  "status": "ok",
+  "source_unpack_verdict": "pass",
+  "input_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "selected_candidate": {
+    "transform": "xor-0x39",
+    "codec": "raw-deflate"
+  },
+  "decode_chain": [
+    {
+      "step": "xor-0x39",
+      "xor_key": 57
+    },
+    {
+      "step": "raw-deflate",
+      "wbits": -15
+    },
+    {
+      "step": "utf8-json"
+    }
+  ],
+  "decoded_kind": "xor-0x39->raw-deflate->utf8-json",
+  "decoded_json_file": "source/h2d_decoded.json",
+  "h2d_tree_index_file": "source/h2d_tree_index.json",
+  "node_count_indexed": 19865,
+  "raw_assets_found": 462,
+  "warnings": []
+}

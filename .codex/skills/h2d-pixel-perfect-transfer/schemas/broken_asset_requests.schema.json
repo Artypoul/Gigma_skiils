@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "broken_asset_requests",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "manual-review"
+      ]
+    },
+    "broken": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "all": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "result",
+    "broken"
+  ]
+}

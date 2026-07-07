@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "asset_map",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "asset_id",
+          "source",
+          "target",
+          "viewports",
+          "criticality"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "selectors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "h2d_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          "viewports": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "criticality": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "decorative",
+              "unknown"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "assets"
+  ]
+}

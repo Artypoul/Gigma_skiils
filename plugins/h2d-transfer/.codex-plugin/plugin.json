@@ -1,0 +1,36 @@
+{
+  "name": "h2d-transfer",
+  "version": "0.1.0",
+  "description": "H2D transfer skill for reconstructing .h2d snapshots into Tailwind HTML/React with mandatory source intake, geometry, asset paint, live comparison, behavior, and liveness/WebGL proof gates.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": [
+    "h2d",
+    "pixel-perfect",
+    "tailwind",
+    "react",
+    "frontend",
+    "transfer",
+    "webgl",
+    "animation"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "H2D transfer",
+    "shortDescription": "Pixel-perfect H2D to code",
+    "longDescription": "Помогает переносить страницы и блоки из .h2d в Tailwind HTML/React без угадывания: source intake, H2D decode, rect targets, geometry validation, asset paint proof, live diff, behavior replay и liveness/WebGL gates.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Перенеси .h2d в Tailwind HTML/React с полной валидацией",
+      "Сделай H2D pixel-perfect transfer и прогони все gates",
+      "Проверь, что перенос из .h2d сохранил поведение и runtime-слои"
+    ]
+  }
+}

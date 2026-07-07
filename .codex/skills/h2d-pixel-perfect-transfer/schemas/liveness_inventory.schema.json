@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "liveness_inventory",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "not-tested"
+      ]
+    },
+    "liveness_required": {
+      "type": "boolean"
+    },
+    "url": {
+      "type": "string"
+    },
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "surface_id",
+          "kind",
+          "selector",
+          "criticality"
+        ],
+        "properties": {
+          "surface_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "css-animation",
+              "css-transition",
+              "js-animation",
+              "requestAnimationFrame",
+              "scroll",
+              "sticky",
+              "parallax",
+              "canvas-2d",
+              "webgl",
+              "webgl2",
+              "video",
+              "lottie",
+              "gsap",
+              "threejs",
+              "spline",
+              "rive",
+              "swiper",
+              "counter",
+              "marquee",
+              "ticker",
+              "loader",
+              "dynamic-text",
+              "unknown-runtime"
+            ]
+          },
+          "selector": {
+            "type": "string"
+          },
+          "criticality": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "normal",
+              "decorative"
+            ]
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence_required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "result",
+    "liveness_required",
+    "surfaces"
+  ]
+}

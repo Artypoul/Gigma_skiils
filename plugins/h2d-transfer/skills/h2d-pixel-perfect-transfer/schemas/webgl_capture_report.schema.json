@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "webgl_capture_report",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "not-present",
+        "not-tested",
+        "manual-review"
+      ]
+    },
+    "contexts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "canvas_selector",
+          "context_type"
+        ],
+        "properties": {
+          "canvas_selector": {
+            "type": "string"
+          },
+          "context_type": {
+            "type": "string",
+            "enum": [
+              "2d",
+              "webgl",
+              "webgl2",
+              "bitmaprenderer",
+              "unknown",
+              "none"
+            ]
+          },
+          "rect": {
+            "type": "object"
+          },
+          "context_attributes": {
+            "type": "object"
+          },
+          "vendor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "renderer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "frame_hashes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pixels_change_over_time": {
+            "type": "boolean"
+          },
+          "non_blank_samples": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "result",
+    "contexts"
+  ]
+}

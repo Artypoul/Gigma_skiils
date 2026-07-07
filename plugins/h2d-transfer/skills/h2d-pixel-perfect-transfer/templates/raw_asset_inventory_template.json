@@ -1,0 +1,12 @@
+{
+  "assets": [
+    {
+      "json_path": "$/assets/0",
+      "kind": "data-uri",
+      "file": "source/extracted_assets/asset_0001.png",
+      "blank_asset": false
+    }
+  ],
+  "external_refs": [],
+  "visited_limit": 200000
+}

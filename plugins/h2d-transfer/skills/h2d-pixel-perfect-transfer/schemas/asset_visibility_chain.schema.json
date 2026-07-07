@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "asset_visibility_chain",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "manual-review"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "asset_id",
+          "viewport",
+          "result"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string"
+          },
+          "viewport": {
+            "type": "integer"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "array"
+          },
+          "bbox": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "manual-review"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "result",
+    "items"
+  ]
+}

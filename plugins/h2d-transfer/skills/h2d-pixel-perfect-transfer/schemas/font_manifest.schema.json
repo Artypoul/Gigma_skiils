@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "font_manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "font-exact",
+        "font-substituted",
+        "font-mismatch-risk",
+        "not-tested",
+        "manual-review"
+      ]
+    },
+    "fonts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "licensing_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "result",
+    "fonts"
+  ]
+}

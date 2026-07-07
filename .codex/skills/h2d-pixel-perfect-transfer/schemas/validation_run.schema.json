@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "validation_run",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "needs-fix",
+        "fail",
+        "manual-review"
+      ]
+    },
+    "behavior_required": {
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "checked_at": {
+      "type": "string"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "result"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "warning",
+              "skip",
+              "manual-review"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array"
+    },
+    "liveness_required": {
+      "type": [
+        "boolean",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "result",
+    "checked_at",
+    "checks"
+  ]
+}

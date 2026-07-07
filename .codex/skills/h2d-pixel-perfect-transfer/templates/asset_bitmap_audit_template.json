@@ -1,0 +1,19 @@
+{
+  "result": "pass",
+  "files": [
+    {
+      "file": "dist/assets/hero-wave-mobile.webp",
+      "width": 1248,
+      "height": 1950,
+      "alpha_bbox": [
+        124,
+        0,
+        1248,
+        1950
+      ],
+      "non_transparent_ratio": 0.9,
+      "result": "pass"
+    }
+  ],
+  "failures": []
+}

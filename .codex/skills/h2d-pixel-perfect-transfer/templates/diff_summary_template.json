@@ -1,0 +1,18 @@
+{
+  "result": "pass",
+  "environment": {
+    "timezone": "Europe/Berlin",
+    "reducedMotion": "reduce"
+  },
+  "viewports": [
+    {
+      "viewport": 390,
+      "original": "screenshots/original_390.png",
+      "candidate": "screenshots/candidate_390.png",
+      "diff": "screenshots/diff_390.png",
+      "pixel_mismatch_ratio": 0.0,
+      "verdict": "pass"
+    }
+  ],
+  "issues": []
+}

@@ -1,0 +1,26 @@
+{
+  "scope": "hero",
+  "coordinate_space": "page",
+  "viewport_key_format": "<viewport>::<data-h2d-path>",
+  "viewports": [
+    {
+      "viewport": 390,
+      "root_path": "0.0.0.2.0",
+      "targets": [
+        {
+          "key": "390::0.0.0.2.0",
+          "data_h2d_path": "0.0.0.2.0",
+          "type": "FRAME",
+          "tag": "section",
+          "rect": {
+            "x": 0,
+            "y": 66,
+            "width": 390,
+            "height": 352.43
+          }
+        }
+      ]
+    }
+  ],
+  "total_targets": 1
+}

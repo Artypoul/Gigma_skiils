@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tree_scope",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scope": {
+      "type": "string"
+    },
+    "roots": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "roots",
+    "viewports",
+    "nodes"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "source_intake",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "input_file": {
+      "type": "string"
+    },
+    "input_original": {
+      "type": "string"
+    },
+    "selected_h2d": {
+      "type": "string"
+    },
+    "input_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "input_sha256": {
+      "type": "string"
+    },
+    "first_32_bytes_hex": {
+      "type": "string"
+    },
+    "last_32_bytes_hex": {
+      "type": "string"
+    },
+    "sniffed_kind": {
+      "type": "string"
+    },
+    "copied_byte_identical": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "input_original",
+    "selected_h2d",
+    "input_size",
+    "input_sha256",
+    "sniffed_kind",
+    "copied_byte_identical"
+  ]
+}

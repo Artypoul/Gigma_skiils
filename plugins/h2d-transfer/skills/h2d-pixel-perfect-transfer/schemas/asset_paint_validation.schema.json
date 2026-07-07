@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "asset_paint_validation",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "manual-review"
+      ]
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "asset_id",
+          "viewport",
+          "result"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string"
+          },
+          "viewport": {
+            "type": "integer"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "bbox": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "crop_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dom_result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "manual-review"
+            ]
+          },
+          "pixel_result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "manual-review",
+              "not-tested"
+            ]
+          },
+          "non_transparent_ratio": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "content_bbox": {
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "visibility_result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "manual-review"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "partial",
+              "fail",
+              "manual-review"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "result",
+    "assets"
+  ]
+}

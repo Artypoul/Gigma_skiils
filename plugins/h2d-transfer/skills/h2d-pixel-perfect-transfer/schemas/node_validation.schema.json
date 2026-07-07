@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "node_validation",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "partial",
+        "manual-review"
+      ]
+    },
+    "threshold_px": {
+      "type": "number"
+    },
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "viewport",
+          "result"
+        ],
+        "properties": {
+          "viewport": {
+            "type": "integer"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "partial"
+            ]
+          },
+          "checked": {
+            "type": "integer"
+          },
+          "missing": {
+            "type": "array"
+          },
+          "extra": {
+            "type": "array"
+          },
+          "max_delta": {
+            "type": "number"
+          },
+          "issues": {
+            "type": "array"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "global_max_delta": {
+      "type": "number"
+    },
+    "issues": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "result",
+    "viewports"
+  ]
+}

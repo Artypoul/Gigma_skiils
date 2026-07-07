@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "raw_asset_inventory",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "external_refs": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "visited_limit": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "assets",
+    "external_refs"
+  ]
+}
