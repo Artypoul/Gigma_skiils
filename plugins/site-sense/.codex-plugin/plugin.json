@@ -1,0 +1,36 @@
+{
+  "name": "site-sense",
+  "version": "0.2.1",
+  "description": "Russian website strategy skill pack for product context, positioning, information architecture, SEO briefs, page copy, conversion review, and final language polish.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": [
+    "website",
+    "strategy",
+    "positioning",
+    "copywriting",
+    "seo",
+    "information-architecture",
+    "cro",
+    "russian"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Site Sense",
+    "shortDescription": "Website strategy and copy",
+    "longDescription": "Помогает провести сайт от вводных до готовой спецификации: продуктовый контекст, смыслы и оффер, структура и URL, SEO-брифы, тексты страниц, ревью конверсии и финальная русскоязычная редактура.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Собери сайт с нуля: контекст, смыслы, структура, SEO и тексты",
+      "Сделай стратегию и тексты лендинга под русский рынок",
+      "Проведи аудит структуры и копирайта сайта и выдай готовые артефакты"
+    ]
+  }
+}

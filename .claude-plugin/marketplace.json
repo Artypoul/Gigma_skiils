@@ -36,6 +36,11 @@
       "name": "h2d-transfer",
       "source": "./plugins/h2d-transfer",
       "description": "Скил для H2D pixel-perfect transfer: перенос .h2d в Tailwind HTML/React с обязательными gates для source intake, geometry, asset paint, live diff, behavior и liveness/WebGL."
+    },
+    {
+      "name": "site-sense",
+      "source": "./plugins/site-sense",
+      "description": "Русскоязычный набор скилов для полного цикла сайта: product context, positioning, information architecture, content strategy, SEO briefs, page copywriting, conversion review и финальная редактура."
     }
   ]
 }
