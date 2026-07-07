@@ -27,6 +27,15 @@ MCP server must not expose a generic REST/curl proxy for ERP. Every MCP tool nee
 
 Полный каталог permission names брать из обычного ERP endpoint `GET /api/permissions` под human Bearer token. Это не отдельный MCP-список, а общая таблица `permissions` с `guard_name=user`.
 
+Готовые billing-наборы в текущем backend:
+
+- billing read-only: `["view-orders"]`;
+- billing operations по заказам: `["view-orders", "edit-orders"]`;
+- billing read-only + application context: `["view-orders", "view-applications"]`;
+- billing operations + application updates: `["view-orders", "edit-orders", "view-applications", "edit-applications"]`.
+
+Отдельных permission names `view-payments`, `edit-payments`, `view-subscriptions`, `edit-subscriptions` сейчас нет. Billing webhook/admin действия дополнительно gated по owner/admin role boundary, а не по самостоятельному permission name.
+
 Новые permissions с `guard_name=user`:
 
 | Permission | Для чего |
