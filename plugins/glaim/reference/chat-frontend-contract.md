@@ -2,7 +2,9 @@
 
 Источник правды: проект GLAIM, `docs/agent-bridge-design.md`,
 `docs/plan-source-agent-chat-api.md`, `app/modules/chat/presentation/router.py`,
-`app/modules/chat/presentation/schemas.py`, `tests/test_chat_endpoints.py`.
+`app/modules/chat/presentation/schemas.py`,
+`app/modules/chat/application/use_cases.py`, `app/shared/presentation/auth.py`,
+`tests/test_chat_endpoints.py`.
 
 Все routes ниже идут под `/api/v2`. Source key в path должен совпадать с
 `^[A-Za-z0-9_.-]+$`.
@@ -120,11 +122,16 @@ Product-ready switching flow:
    repeat the session/events flow with the new `source_conversation_ref` and
    `default_agent_key`.
 
-Current source-chat API does not expose `GET /chat/threads`,
-`GET /chat/sessions` or `GET /chat/history`. Do not invent those endpoints in a
-frontend integration. If a product needs a cross-thread server-side list, that
-is a new backend feature; today the source/miniapp owns the list and GLAIM
-returns history for the selected source conversation.
+Current source-chat API does expose session history endpoints inside the current
+verified `source_conversation_ref`:
+
+- `GET /api/v2/sources/{source}/chat/sessions`
+- `GET /api/v2/sources/{source}/chat/sessions/{session_id}`
+- `GET /api/v2/sources/{source}/chat/sessions/{session_id}/messages`
+
+Use those real endpoints when the product needs server-side session history or
+transcript pages for the active source conversation. Do not invent aliases such
+as `GET /chat/threads` or `GET /chat/history`.
 
 `reset` is not a thread switch. It archives the current session and creates a
 new session for the same `source_conversation_ref`. To create a new UI thread,
@@ -241,6 +248,193 @@ Idempotency: GLAIM строит ключ
 `chat:session:{session_id}:message:{client_message_id}`. Retry той же отправки
 с тем же UUID возвращает тот же job и `created:false`.
 
+## List sessions inside one source conversation
+
+```http
+GET /api/v2/sources/{source}/chat/sessions
+X-Source-Secret: <source-token>
+Accept: application/json
+```
+
+Query:
+
+```text
+project_external_ref=project-ext-1
+app_external_ref=app-ext-1
+source_conversation_ref=miniapp:user:1:application:2
+include_archived=false
+limit=50
+cursor=<optional-session-id>
+```
+
+This is not a global "all threads for the whole app" endpoint. It lists sessions
+only for the already verified `project/app/source_conversation_ref` scope.
+
+Response:
+
+```json
+{
+  "sessions": [
+    {
+      "session_id": "00000000-0000-0000-0000-000000000111",
+      "status": "active",
+      "title": "Проверка товаров",
+      "last_message_preview": "Проверь товары",
+      "active_job_id": null,
+      "is_generating": false,
+      "message_count": 4,
+      "created_at": "2026-06-26T00:00:00Z",
+      "updated_at": "2026-06-26T00:10:00Z",
+      "archived_at": null
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+## Session detail and rename
+
+```http
+GET   /api/v2/sources/{source}/chat/sessions/{session_id}
+PATCH /api/v2/sources/{source}/chat/sessions/{session_id}
+X-Source-Secret: <source-token>
+Accept: application/json
+Content-Type: application/json
+```
+
+Common GET query:
+
+```text
+project_external_ref=project-ext-1
+app_external_ref=app-ext-1
+source_conversation_ref=miniapp:user:1:application:2
+```
+
+PATCH body:
+
+```json
+{
+  "project_external_ref": "project-ext-1",
+  "app_external_ref": "app-ext-1",
+  "source_conversation_ref": "miniapp:user:1:application:2",
+  "title": "Новый заголовок"
+}
+```
+
+The session title must not be blank; blank input fails with `422 session_title_empty`.
+
+## Archive session
+
+```http
+POST /api/v2/sources/{source}/chat/sessions/{session_id}/archive
+X-Source-Secret: <source-token>
+Accept: application/json
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "project_external_ref": "project-ext-1",
+  "app_external_ref": "app-ext-1",
+  "source_conversation_ref": "miniapp:user:1:application:2"
+}
+```
+
+Response `status` is `archived`; current open work for that session is stopped
+server-side.
+
+## List transcript messages
+
+```http
+GET /api/v2/sources/{source}/chat/sessions/{session_id}/messages
+X-Source-Secret: <source-token>
+Accept: application/json
+```
+
+Query:
+
+```text
+project_external_ref=project-ext-1
+app_external_ref=app-ext-1
+source_conversation_ref=miniapp:user:1:application:2
+include_archived=false
+limit=100
+cursor=<optional-message-id>
+```
+
+Response:
+
+```json
+{
+  "messages": [
+    {
+      "id": "message-id",
+      "role": "user",
+      "status": "final",
+      "content": "Проверь товары",
+      "format": "text",
+      "client_message_id": "00000000-0000-0000-0000-000000000999",
+      "parent_message_id": null,
+      "branch_root_message_id": null,
+      "replaces_message_id": null,
+      "version": 1,
+      "created_at": "2026-06-26T00:00:00Z",
+      "updated_at": "2026-06-26T00:00:00Z",
+      "archived_at": null
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+Use `/messages` when the UI needs transcript pages, edit/retry/regenerate lineage
+or sidebar previews that are more stable than reconstructing everything from
+operational `events` alone.
+
+## Message actions
+
+```http
+POST /api/v2/sources/{source}/chat/messages/{message_id}/retry
+POST /api/v2/sources/{source}/chat/messages/{message_id}/regenerate
+POST /api/v2/sources/{source}/chat/messages/{message_id}/edit
+X-Source-Secret: <source-token>
+Accept: application/json
+Content-Type: application/json
+```
+
+Retry/regenerate body:
+
+```json
+{
+  "project_external_ref": "project-ext-1",
+  "app_external_ref": "app-ext-1",
+  "source_conversation_ref": "miniapp:user:1:application:2",
+  "client_action_id": "00000000-0000-0000-0000-000000000777",
+  "source_user_ref": "user-1",
+  "context_snapshot": null
+}
+```
+
+Edit body adds a new `message` field:
+
+```json
+{
+  "project_external_ref": "project-ext-1",
+  "app_external_ref": "app-ext-1",
+  "source_conversation_ref": "miniapp:user:1:application:2",
+  "client_action_id": "00000000-0000-0000-0000-000000000778",
+  "message": "Уточни остатки по складу",
+  "source_user_ref": "user-1",
+  "context_snapshot": null
+}
+```
+
+Each action returns `202` and the same `ChatMessageResponseSchema` shape as
+`POST /chat/messages`. `client_action_id` is idempotency for the action itself;
+generate a fresh UUID per retry/regenerate/edit user action.
+
 ## Poll events
 
 ```http
@@ -336,13 +530,79 @@ session. Frontend must replace local `session_id`, clear local pending state and
 start polling from the returned `next_after_id`. Reset keeps the same
 `source_conversation_ref`; it does not select a different miniapp thread.
 
+## WebSocket transports
+
+There are two public websocket entry points.
+
+### Events-only websocket
+
+```http
+POST /api/v2/sources/{source}/chat/sessions/{session_id}/events/ws-ticket
+WS   /api/v2/sources/{source}/chat/sessions/{session_id}/events/ws
+```
+
+Use this when frontend needs live `chat.events` for one active session. The
+socket authorizes either by:
+
+- `X-Source-Secret` request header, or
+- one-time ticket from `/events/ws-ticket`.
+
+Server sends `connection.ready`, then `chat.events`, and may send `chat.error`.
+
+### Rich chat websocket
+
+```http
+POST /api/v2/sources/{source}/chat/ws-ticket
+WS   /api/v2/sources/{source}/chat/ws
+```
+
+Use this when the product wants one richer socket for session history, message
+actions and live sync. The socket accepts either `X-Source-Secret` header or a
+ticket from `/chat/ws-ticket`.
+
+Supported client commands on this websocket:
+
+- `ping`
+- `sync`
+- `session.open`
+- `session.list`
+- `session.get`
+- `session.update`
+- `session.archive`
+- `session.stop`
+- `session.reset`
+- `message.list`
+- `message.send`
+- `message.retry`
+- `message.regenerate`
+- `message.edit`
+
+Server response envelopes include:
+
+- `connection.ready`
+- `session.state`
+- `sessions.page`
+- `messages.page`
+- `message.accepted`
+- `chat.events`
+- `chat.error`
+- `pong`
+
+Do not pass source token in query string for websocket auth; use the header or
+issued ticket.
+
 ## Error map
 
 - `401 missing_source_secret`: client did not send `X-Source-Secret`.
 - `401 invalid_source_token`: source secret does not match source/project/app.
+- `401 invalid_ws_ticket`: websocket ticket is invalid, expired or mismatched.
+- `403 source_token_scope_denied`: chat-scoped token or websocket scope does not allow this conversation or mutable fields.
 - `403 session_not_owned` / `event_cursor_not_owned`: scope/session/cursor mismatch.
+- `403 message_not_owned`: message action was attempted outside the verified source scope.
 - `404 session_not_found` / `event_cursor_not_found`: stale local state.
+- `404 message_not_found`: message action points to a message not visible in this source scope.
 - `422 context_snapshot_malformed`: `context_snapshot` есть в body, но не проходит backend-формат. Убери поле или отправь `null`; такой запрос отсекается до создания job.
+- `422 session_title_empty`: rename request contains blank title.
 - `422`: request validation, bad UUID, extra fields, empty message, malformed or oversized context, `workspace_missing`, `workspace_ambiguous`.
 
 Validation responses intentionally do not echo raw input. Preserve that property
@@ -373,14 +633,19 @@ action, generate a new UUID.
 - For Gigma AI miniapp, the existing static source token remains unchanged unless Art explicitly asks for rotation or a new auth-flow.
 - Production source token is chat-scoped or server-restricted to `/sources/{source}/chat/*`.
 - Retry of the same send is idempotent.
+- Retry/regenerate/edit use real `/chat/messages/{message_id}/...` routes with fresh `client_action_id`.
 - Event polling uses `after_id` and does not duplicate rendered events.
 - Thread switching is implemented by changing active `source_conversation_ref`
   and, for multi-agent UI, active `default_agent_key`; then reopening
   `/chat/session`, not by using executor `thread_id`.
+- If the product uses server-side history, it uses the real `/chat/sessions`,
+  `/chat/sessions/{session_id}` and `/chat/sessions/{session_id}/messages`
+  routes inside the current `source_conversation_ref` scope.
 - History catch-up continues from `session.events` through `/events?after_id=...`
   until an empty page or stable cursor before switching to live polling.
-- No non-existent user-chat routes such as `GET /chat/threads` or
-  `GET /chat/history` are added.
+- No fake aliases such as `GET /chat/threads` or `GET /chat/history` are added.
+- If websocket transport is used, it authenticates via `X-Source-Secret` header
+  or issued ticket, not via query-string secret.
 - Markdown is rendered only for `format:"markdown"`.
 - Stop and reset update UI state without exposing internal job details.
 
