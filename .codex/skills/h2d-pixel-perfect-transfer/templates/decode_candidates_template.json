@@ -1,0 +1,11 @@
+[
+  {
+    "source_file": "source/input.h2d",
+    "transform": "xor-0x39",
+    "codec": "raw-deflate",
+    "status": "ok",
+    "result": "pass",
+    "decoded_bytes": 41967134,
+    "score": 235
+  }
+]

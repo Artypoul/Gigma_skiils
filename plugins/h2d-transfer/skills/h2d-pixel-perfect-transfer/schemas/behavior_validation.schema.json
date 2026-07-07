@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "behavior_validation",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "static-scope",
+        "not-tested",
+        "manual-review"
+      ]
+    },
+    "behavior_required": {
+      "type": "boolean"
+    },
+    "comparisons": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "accepted_deviations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "safe_boundaries": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "result",
+    "behavior_required",
+    "comparisons",
+    "issues"
+  ]
+}

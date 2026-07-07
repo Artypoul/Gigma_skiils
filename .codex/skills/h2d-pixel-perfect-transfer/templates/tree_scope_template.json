@@ -1,0 +1,22 @@
+{
+  "scope": "hero",
+  "roots": {
+    "390": "0.0.0.2"
+  },
+  "viewports": [
+    390
+  ],
+  "nodes": [
+    {
+      "viewport": 390,
+      "h2d_path": "0.0.0.2",
+      "type": "FRAME",
+      "rect": {
+        "x": 0,
+        "y": 66,
+        "width": 390,
+        "height": 600
+      }
+    }
+  ]
+}

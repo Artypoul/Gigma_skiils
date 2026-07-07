@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "output_contract",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scope": {
+      "type": "string"
+    },
+    "behavior_required": {
+      "type": "boolean"
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "liveness_required": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "scope",
+    "behavior_required",
+    "files",
+    "liveness_required"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "behavior_required": {
+            "const": true
+          }
+        },
+        "required": [
+          "behavior_required"
+        ]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": [
+              "behavior_inventory",
+              "interaction_matrix",
+              "event_listener_inventory",
+              "original_behavior_traces",
+              "candidate_behavior_traces",
+              "behavior_state_targets",
+              "behavior_implementation_map",
+              "behavior_validation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "behavior_required": {
+            "const": false
+          }
+        },
+        "required": [
+          "behavior_required"
+        ]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": [
+              "behavior_validation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "liveness_required": {
+            "const": true
+          }
+        },
+        "required": [
+          "liveness_required"
+        ]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": [
+              "liveness_inventory",
+              "webgl_capture_report",
+              "original_animation_trace",
+              "candidate_animation_trace",
+              "liveness_validation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "liveness_required": {
+            "const": false
+          }
+        },
+        "required": [
+          "liveness_required"
+        ]
+      },
+      "then": {
+        "properties": {
+          "files": {
+            "required": [
+              "liveness_validation"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

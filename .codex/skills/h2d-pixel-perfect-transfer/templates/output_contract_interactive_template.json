@@ -1,0 +1,28 @@
+{
+  "scope": "hero",
+  "behavior_required": true,
+  "files": {
+    "html": "dist/hero.html",
+    "source_intake": "reports/source_intake.json",
+    "h2d_unpack_report": "reports/h2d_unpack_report.json",
+    "rect_targets": "reports/rect_targets.json",
+    "asset_map": "reports/asset_map.json",
+    "asset_paint_validation": "reports/asset_paint_validation.json",
+    "node_validation": "reports/node_validation.json",
+    "behavior_inventory": "reports/behavior_inventory.json",
+    "interaction_matrix": "reports/interaction_matrix.json",
+    "event_listener_inventory": "reports/event_listener_inventory.json",
+    "original_behavior_traces": "reports/original_behavior_traces.jsonl",
+    "candidate_behavior_traces": "reports/candidate_behavior_traces.jsonl",
+    "behavior_state_targets": "reports/behavior_state_targets.json",
+    "behavior_implementation_map": "reports/behavior_implementation_map.json",
+    "behavior_validation": "reports/behavior_validation.json",
+    "review": "reports/review.md",
+    "liveness_inventory": "reports/liveness_inventory.json",
+    "webgl_capture_report": "reports/webgl_capture_report.json",
+    "original_animation_trace": "reports/original_animation_trace.jsonl",
+    "candidate_animation_trace": "reports/candidate_animation_trace.jsonl",
+    "liveness_validation": "reports/liveness_validation.json"
+  },
+  "liveness_required": true
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "interaction_matrix",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "not-tested"
+      ]
+    },
+    "interactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "interaction_id",
+          "component_id",
+          "action"
+        ],
+        "properties": {
+          "interaction_id": {
+            "type": "string"
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "hover",
+              "focus",
+              "click",
+              "keyboard-enter",
+              "keyboard-space",
+              "escape",
+              "outside-click",
+              "tab-sequence",
+              "scroll",
+              "input"
+            ]
+          },
+          "criticality": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "normal"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "result",
+    "interactions"
+  ]
+}

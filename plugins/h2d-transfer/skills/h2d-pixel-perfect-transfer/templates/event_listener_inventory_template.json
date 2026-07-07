@@ -1,0 +1,13 @@
+{
+  "result": "pass",
+  "listeners": [
+    {
+      "component_id": "390:button:get-started",
+      "selector": "text=Get started",
+      "events": [
+        "click",
+        "keydown"
+      ]
+    }
+  ]
+}

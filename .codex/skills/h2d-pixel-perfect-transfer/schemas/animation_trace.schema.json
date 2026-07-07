@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "animation_trace",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "not-tested"
+      ]
+    },
+    "side": {
+      "type": "string",
+      "enum": [
+        "original",
+        "candidate"
+      ]
+    },
+    "traces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "trace_id",
+          "surface_id",
+          "samples"
+        ],
+        "properties": {
+          "trace_id": {
+            "type": "string"
+          },
+          "surface_id": {
+            "type": "string"
+          },
+          "viewport": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "selector": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "timing": {
+            "type": "object"
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "t_ms": {
+                  "type": "number"
+                },
+                "screenshot": {
+                  "type": "string"
+                },
+                "frame_hash": {
+                  "type": "string"
+                },
+                "alpha_bbox": {},
+                "computed": {
+                  "type": "object"
+                },
+                "rect": {
+                  "type": "object"
+                },
+                "canvas_non_blank_ratio": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "result",
+    "side",
+    "traces"
+  ]
+}

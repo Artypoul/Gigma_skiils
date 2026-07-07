@@ -1,0 +1,16 @@
+{
+  "result": "pass",
+  "url": "https://example.test",
+  "viewports": [
+    390
+  ],
+  "components": [
+    {
+      "component_id": "390:button:get-started",
+      "selector": "text=Get started",
+      "kind": "button",
+      "label": "Get started",
+      "criticality": "critical"
+    }
+  ]
+}

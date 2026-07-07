@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "decode_candidates",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "source_file": {
+        "type": "string"
+      },
+      "transform": {
+        "type": "string"
+      },
+      "codec": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "fail",
+          "skipped"
+        ]
+      },
+      "result": {
+        "type": "string",
+        "enum": [
+          "pass",
+          "fail",
+          "skipped"
+        ]
+      },
+      "decoded_bytes": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "score": {
+        "type": "number"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "error": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "transform",
+      "codec",
+      "decoded_bytes"
+    ]
+  }
+}

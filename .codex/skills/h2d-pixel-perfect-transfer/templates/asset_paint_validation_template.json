@@ -1,0 +1,29 @@
+{
+  "result": "pass",
+  "assets": [
+    {
+      "asset_id": "hero-wave-mobile",
+      "viewport": 390,
+      "selector": "[data-asset-id='hero-wave-mobile']",
+      "bbox": {
+        "x": 0,
+        "y": 66,
+        "width": 390,
+        "height": 300
+      },
+      "crop_file": "screenshots/painted_asset_crops/390_hero-wave-mobile.png",
+      "dom_result": "pass",
+      "pixel_result": "pass",
+      "non_transparent_ratio": 0.9,
+      "content_bbox": [
+        0,
+        0,
+        390,
+        300
+      ],
+      "visibility_result": "pass",
+      "result": "pass"
+    }
+  ],
+  "issues": []
+}

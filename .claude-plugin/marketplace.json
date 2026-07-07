@@ -31,6 +31,11 @@
       "name": "development-workflow",
       "source": "./plugins/development-workflow",
       "description": "Generic development workflow skills for evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks, dirty worktree safety and redacted handoff output."
+    },
+    {
+      "name": "h2d-transfer",
+      "source": "./plugins/h2d-transfer",
+      "description": "Скил для H2D pixel-perfect transfer: перенос .h2d в Tailwind HTML/React с обязательными gates для source intake, geometry, asset paint, live diff, behavior и liveness/WebGL."
     }
   ]
 }

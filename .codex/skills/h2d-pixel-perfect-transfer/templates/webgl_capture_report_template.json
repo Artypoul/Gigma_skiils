@@ -1,0 +1,30 @@
+{
+  "result": "pass",
+  "contexts": [
+    {
+      "canvas_selector": "canvas.hero-wave",
+      "context_type": "webgl",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 360
+      },
+      "context_attributes": {
+        "alpha": true,
+        "antialias": true,
+        "depth": true,
+        "stencil": false,
+        "preserveDrawingBuffer": false
+      },
+      "vendor": "masked-or-unavailable",
+      "renderer": "masked-or-unavailable",
+      "frame_hashes": [
+        "sha256:example"
+      ],
+      "pixels_change_over_time": true,
+      "non_blank_samples": 3
+    }
+  ],
+  "issues": []
+}

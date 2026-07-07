@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "h2d_unpack_report",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "ambiguous",
+        "fail"
+      ]
+    },
+    "source_unpack_verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail"
+      ]
+    },
+    "input_sha256": {
+      "type": "string"
+    },
+    "selected_candidate": {
+      "type": "object"
+    },
+    "decode_chain": {
+      "type": "array"
+    },
+    "decoded_kind": {
+      "type": "string"
+    },
+    "decoded_json_file": {
+      "type": "string"
+    },
+    "h2d_tree_index_file": {
+      "type": "string"
+    },
+    "node_count_indexed": {
+      "type": "integer"
+    },
+    "raw_assets_found": {
+      "type": "integer"
+    },
+    "warnings": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "status",
+    "source_unpack_verdict",
+    "input_sha256",
+    "decode_chain",
+    "decoded_json_file",
+    "h2d_tree_index_file",
+    "node_count_indexed"
+  ]
+}

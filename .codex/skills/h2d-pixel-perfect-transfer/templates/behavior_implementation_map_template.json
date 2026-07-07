@@ -1,0 +1,13 @@
+{
+  "result": "pass",
+  "mappings": [
+    {
+      "component_id": "390:button:get-started",
+      "original_selector": "text=Get started",
+      "candidate_selector": "[data-behavior-id='get-started']",
+      "h2d_paths": [
+        "0.0.0.2.0.0.3"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "result": "static-scope",
+  "behavior_required": false,
+  "comparisons": [],
+  "accepted_deviations": [],
+  "issues": [
+    {
+      "severity": "info",
+      "message": "Scope declared static; no original behavior requested."
+    }
+  ],
+  "safe_boundaries": []
+}

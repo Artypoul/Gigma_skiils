@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "output_manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scope": {
+      "type": "string"
+    },
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "behavior_required": {
+      "type": "boolean"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "source_sha256": {
+      "type": "string"
+    },
+    "html_file": {
+      "type": "string"
+    },
+    "html_sha256": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "needs-fix",
+        "fail",
+        "manual-review"
+      ]
+    }
+  },
+  "required": [
+    "scope",
+    "viewports",
+    "behavior_required",
+    "files",
+    "html_file",
+    "html_sha256",
+    "result"
+  ]
+}

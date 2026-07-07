@@ -1,0 +1,24 @@
+{
+  "assets": [
+    {
+      "asset_id": "hero-wave-mobile",
+      "source": {
+        "kind": "h2d-fallback-image",
+        "h2d_path": "0.0.0.2.0.1.1.0.0.1"
+      },
+      "target": {
+        "file": "dist/assets/hero-wave-mobile.webp",
+        "selectors": [
+          "[data-asset-id='hero-wave-mobile']"
+        ],
+        "h2d_paths": [
+          "0.0.0.2.0.1.1.0.0.1"
+        ]
+      },
+      "viewports": [
+        390
+      ],
+      "criticality": "critical"
+    }
+  ]
+}

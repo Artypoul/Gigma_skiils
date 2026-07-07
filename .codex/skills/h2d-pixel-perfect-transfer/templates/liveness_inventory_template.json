@@ -1,0 +1,28 @@
+{
+  "result": "pass",
+  "liveness_required": true,
+  "url": "https://original.example",
+  "viewports": [
+    390,
+    768,
+    1440
+  ],
+  "surfaces": [
+    {
+      "surface_id": "390:hero:webgl-wave",
+      "kind": "webgl",
+      "selector": "canvas.hero-wave",
+      "criticality": "critical",
+      "triggers": [
+        "load",
+        "resize"
+      ],
+      "evidence_required": [
+        "webgl_context",
+        "frame_hashes",
+        "non_blank_pixels",
+        "start_mid_end_screenshots"
+      ]
+    }
+  ]
+}

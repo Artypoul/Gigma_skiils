@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "liveness_validation",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "static-scope",
+        "not-tested",
+        "manual-review"
+      ]
+    },
+    "liveness_required": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "surface_id",
+          "result"
+        ],
+        "properties": {
+          "surface_id": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "partial",
+              "fail",
+              "static-fallback",
+              "manual-review"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "accepted_deviations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "webgl_runtime_verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "not-present",
+        "static-fallback",
+        "not-tested",
+        "manual-review"
+      ]
+    }
+  },
+  "required": [
+    "result",
+    "liveness_required",
+    "checks",
+    "issues"
+  ]
+}

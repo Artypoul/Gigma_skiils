@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "schema_discovery",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "top_level_type": {
+      "type": "string"
+    },
+    "top_level_keys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "viewport_roots": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "viewport_widths": {
+      "type": "array",
+      "items": {
+        "type": [
+          "number",
+          "null"
+        ]
+      }
+    },
+    "shape": {
+      "type": "object"
+    },
+    "tree_index_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sample_nodes": {
+      "type": "array"
+    },
+    "asset_count_top_level": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "font_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "top_level_type",
+    "viewport_roots",
+    "tree_index_count"
+  ]
+}

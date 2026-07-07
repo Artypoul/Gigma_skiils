@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "behavior_implementation_map",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "partial",
+        "fail",
+        "not-tested"
+      ]
+    },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "component_id",
+          "original_selector",
+          "candidate_selector"
+        ],
+        "properties": {
+          "component_id": {
+            "type": "string"
+          },
+          "original_selector": {
+            "type": "string"
+          },
+          "candidate_selector": {
+            "type": "string"
+          },
+          "h2d_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "result",
+    "mappings"
+  ]
+}

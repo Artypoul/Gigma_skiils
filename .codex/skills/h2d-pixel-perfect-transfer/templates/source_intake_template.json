@@ -1,0 +1,11 @@
+{
+  "input_file": "source/input.h2d",
+  "input_original": "source/input.original",
+  "selected_h2d": "source/input.h2d",
+  "input_size": 12345,
+  "input_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "first_32_bytes_hex": "",
+  "last_32_bytes_hex": "",
+  "sniffed_kind": "xor-0x39-candidate",
+  "copied_byte_identical": true
+}

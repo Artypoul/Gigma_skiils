@@ -1,0 +1,21 @@
+{
+  "result": "pass",
+  "liveness_required": true,
+  "webgl_runtime_verdict": "pass",
+  "checks": [
+    {
+      "surface_id": "390:hero:webgl-wave",
+      "kind": "webgl",
+      "result": "pass",
+      "evidence": [
+        "webgl_capture_report.json",
+        "original_animation_trace.jsonl",
+        "candidate_animation_trace.jsonl",
+        "screenshots/liveness/candidate_390_hero_webgl_0000.png"
+      ],
+      "message": "runtime surface reproduced"
+    }
+  ],
+  "accepted_deviations": [],
+  "issues": []
+}

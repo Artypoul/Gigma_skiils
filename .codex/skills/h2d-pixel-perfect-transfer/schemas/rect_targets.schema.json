@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rect_targets",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scope": {
+      "type": "string"
+    },
+    "coordinate_space": {
+      "type": "string",
+      "enum": [
+        "page",
+        "branch-local",
+        "component-local"
+      ]
+    },
+    "viewport_key_format": {
+      "type": "string"
+    },
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "viewport",
+          "root_path",
+          "targets"
+        ],
+        "properties": {
+          "viewport": {
+            "type": "integer"
+          },
+          "root_path": {
+            "type": "string"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "data_h2d_path",
+                "rect"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "data_h2d_path": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rect": {
+                  "type": "object",
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "total_targets": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "scope",
+    "coordinate_space",
+    "viewports",
+    "total_targets"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "result": "font-exact",
+  "fonts": [
+    {
+      "selector": "body",
+      "font_family": "Inter",
+      "font_weight": "400",
+      "source": "computed-style"
+    }
+  ],
+  "licensing_notes": [
+    "Do not package proprietary font files without permission."
+  ]
+}

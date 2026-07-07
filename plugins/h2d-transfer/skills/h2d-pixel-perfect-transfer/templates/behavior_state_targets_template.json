@@ -1,0 +1,13 @@
+{
+  "result": "pass",
+  "targets": [
+    {
+      "interaction_id": "390:button:get-started:click",
+      "component_id": "390:button:get-started",
+      "expected": {
+        "url_changed": true,
+        "panel_visible": false
+      }
+    }
+  ]
+}

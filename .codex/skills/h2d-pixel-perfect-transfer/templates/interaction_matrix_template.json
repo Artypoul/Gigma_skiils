@@ -1,0 +1,12 @@
+{
+  "result": "pass",
+  "interactions": [
+    {
+      "interaction_id": "390:button:get-started:click",
+      "component_id": "390:button:get-started",
+      "selector": "text=Get started",
+      "action": "click",
+      "criticality": "critical"
+    }
+  ]
+}

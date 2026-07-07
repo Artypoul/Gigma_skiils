@@ -1,0 +1,8 @@
+{
+  "result": "static-scope",
+  "liveness_required": false,
+  "webgl_runtime_verdict": "not-present",
+  "checks": [],
+  "accepted_deviations": [],
+  "issues": []
+}

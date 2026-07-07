@@ -1,0 +1,25 @@
+{
+  "result": "pass",
+  "items": [
+    {
+      "asset_id": "hero-wave-mobile",
+      "viewport": 390,
+      "selector": "[data-asset-id='hero-wave-mobile']",
+      "bbox": {
+        "x": 0,
+        "y": 66,
+        "width": 390,
+        "height": 300
+      },
+      "chain": [
+        {
+          "tag": "IMG",
+          "display": "block",
+          "visibility": "visible",
+          "opacity": 1
+        }
+      ],
+      "result": "pass"
+    }
+  ]
+}

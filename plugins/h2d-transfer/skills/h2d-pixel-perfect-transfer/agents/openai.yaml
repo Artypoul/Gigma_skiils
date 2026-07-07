@@ -1,0 +1,4 @@
+interface:
+  display_name: "H2D transfer"
+  short_description: "H2D to code with proof gates"
+  default_prompt: "Use $h2d-pixel-perfect-transfer to reconstruct a .h2d page or block into Tailwind HTML/React with source intake, geometry validation, live diff, behavior replay, and liveness/WebGL proof."

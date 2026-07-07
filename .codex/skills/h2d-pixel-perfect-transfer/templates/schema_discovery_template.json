@@ -1,0 +1,24 @@
+{
+  "top_level_type": "dict",
+  "top_level_keys": [
+    "frame",
+    "alternatives"
+  ],
+  "viewport_roots": [
+    {
+      "branch": "default",
+      "width": 1920,
+      "frame_path": "$.frame"
+    }
+  ],
+  "viewport_widths": [
+    1920
+  ],
+  "shape": {
+    "looks_like_h2d": true
+  },
+  "tree_index_count": 100,
+  "sample_nodes": [],
+  "asset_count_top_level": 1,
+  "font_count": 0
+}
