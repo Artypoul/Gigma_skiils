@@ -1,5 +1,5 @@
 {
   "name": "glaim",
-  "description": "Скилы GLAIM для agent bridge: прямое подключение miniapp, сайта или frontend-чата к source-chat API через source token, без доступа к agent/control токенам.",
-  "version": "0.1.1"
+  "description": "Скилы GLAIM для agent bridge и Support Assets API: прямое подключение frontend-чата к source-chat API через source token, а также templates, generated assets, publish flow и bindings по Bearer/control-plane модели.",
+  "version": "0.1.2"
 }

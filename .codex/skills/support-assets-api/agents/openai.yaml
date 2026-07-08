@@ -1,0 +1,4 @@
+interface:
+  display_name: "Support Assets API"
+  short_description: "GLAIM support assets workflow"
+  default_prompt: "Use $support-assets-api to create or review a GLAIM support asset template, generated asset, approval flow, or asset binding by the real API contract."
