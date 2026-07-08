@@ -1,13 +1,18 @@
 {
   "name": "h2d-transfer",
-  "version": "0.1.0",
-  "description": "H2D transfer skill for reconstructing .h2d snapshots into Tailwind HTML/React with mandatory source intake, geometry, asset paint, live comparison, behavior, and liveness/WebGL proof gates.",
+  "version": "0.2.0",
+  "description": "Frontend transfer skills for reconstructing .h2d snapshots or live websites into clean Tailwind HTML/React, with either mandatory proof gates for H2D or practical block-by-block rebuild guidance from browser dev mode.",
   "author": {
     "name": "Artypoul"
   },
   "license": "MIT",
   "keywords": [
     "h2d",
+    "dev-mode",
+    "devtools",
+    "browser",
+    "elementor",
+    "wordpress",
     "pixel-perfect",
     "tailwind",
     "react",
@@ -19,8 +24,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "H2D transfer",
-    "shortDescription": "Pixel-perfect H2D to code",
-    "longDescription": "Помогает переносить страницы и блоки из .h2d в Tailwind HTML/React без угадывания: source intake, H2D decode, rect targets, geometry validation, asset paint proof, live diff, behavior replay и liveness/WebGL gates.",
+    "shortDescription": "H2D and dev-mode site transfer",
+    "longDescription": "Помогает переносить страницы и блоки либо из .h2d с proof-gates, либо из живого сайта через browser dev mode в чистый Tailwind HTML/React без слепого копирования legacy-разметки.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": [
@@ -30,7 +35,8 @@
     "defaultPrompt": [
       "Перенеси .h2d в Tailwind HTML/React с полной валидацией",
       "Сделай H2D pixel-perfect transfer и прогони все gates",
-      "Проверь, что перенос из .h2d сохранил поведение и runtime-слои"
+      "Проверь, что перенос из .h2d сохранил поведение и runtime-слои",
+      "Перенеси живой сайт из browser dev mode по блокам в чистый код"
     ]
   }
 }
