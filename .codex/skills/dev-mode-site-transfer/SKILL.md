@@ -7,12 +7,14 @@ description: "Transfer a live website or page block by block from browser dev mo
 
 Use this skill when the source of truth is a live site and the practical move is:
 
-1. inspect the page in browser dev mode;
+1. confirm the page opens and you can inspect it in browser dev mode;
 2. inventory blocks, assets, and layout tokens;
 3. rebuild the page cleanly in new code;
 4. verify that the result is faithful enough for the requested level.
 
 This is not the H2D proof pipeline. Do not call the result `pixel-perfect` unless the user only asked for a close transfer or you later validate it with stricter diff methods.
+
+If you cannot open the live page, inspect the final rendered DOM/CSS, or access the meaningful states needed for transfer, stop and report `blocked`.
 
 ## Choose the route first
 
@@ -34,12 +36,13 @@ If unsure, read `references/dev-mode-transfer-checklist.md` and decide honestly.
 
 ## Quick workflow
 
-1. Identify the stack.
-2. Build a block inventory.
-3. Extract visual tokens and assets from dev mode.
-4. Rebuild each block in clean markup/components.
-5. Verify desktop and mobile behavior.
-6. Report the true status: close transfer, exact transfer, or needs manual polish.
+1. Run a preflight: confirm the live page opens and dev-mode inspection is actually available.
+2. Identify the stack.
+3. Build a block inventory.
+4. Extract visual tokens and assets from dev mode.
+5. Rebuild each block in clean markup/components.
+6. Verify desktop and mobile behavior and keep lightweight evidence.
+7. Report the true status with canonical labels: `clean-transfer`, `close-match`, `needs-polish`, `changed-source`, or `blocked`.
 
 ## 1. Identify the stack
 
@@ -53,6 +56,8 @@ Before copying anything, determine what you are looking at:
 Use browser dev mode, page source, loaded CSS/JS URLs, and generator meta tags when available.
 
 Do not assume the raw DOM is worth preserving. On builder sites, the DOM often contains many wrappers that should not survive the rebuild.
+
+If browser inspection is unavailable, the page is auth-gated, or the visible state cannot be reached safely, stop early with `blocked` instead of inventing the missing source data.
 
 ## 2. Build a block inventory
 
@@ -126,6 +131,7 @@ Do not "transfer from dev mode" by dumping copied production HTML into the new c
 
 Minimum verification before calling the block transferred:
 
+- save lightweight evidence from inspection and comparison: at least one desktop capture and one mobile capture, or equivalent per-block notes/screenshots;
 - compare the result side-by-side with the live source on desktop;
 - compare at least one mobile width;
 - verify headings, text order, CTA labels, and assets;
@@ -139,6 +145,8 @@ Recommended working widths:
 - `1440`
 
 If the source visibly changes outside these widths, test the real breakpoints you observe.
+
+If you cannot leave this minimum evidence trail, do not claim `clean-transfer`; use `needs-polish` or `blocked`, depending on what is missing.
 
 ## 6. Honest status language
 

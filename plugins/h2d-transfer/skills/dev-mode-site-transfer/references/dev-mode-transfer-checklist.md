@@ -7,6 +7,7 @@ Use this file when transferring a live site from browser dev mode into clean cod
 Use dev mode transfer when:
 
 - source is a live URL;
+- you can actually open the page and inspect the rendered result in browser dev mode;
 - page is mostly normal DOM/CSS;
 - the site is WordPress/Elementor, Tilda, Webflow-like, or old static markup;
 - you want a clean reconstruction faster than a proof-gated forensic clone.
@@ -17,6 +18,8 @@ Escalate to H2D or stricter validation when:
 - user explicitly says `pixel-perfect`;
 - page behavior depends on canvas, WebGL, complex motion, or runtime traces;
 - there are many stateful interactions that inspector-only copying cannot explain safely.
+
+Stop with `blocked` when the page does not open, auth/runtime gating prevents meaningful inspection, or browser/devtools access is unavailable.
 
 ## 2. What to collect from dev mode
 
@@ -105,6 +108,7 @@ Do not import:
 - route choice is explicit: dev mode transfer, not H2D proof transfer;
 - blocks are inventoried and named by role;
 - rebuilt code is cleaner than the source;
+- lightweight evidence was kept: desktop/mobile captures or equivalent per-block notes;
 - desktop and mobile were checked;
 - asset and text parity were checked;
 - remaining behavior gaps are named explicitly;
