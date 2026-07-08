@@ -1,7 +1,7 @@
 {
   "name": "site-sense",
-  "version": "0.2.1",
-  "description": "Russian website strategy skill pack for product context, positioning, information architecture, SEO briefs, page copy, conversion review, and final language polish.",
+  "version": "0.2.2",
+  "description": "Russian website strategy skill pack with a common workflow entrypoint for product context, positioning, information architecture, SEO briefs, page copy, conversion review, and final language polish.",
   "author": {
     "name": "Artypoul"
   },
@@ -14,7 +14,9 @@
     "seo",
     "information-architecture",
     "cro",
-    "russian"
+    "russian",
+    "workflow",
+    "router"
   ],
   "skills": "./skills/",
   "interface": {
@@ -30,7 +32,8 @@
     "defaultPrompt": [
       "Собери сайт с нуля: контекст, смыслы, структура, SEO и тексты",
       "Сделай стратегию и тексты лендинга под русский рынок",
-      "Проведи аудит структуры и копирайта сайта и выдай готовые артефакты"
+      "Проведи аудит структуры и копирайта сайта и выдай готовые артефакты",
+      "Маршрутизируй задачу по сайту в правильный skill и собери следующий артефакт"
     ]
   }
 }
