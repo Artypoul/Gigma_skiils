@@ -1,7 +1,7 @@
 {
   "name": "glaim",
-  "version": "0.1.1+codex.20260702165500",
-  "description": "Скилы GLAIM: прямое подключение miniapp, сайта или frontend-чата к GLAIM source-chat API, работа с source token, session/message/events flow и проверка интеграции.",
+  "version": "0.1.2+codex.20260708173000",
+  "description": "Скилы GLAIM: прямое подключение miniapp, сайта или frontend-чата к GLAIM source-chat API и работа с Support Assets API: templates, generated assets, publish flow и bindings.",
   "author": {
     "name": "Artypoul"
   },
@@ -14,13 +14,15 @@
     "frontend",
     "miniapp",
     "source",
-    "api"
+    "api",
+    "assets",
+    "support"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "GLAIM: agent bridge",
-    "shortDescription": "Frontend-чат и агентный мост",
-    "longDescription": "Помогает подключать miniapp, сайт, витрину или web chat напрямую к GLAIM source-chat API: session, messages, events, stop/reset, idempotency, markdown events, source token в X-Source-Secret и проверка token blast radius.",
+    "shortDescription": "Frontend-чат и support assets",
+    "longDescription": "Помогает подключать miniapp, сайт, витрину или web chat напрямую к GLAIM source-chat API, а также работать с Support Assets API: templates, generated assets, versions, approve/publish flow, bindings и безопасные storage_uri.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": [
@@ -30,7 +32,8 @@
     "defaultPrompt": [
       "Подключи frontend-чат к GLAIM",
       "Проверь интеграцию чата с GLAIM API",
-      "Настрой source-token доступ к GLAIM chat API"
+      "Настрой source-token доступ к GLAIM chat API",
+      "Собери flow для GLAIM Support Assets API"
     ]
   }
 }
