@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dev mode transfer"
+  short_description: "Transfer live sites from browser dev mode"
+  default_prompt: "Use $dev-mode-site-transfer to rebuild a live website block by block from browser dev mode into clean code without copying legacy markup blindly."
