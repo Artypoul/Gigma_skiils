@@ -24,6 +24,8 @@ Winning source of truth:
 - <artifact or rule that now decides the task>
 User constraints:
 - <constraint that must steer the next agent>
+Decision lock:
+- <accepted product/API/runtime/compatibility decisions that must not change without explicit approval>
 Open blockers:
 - <real blocker or "none known">
 Next required action:
@@ -111,9 +113,40 @@ Answer "ready" only when:
 - CI/checks are completed or their unavailable state is explained;
 - tests or equivalent validation were run and results are named;
 - review comments were read after the last push;
+- accepted product, API, runtime, data-compatibility and rollout decisions are preserved, or an explicit user-approved decision change is linked/named;
 - deploy health was checked when deploy is in scope;
 - no secrets, tokens, private paths, or credentials were printed or committed;
 - handoff names the next required action.
+
+## Decision-Lock Review
+
+Use this check before coding, after review fixes, and before merge-ready/deploy-ready status:
+
+```text
+decision | source | must preserve | changed by this diff? | approval
+```
+
+Sources include explicit user messages, the active plan, PR body, review comments, contract docs, runbooks, and compatibility tests. Compatibility tests that assert accepted old behavior are product evidence; do not rewrite them just to match a new implementation.
+
+Stop and request an explicit decision change before changing:
+
+- public API, payloads, auth, permissions, runtime contract or agent permissions;
+- DB/migration behavior, old records, queued jobs, rollout phase or backward compatibility;
+- feature scope, ownership boundary, source of truth, or the user's accepted product behavior.
+
+Use this format:
+
+```text
+DECISION CHANGE REQUEST
+Current locked decision:
+Proposed change:
+Why it seems needed:
+What breaks:
+Options:
+Recommended option:
+```
+
+Do not call an unapproved drift a "contract decision". Green CI does not approve product drift.
 
 ## Intent Map
 
@@ -139,6 +172,8 @@ Answer "ready" only when:
 - Switching domains after the user narrowed scope.
 - Reporting deploy success without checking workflow or health evidence.
 - Handing off a recovery task without naming the failed assumption or the winning source of truth.
+- Rewriting docs or tests to ratify a behavior change that was never approved.
+- Treating architectural cleanup or security hardening as permission to break an accepted compatibility or rollout decision.
 
 ## Output Style
 

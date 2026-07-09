@@ -1,4 +1,4 @@
 interface:
   display_name: "Development Handoff"
-  short_description: "Continue agent work from evidence"
-  default_prompt: "Use $development-handoff to continue development from a PR, review, or interrupted agent session."
+  short_description: "Continue from evidence and decision locks"
+  default_prompt: "Use $development-handoff to continue development from a PR, review, interrupted agent session, or complaint that the work drifted from an accepted decision."

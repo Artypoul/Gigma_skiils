@@ -49,11 +49,15 @@ git log --oneline --decorate -5
 git branch -vv
 ```
 
-For review, handoff, PR fix, PR finalization, merge, deploy, or "ready?" work, PR/check/review evidence is mandatory. If GitHub CLI is unavailable or the user requested offline/local-only work, mark PR evidence as unknown/blocking instead of guessing.
+For review, handoff, PR fix, PR finalization, merge, deploy, or "ready?" work, PR/check/review evidence is mandatory. Prefer the strongest PR identifier available: user-supplied PR URL/number, then current branch PR, then `gh pr status` discovery. If GitHub CLI is unavailable, the repository cannot be inferred, or the user requested offline/local-only work, mark PR evidence as unknown/blocking instead of guessing.
 
 ```bash
+gh pr view <pr-url-or-number> --json url,state,headRefName,baseRefName,statusCheckRollup,reviewDecision
 gh pr view --json url,state,headRefName,baseRefName,statusCheckRollup,reviewDecision
+gh pr status
 ```
+
+When working from a fork, detached worktree, or non-default remote, pass `--repo <owner/name>` to `gh` commands after deriving it from the PR URL or `gh repo view --json nameWithOwner`.
 
 For dirty worktrees, classify files as current-task, pre-existing, generated, or unknown. Never reset or clean unrelated files. Before edits, if any target file is already dirty and its origin is unknown or pre-existing, stop and ask Art how to proceed.
 

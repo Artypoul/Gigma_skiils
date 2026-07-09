@@ -50,7 +50,8 @@ Keep it short. Once the route is clear, execute the selected workflow instead of
 ## Safety
 
 - Do not use this router to skip review gates.
-- If project/global rules configure a review gate and the review skill/tool/check is unavailable, stale, or queued, report it as `Blocked by`, not as a normal fallback.
+- Treat hard gates as blockers when unavailable, stale, or queued: required CI, required PR approval, deploy gates, security checks, explicit user-required review, and PR evidence for PR work.
+- If an optional automatic reviewer such as monster/Codex/Claude review is unavailable and project rules allow a local fallback, run a local findings-first monster review, state the limitation, and do not mark the task ready while real findings remain open.
 - Do not create a new PR if the user asked to fix the existing one.
 - Do not broaden product scope silently; ask when several product choices are valid.
 - Do not mark a task ready while CI/review/deploy evidence is unknown.

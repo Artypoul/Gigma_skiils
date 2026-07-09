@@ -1,6 +1,6 @@
 # Reusable Skill Bundles
 
-Use these bundles as named starting points. Load the real skill files that exist in the current session/project. Optional missing skills may use a named fallback; configured review gates, CI checks, PR evidence, or deploy gates that are unavailable/stale/queued are blockers, not normal fallbacks.
+Use these bundles as named starting points. Load the real skill files that exist in the current session/project. Optional missing skills may use a named fallback. Hard gates are blockers when unavailable, stale, or queued: required CI, required PR approval, deploy gates, security checks, explicit user-required review, and PR evidence for PR work. If an optional automatic reviewer is unavailable and project rules allow a local fallback, run a local findings-first monster review and state that limitation.
 
 ## context-first
 
@@ -16,7 +16,7 @@ Use for meaningful implementation.
 Chain:
 `project-context-bootstrap` -> `feature` -> local planning skill -> plan review gate -> implementation -> tests/checks -> code review/monster feedback -> local finalization skill.
 
-Ready only after both plan review and post-code review gates are clear or explicitly waived by Art.
+Ready only after both plan review and post-code review gates are clear, locally substituted under the project's fallback rule, or explicitly waived by Art.
 
 ## agent-error-check
 

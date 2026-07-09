@@ -1,4 +1,4 @@
 interface:
   display_name: "Feedback Recovery"
-  short_description: "Recover after wrong-direction feedback"
-  default_prompt: "Use $feedback-recovery when the user says the result is wrong, off-spec, not from the design, or not pixel-perfect, and you need to stop, re-anchor to the source of truth, and ship the smallest verified correction."
+  short_description: "Recover after wrong-direction or drift feedback"
+  default_prompt: "Use $feedback-recovery when the user says the result is wrong, off-spec, drifted from an accepted decision, not from the design, or not pixel-perfect, and you need to stop, re-anchor to the source of truth, and ship the smallest verified correction."
