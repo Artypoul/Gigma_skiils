@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Finalize"
+  short_description: "Finalize a frontend PR safely"
+  default_prompt: "Use $pr-finalize to prepare a frontend PR: verify checks, update required history or docs, and assemble a clean Summary and Test plan."

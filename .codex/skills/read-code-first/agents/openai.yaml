@@ -1,0 +1,6 @@
+interface:
+  display_name: "Read Code First"
+  short_description: "Inspect code before replying"
+  default_prompt: "Use $read-code-first to inspect the relevant code before answering or editing."
+policy:
+  allow_implicit_invocation: true
