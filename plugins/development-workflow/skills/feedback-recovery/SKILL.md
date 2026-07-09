@@ -1,6 +1,6 @@
 ---
 name: feedback-recovery
-description: "Recover after wrong-direction user feedback in coding, design-transfer, review, or skill work. Use when the user says `не то`, `не туда`, `stop`, `wrong`, `off-spec`, `not from the design`, `not pixel-perfect`, `nothing changed`, `you are lying`, or similar, and the agent must stop, re-read the latest request, lock the source of truth, inspect git/workspace evidence, and ship only the smallest verified correction."
+description: "Recover after wrong-direction user feedback or accepted-decision drift in coding, design-transfer, review, or skill work. Use when the user says `не то`, `не туда`, `уехал от решения`, `свернул от принятого решения`, `decision drift`, `drifted from an accepted decision`, `stop`, `wrong`, `off-spec`, `not from the design`, `not pixel-perfect`, `nothing changed`, `you are lying`, or similar, and the agent must stop, re-read the latest request, lock the source of truth, inspect git/workspace evidence, and ship only the smallest verified correction."
 ---
 
 # Feedback Recovery
