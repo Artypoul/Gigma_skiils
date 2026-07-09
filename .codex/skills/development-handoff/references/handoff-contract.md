@@ -18,6 +18,10 @@ Last evidence:
 - checks:
 - reviews:
 - deploy:
+Failed assumption:
+- <what the previous agent believed that is now known wrong, or "none known">
+Winning source of truth:
+- <artifact or rule that now decides the task>
 User constraints:
 - <constraint that must steer the next agent>
 Open blockers:
@@ -122,6 +126,7 @@ Answer "ready" only when:
 | `обнови ветки`, `origin?` | Fetch/prune and compare local vs remote without losing dirty work. |
 | `деплой` | Follow deploy runbook/checks; do not drift into unrelated code. |
 | `стоп`, `не туда` | Stop current workflow immediately. |
+| `не то`, `wrong`, `nothing changed` | Stop the old fix path, rebuild evidence, and route through recovery before more edits. |
 
 ## Failure Patterns To Prevent
 
@@ -133,6 +138,7 @@ Answer "ready" only when:
 - Relying on memory instead of reading PR comments, checks, and branch state.
 - Switching domains after the user narrowed scope.
 - Reporting deploy success without checking workflow or health evidence.
+- Handing off a recovery task without naming the failed assumption or the winning source of truth.
 
 ## Output Style
 

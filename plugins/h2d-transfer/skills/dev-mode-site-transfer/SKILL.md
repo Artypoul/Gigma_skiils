@@ -16,6 +16,28 @@ This is not the H2D proof pipeline. Do not call the result `pixel-perfect` unles
 
 If you cannot open the live page, inspect the final rendered DOM/CSS, or access the meaningful states needed for transfer, stop and report `blocked`.
 
+If the user says the transfer is wrong, off-spec, not from the source, or nothing changed, stop the previous fix path, rebuild the source-of-truth map for the complained-about block, and only then continue.
+
+## Agent Stance
+
+Work like a reconstruction agent, not like a stylist.
+
+- rebuild from inspected evidence;
+- keep the source and the candidate mentally separate;
+- do not compensate one wrong block by globally scaling or nudging the whole page;
+- do not report success from memory after a complaint; re-open the block and prove it again.
+
+## Recovery Protocol
+
+After complaint-driven feedback:
+
+1. stop the previous fix path;
+2. re-read the latest user message;
+3. lock the winning source for the complained-about block;
+4. name the exact delta in one line;
+5. fix only that block first;
+6. rerun the comparison at the judged width before claiming improvement.
+
 ## Choose the route first
 
 Use this skill when most of these are true:
@@ -37,12 +59,30 @@ If unsure, read `references/dev-mode-transfer-checklist.md` and decide honestly.
 ## Quick workflow
 
 1. Run a preflight: confirm the live page opens and dev-mode inspection is actually available.
-2. Identify the stack.
-3. Build a block inventory.
-4. Extract visual tokens and assets from dev mode.
-5. Rebuild each block in clean markup/components.
-6. Verify desktop and mobile behavior and keep lightweight evidence.
-7. Report the true status with canonical labels: `clean-transfer`, `close-match`, `needs-polish`, `changed-source`, or `blocked`.
+2. Lock the source of truth.
+3. Identify the stack.
+4. Build a block inventory.
+5. Extract visual tokens and assets from dev mode.
+6. Rebuild each block in clean markup/components.
+7. Verify desktop and mobile behavior and keep lightweight evidence.
+8. Report the true status with canonical labels: `clean-transfer`, `close-match`, `needs-polish`, `changed-source`, or `blocked`.
+
+## Lock the source of truth
+
+Before rebuilding, decide what actually wins:
+
+- live site only;
+- live site + a specific screenshot/crop;
+- live site visuals + a separate behavior donor;
+- another explicit source the user named.
+
+Record that decision in a small working map:
+
+```text
+block | winning source | desktop width | mobile width | key behavior | allowed deviation
+```
+
+Do not silently mix donor, Figma, screenshots, and current local code into one blended interpretation.
 
 ## 1. Identify the stack
 
@@ -70,7 +110,8 @@ For each block capture:
 - asset dependencies;
 - desktop layout pattern;
 - mobile layout pattern;
-- interaction, if any.
+- interaction, if any;
+- which source proves the block is correct.
 
 Name blocks by role, not by source CSS class. Good names:
 
@@ -125,6 +166,13 @@ Rules:
 - simplify DOM depth whenever possible;
 - keep components reusable across similar pages.
 
+Recovery rules:
+
+- fix one complained-about block at a time;
+- prefer local block fixes over page-wide scaling or compensating layout hacks;
+- do not announce the block as done until you rerun the comparison at the complained-about width;
+- if the user says nothing changed, re-check the served build, cache/versioning, and actual DOM state before another CSS edit.
+
 Do not "transfer from dev mode" by dumping copied production HTML into the new codebase and only renaming a few classes. That imports legacy debt instead of transferring the design.
 
 ## 5. Verification standard
@@ -135,7 +183,8 @@ Minimum verification before calling the block transferred:
 - compare the result side-by-side with the live source on desktop;
 - compare at least one mobile width;
 - verify headings, text order, CTA labels, and assets;
-- verify that any meaningful gallery, slider, accordion, or menu still behaves plausibly.
+- verify that any meaningful gallery, slider, accordion, or menu still behaves plausibly;
+- verify that clickable-looking controls either work or are intentionally decorative in both behavior and affordance.
 
 Recommended working widths:
 

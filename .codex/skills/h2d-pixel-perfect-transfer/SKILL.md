@@ -9,6 +9,27 @@ Use this skill for `.h2d` to code work where "looks close enough" is not accepta
 
 Resolve bundled paths relative to this `SKILL.md`.
 
+If the user says the result is wrong, not from the source, not pixel-perfect, or nothing changed, stop the previous fix path, rebuild the active scope row, and only then continue implementation.
+
+## Agent Stance
+
+Act like a proof-driven transfer agent.
+
+- trust gates over intuition;
+- trust current source artifacts over your memory of the last pass;
+- repair the failing scope, not the whole page;
+- after a complaint, assume the previous "ready" claim is invalid until proven again.
+
+## Recovery Protocol
+
+After complaint-driven feedback:
+
+1. stop the previous repair path;
+2. rebuild `scope | source artifact | judged viewport | failing gate | next proof`;
+3. restate which gate or viewport actually failed;
+4. repair only that scope;
+5. rerun the failing gate and the final runner before claiming recovery.
+
 ## Non-Negotiable Gates
 
 1. Start with source intake and H2D decode before writing final HTML.
@@ -29,6 +50,24 @@ python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required
 5. A static screenshot clone is a failure when the original has interaction, animation, canvas, WebGL, video, or scroll-linked motion unless the user explicitly accepts a documented static fallback.
 
 Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder, or from `.codex/reference/` after mirror sync, when you need the exact hard-gate wording.
+
+## Scope Lock Before Repair
+
+Before the first implementation pass, and again after a complaint, lock the active scope:
+
+- exact snapshot/source artifact;
+- exact viewport branch under judgment;
+- exact block/component scope;
+- whether behavior, liveness, or both are in scope;
+- what counts as an allowed deviation, if any.
+
+Keep a tiny working row:
+
+```text
+scope | source artifact | judged viewport | failing gate | next proof
+```
+
+Do not respond to one failing viewport by globally scaling or shifting unrelated scopes. Repair the active scope and rerun the gates that prove that repair.
 
 ## Environment Preflight
 
@@ -113,6 +152,8 @@ node scripts/capture_visual_diff.js \
 9. Run the final runner and only then report final readiness.
 
 If live diff fails and investigation shows the production site drifted away from the H2D snapshot, keep the evidence but report `changed-source` or `manual-review` honestly instead of calling the transfer ready.
+
+After a complaint-driven fix, rerun the failing proof gate and the final runner. Do not say `fixed` from visual intuition alone.
 
 ## Pick The Right Reference
 
