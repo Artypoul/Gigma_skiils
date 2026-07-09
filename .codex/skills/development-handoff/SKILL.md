@@ -1,6 +1,6 @@
 ---
 name: development-handoff
-description: "Manage development handoff between Codex agents: post-merge protocol, same-PR fixes, monster review gates, prod-ready checks, deploy checks, dirty worktree safety, recovery-aware handoff, and continuation from evidence. Use when the user says merged/смерджил, fix in PR/чини в PR, monster review/монстр ревью, prod ready/продак реди, update branches/обнови ветки, deploy/деплой, handoff/передай смену, or when continuing an interrupted development task."
+description: "Manage development handoff between Codex agents: post-merge protocol, same-PR fixes, monster review gates, decision-lock/product-drift checks, prod-ready checks, deploy checks, dirty worktree safety, recovery-aware handoff, and continuation from evidence. Use when the user says merged/смерджил, fix in PR/чини в PR, monster review/монстр ревью, prod ready/продак реди, update branches/обнови ветки, deploy/деплой, handoff/передай смену, decision drift/уехал от решения/свернул от решения, or when continuing an interrupted development task."
 ---
 
 # Development Handoff
@@ -91,10 +91,42 @@ For monster review or serious review:
 1. Start with findings ordered by severity.
 2. Ground each finding in file/line evidence.
 3. Include risk and one-sentence fix.
-4. If P1/P2 findings are real and the user asked to fix, fix them in the same PR.
-5. Re-run relevant checks and re-read review comments after push.
+4. Compare the diff against locked decisions from the plan, PR body, contract docs, review comments and user messages.
+5. Treat silent drift from an accepted product or compatibility decision as a real finding, even when CI is green.
+6. If P1/P2 findings are real and the user asked to fix, fix them in the same PR.
+7. Re-run relevant checks and re-read review comments after push.
 
 Do not call a PR ready while a real P1/P2 remains open.
+
+## Decision Lock And Product Drift
+
+Before plan -> code, review -> fix, merge-ready, deploy-ready, or any recovery after user criticism, lock the accepted decisions from evidence. Use source docs, the active plan, PR body, PR comments, explicit user messages, compatibility tests, and named contracts.
+
+Build a tiny internal map:
+
+```text
+decision | source | must preserve | what would break it | approval status
+```
+
+Treat these as locked unless the user explicitly changes them:
+
+- public API, payload, auth, permissions, runtime contract, DB/migration behavior, old data compatibility, feature scope, rollout phase, and agent autonomy;
+- tests that prove accepted compatibility or legacy behavior;
+- PR/body/source-doc statements that say a client, runner, endpoint, old record, or user flow stays compatible.
+
+If implementation would change a locked decision, stop before editing and ask for an explicit decision change:
+
+```text
+DECISION CHANGE REQUEST
+Current locked decision:
+Proposed change:
+Why it seems needed:
+What breaks:
+Options:
+Recommended option:
+```
+
+Do not rewrite docs or tests to make an unapproved behavior look accepted. Do not call an unapproved change a "contract decision". If the user says the agent drifted from an accepted decision, switch to `feedback-recovery`, find the winning source of truth, and make the smallest correction that restores it.
 
 ## Prod-Ready Gate
 
@@ -131,6 +163,8 @@ Explicit user decisions steer the workflow until changed:
 - "same PR" means no new PR.
 - "do not ask" means act from evidence when risk is low.
 
+Architectural cleanup, security hardening, or "better design" does not override a locked product decision. If preserving the decision is unsafe, pause and explain the concrete risk instead of silently changing the product behavior.
+
 If a user constraint conflicts with security, money, production data, destructive git operations, or deploy safety, pause and explain the risk.
 
 ## Skill/Plugin Work
@@ -160,6 +194,7 @@ Last evidence:
 Failed assumption:
 Winning source of truth:
 User constraints:
+Decision lock:
 Open blockers:
 Next required action:
 Do not:

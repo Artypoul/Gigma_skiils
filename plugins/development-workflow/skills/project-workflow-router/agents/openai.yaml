@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Workflow Router"
+  short_description: "Route multi-step repo work to skills"
+  default_prompt: "Use $project-workflow-router to load project context, choose the minimal relevant skill chain for this repository task, name blockers, and execute the selected workflow when changes are requested."

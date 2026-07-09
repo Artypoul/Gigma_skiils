@@ -56,6 +56,18 @@ scope | judged state | winning source | exact delta | next verification
 
 Do not silently blend Figma, donor, screenshots, and local code. If you intentionally borrow behavior from one source and visuals from another, state that explicitly.
 
+## Accepted Decision Drift
+
+If the user says the agent drifted from an accepted decision, treat the accepted decision as the source of truth until the user changes it. Search the active plan, PR body, PR comments, contract docs, runbooks, and compatibility tests for the decision that was supposed to hold.
+
+Before editing, write this for yourself:
+
+```text
+locked decision | evidence | current drift | smallest restoration | proof
+```
+
+Do not propose a new architecture, rewrite compatibility tests, or rename the drift as a "contract decision". Restore the accepted behavior first, then separately ask whether the user wants to reconsider the decision.
+
 ## Diagnose The Failure
 
 Classify the complaint before coding:

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Context Bootstrap"
+  short_description: "Snapshot repo rules, memory, and git state"
+  default_prompt: "Use $project-context-bootstrap to read repository rules, memory/history, and git/PR state, then summarize the current truth, blockers, and next safe action before project-sensitive work."

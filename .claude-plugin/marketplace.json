@@ -30,7 +30,7 @@
     {
       "name": "development-workflow",
       "source": "./plugins/development-workflow",
-      "description": "Generic development workflow skills for evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks, dirty worktree safety and redacted handoff output."
+      "description": "Generic development workflow skills for project context bootstrap, workflow routing, evidence-based handoff, post-merge protocol, PR fix continuation, review gates, decision-lock/product-drift checks, deploy checks, dirty worktree safety, wrong-direction recovery and redacted handoff output."
     },
     {
       "name": "h2d-transfer",
