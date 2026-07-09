@@ -1,7 +1,7 @@
 {
   "name": "development-workflow",
-  "version": "0.1.5",
-  "description": "Generic development workflow skills for Codex agents: evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks, dirty worktree safety, and wrong-direction recovery after user feedback.",
+  "version": "0.1.7",
+  "description": "Generic development workflow skills for Codex agents: project context bootstrap, workflow routing, evidence-based handoff, post-merge protocol, PR fix continuation, review gates, decision-lock/product-drift checks, deploy checks, dirty worktree safety, and wrong-direction recovery after user feedback.",
   "author": {
     "name": "Artypoul"
   },
@@ -18,14 +18,16 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Development workflow",
-    "shortDescription": "PR handoff, review gates, recovery",
-    "longDescription": "Helps Codex agents continue software development from evidence: branch and PR state, post-merge updates, same-PR fixes, monster review tracking, deploy checks, prod-ready checks, dirty worktree handling, wrong-direction recovery after user feedback, and redacted handoff output.",
+    "shortDescription": "Context, PR handoff, recovery",
+    "longDescription": "Helps Codex agents work from project evidence: repository context bootstrap, skill/workflow routing, branch and PR state, post-merge updates, same-PR fixes, monster review tracking, decision-lock checks against accepted product and compatibility decisions, deploy checks, prod-ready checks, dirty worktree handling, wrong-direction recovery after user feedback, and redacted handoff output.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
-      "Use $development-handoff after a merge, PR fix, review, deploy or interrupted agent session.",
-      "Use $feedback-recovery when the user says the current result is wrong, off-spec, or not pixel-perfect."
+      "Use $project-context-bootstrap before project-sensitive work to read repository rules, memory/history, git/PR state, blockers, and the next safe action.",
+      "Use $project-workflow-router when more than one workflow may apply, so the agent chooses the minimal relevant skill chain before acting.",
+      "Use $development-handoff after a merge, PR fix, review, deploy, decision-drift complaint, or interrupted agent session.",
+      "Use $feedback-recovery when the user says the current result is wrong, off-spec, drifted from an accepted decision, or not pixel-perfect."
     ]
   }
 }

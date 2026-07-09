@@ -44,8 +44,10 @@
 
 ### Development workflow
 Общие скилы разработки, не привязанные к продуктовому домену.
+- Вход: **`project-context-bootstrap`** — универсальный старт перед проектно-чувствительной работой: правила репо, память, история, git/PR, блокеры и следующий безопасный шаг.
+- Маршрутизатор: **`project-workflow-router`** — выбирает связку скилов для фичи, ревью, PR-fix, merge/deploy, frontend/data/website задач; read-only/консилиум заканчивает отчётом без правок.
 - Вход: **`development-handoff`** — проверяемый handoff перед продолжением PR, фиксом review, передачей агенту или работой со скилами/плагинами.
-- Главное правило: продолжать работу от фактов Git/GitHub/CI/локальных файлов, а не от устаревшей памяти чата; перед skill move/add/remove проверять ownership, версии плагинов, marketplace discovery, `.codex` sync и re-review.
+- Главное правило: продолжать работу от фактов Git/GitHub/CI/локальных файлов, а не от устаревшей памяти чата; фиксировать принятые product/API/runtime/compatibility decisions как decision lock; перед skill move/add/remove проверять ownership, версии плагинов, marketplace discovery, `.codex` sync и re-review.
 
 ### H2D pixel-perfect transfer
 Скил для переноса страниц и блоков из `.h2d` в Tailwind HTML/React по исполняемому контракту, а не "на глаз".
