@@ -1,0 +1,37 @@
+{
+  "name": "frontend-workflow",
+  "version": "0.1.0",
+  "description": "Generic frontend engineering skills for planning work before code, reviewing RTK Query changes, auditing affordance regressions, and safely finalizing pull requests across React and TypeScript web applications.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": [
+    "frontend",
+    "react",
+    "typescript",
+    "rtk-query",
+    "review",
+    "planning",
+    "accessibility",
+    "pull-request"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Frontend Workflow",
+    "shortDescription": "Frontend planning and review",
+    "longDescription": "Generic frontend workflow skills for repository-aware planning before code, RTK Query cache and contract review, affordance and hidden-regression audits, and safe pull request finalization.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Plan this frontend feature before we code it.",
+      "Review this RTK Query change for cache, invalidation, and race issues.",
+      "Check this UI refactor for affordance and hidden form regressions.",
+      "Finalize this frontend PR and prepare a clean Summary and Test plan."
+    ]
+  }
+}

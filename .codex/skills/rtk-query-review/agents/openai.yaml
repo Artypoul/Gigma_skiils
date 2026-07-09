@@ -1,0 +1,4 @@
+interface:
+  display_name: "RTK Query Review"
+  short_description: "Review tags, cache, and request flow"
+  default_prompt: "Use $rtk-query-review to inspect an RTK Query change for cache tags, transforms, sequencing, auth, and duplicate fetch risk."

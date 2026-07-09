@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Plan"
+  short_description: "Plan frontend changes before coding"
+  default_prompt: "Use $frontend-plan to inspect the repo, map the scope, risks, UI and data contracts, and verification before changing a frontend feature."

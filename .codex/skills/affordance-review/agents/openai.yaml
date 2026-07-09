@@ -1,0 +1,4 @@
+interface:
+  display_name: "Affordance Review"
+  short_description: "Check UI affordance and form safety"
+  default_prompt: "Use $affordance-review to inspect a UI refactor for keyboard and pointer affordance, cleanup, hydration, hidden-field validation, and form save scope."

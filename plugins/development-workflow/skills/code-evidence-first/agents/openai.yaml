@@ -1,0 +1,7 @@
+interface:
+  display_name: "Code Evidence First"
+  short_description: "Clarify ambiguous code requests"
+  default_prompt: "Use $code-evidence-first when a code request is ambiguous, clarify the expected result, then inspect the relevant code before answering or editing."
+
+policy:
+  allow_implicit_invocation: false

@@ -4,7 +4,7 @@
 
 - **Claude Code** — через маркетплейс `.claude-plugin/marketplace.json` → плагины в `plugins/`.
 - **Codex** — двумя путями:
-  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`, `h2d-transfer`). Манифесты проходят `validate_plugin.py`.
+  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`, `frontend-workflow`, `h2d-transfer`, `site-sense`). Манифесты проходят `validate_plugin.py`.
   2. **Зеркало** `.codex/skills/` — копии скилов, видны когда Codex запущен в этом репо (фолбэк без установки).
 
 Скилы (`SKILL.md`) общие для Claude и Codex. ⚠ Frontmatter `description`/`when_to_use` со значением, содержащим `: ` (двоеточие-пробел), **обязательно в кавычках** — иначе строгий YAML-парсер Codex отвергает скил.
@@ -46,8 +46,17 @@
 Общие скилы разработки, не привязанные к продуктовому домену.
 - Вход: **`project-context-bootstrap`** — универсальный старт перед проектно-чувствительной работой: правила репо, память, история, git/PR, блокеры и следующий безопасный шаг.
 - Маршрутизатор: **`project-workflow-router`** — выбирает связку скилов для фичи, ревью, PR-fix, merge/deploy, frontend/data/website задач; read-only/консилиум заканчивает отчётом без правок.
+- Guardrail: **`read-code-first`** — перед ответом, ревью или правкой по коду сначала читает живой код (`rg`, определения, вызовы, тесты, конфиги), чтобы не отвечать по памяти.
+- Guardrail: **`code-evidence-first`** — более строгий вариант для двусмысленных code-request'ов: сначала один короткий вопрос про ожидаемый результат, потом чтение кода и только затем ответ или правка.
 - Вход: **`development-handoff`** — проверяемый handoff перед продолжением PR, фиксом review, передачей агенту или работой со скилами/плагинами.
 - Главное правило: продолжать работу от фактов Git/GitHub/CI/локальных файлов, а не от устаревшей памяти чата; фиксировать принятые product/API/runtime/compatibility decisions как decision lock; перед skill move/add/remove проверять ownership, версии плагинов, marketplace discovery, `.codex` sync и re-review.
+
+### Frontend workflow
+Generic frontend engineering skills for reusable project work, not tied to Gigma-only business logic.
+- Вход: **`frontend-plan`** — планирует frontend-задачу до кода: читает правила репо, текущий контекст и живой код, затем возвращает scope, контракты, риски и verification.
+- Review: **`rtk-query-review`** — проверяет RTK Query cache tags, invalidation, transforms, races, auth/reauth и type safety.
+- Review: **`affordance-review`** — ловит скрытые UI-регрессии в keyboard/pointer affordance, cleanup, async hydration, conditional forms и form-save orchestration.
+- Финализация: **`pr-finalize`** — собирает repo-aware PR finalization flow: checks, required docs/history, Summary/Test plan и guardrails перед публикацией.
 
 ### H2D pixel-perfect transfer
 Скил для переноса страниц и блоков из `.h2d` в Tailwind HTML/React по исполняемому контракту, а не "на глаз".

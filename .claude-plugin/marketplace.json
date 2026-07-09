@@ -4,7 +4,7 @@
     "name": "Artypoul"
   },
   "metadata": {
-    "description": "Открытый маркетплейс скилов Art: Gigma ERP операции и e-commerce консультации, GLAIM agent bridge/frontend chat, поддержка сервиса Твой ВПС и development workflow."
+    "description": "Открытый маркетплейс скилов Art: Gigma ERP операции и e-commerce консультации, generic frontend workflow, GLAIM agent bridge/frontend chat, поддержка сервиса Твой ВПС и development workflow."
   },
   "plugins": [
     {
@@ -30,7 +30,7 @@
     {
       "name": "development-workflow",
       "source": "./plugins/development-workflow",
-      "description": "Generic development workflow skills for project context bootstrap, workflow routing, evidence-based handoff, post-merge protocol, PR fix continuation, review gates, decision-lock/product-drift checks, deploy checks, dirty worktree safety, wrong-direction recovery and redacted handoff output."
+      "description": "Generic development workflow skills for project context bootstrap, workflow routing, read-code-first guardrails, explicit clarification of ambiguous code requests, evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks, dirty worktree safety, wrong-direction recovery and redacted handoff output."
     },
     {
       "name": "h2d-transfer",
@@ -41,6 +41,11 @@
       "name": "site-sense",
       "source": "./plugins/site-sense",
       "description": "Русскоязычный набор скилов для полного цикла сайта: product context, positioning, information architecture, content strategy, SEO briefs, page copywriting, conversion review и финальная редактура."
+    },
+    {
+      "name": "frontend-workflow",
+      "source": "./plugins/frontend-workflow",
+      "description": "Generic frontend engineering skills for planning before code, RTK Query review, affordance and hidden-regression audits, and safe PR finalization across React and TypeScript web apps."
     }
   ]
 }
