@@ -1,7 +1,7 @@
 {
   "name": "development-workflow",
-  "version": "0.1.3",
-  "description": "Generic development workflow skills for Codex agents: evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks and dirty worktree safety.",
+  "version": "0.1.5",
+  "description": "Generic development workflow skills for Codex agents: evidence-based handoff, post-merge protocol, PR fix continuation, review gates, deploy checks, dirty worktree safety, and wrong-direction recovery after user feedback.",
   "author": {
     "name": "Artypoul"
   },
@@ -18,13 +18,14 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Development workflow",
-    "shortDescription": "PR handoff and review gates",
-    "longDescription": "Helps Codex agents continue software development from evidence: branch and PR state, post-merge updates, same-PR fixes, monster review tracking, deploy checks, prod-ready checks, dirty worktree handling and redacted handoff output.",
+    "shortDescription": "PR handoff, review gates, recovery",
+    "longDescription": "Helps Codex agents continue software development from evidence: branch and PR state, post-merge updates, same-PR fixes, monster review tracking, deploy checks, prod-ready checks, dirty worktree handling, wrong-direction recovery after user feedback, and redacted handoff output.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
-      "Use $development-handoff after a merge, PR fix, review, deploy or interrupted agent session."
+      "Use $development-handoff after a merge, PR fix, review, deploy or interrupted agent session.",
+      "Use $feedback-recovery when the user says the current result is wrong, off-spec, or not pixel-perfect."
     ]
   }
 }

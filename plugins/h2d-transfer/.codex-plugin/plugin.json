@@ -1,7 +1,7 @@
 {
   "name": "h2d-transfer",
-  "version": "0.2.0",
-  "description": "Frontend transfer skills for reconstructing .h2d snapshots or live websites into clean Tailwind HTML/React, with either mandatory proof gates for H2D or practical block-by-block rebuild guidance from browser dev mode.",
+  "version": "0.2.2",
+  "description": "Frontend transfer skills for reconstructing .h2d snapshots or live websites into clean Tailwind HTML/React, with mandatory proof gates or practical dev-mode rebuild guidance plus source-of-truth and recovery guardrails.",
   "author": {
     "name": "Artypoul"
   },

@@ -1,5 +1,5 @@
 {
   "name": "h2d-transfer",
-  "description": "Скилы для переноса либо .h2d с proof-gates, либо живого сайта из browser dev mode в чистый Tailwind HTML/React.",
-  "version": "0.2.0"
+  "description": "Скилы для переноса либо .h2d с proof-gates, либо живого сайта из browser dev mode в чистый Tailwind HTML/React, с guardrails для source-of-truth и recovery после wrong-direction feedback.",
+  "version": "0.2.2"
 }

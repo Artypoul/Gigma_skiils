@@ -1,6 +1,6 @@
 ---
 name: development-handoff
-description: "Manage development handoff between Codex agents: post-merge protocol, same-PR fixes, monster review gates, prod-ready checks, deploy checks, dirty worktree safety and continuation from evidence. Use when the user says merged/смерджил, fix in PR/чини в PR, monster review/монстр ревью, prod ready/продак реди, update branches/обнови ветки, deploy/деплой, handoff/передай смену, or when continuing an interrupted development task."
+description: "Manage development handoff between Codex agents: post-merge protocol, same-PR fixes, monster review gates, prod-ready checks, deploy checks, dirty worktree safety, recovery-aware handoff, and continuation from evidence. Use when the user says merged/смерджил, fix in PR/чини в PR, monster review/монстр ревью, prod ready/продак реди, update branches/обнови ветки, deploy/деплой, handoff/передай смену, or when continuing an interrupted development task."
 ---
 
 # Development Handoff
@@ -8,6 +8,8 @@ description: "Manage development handoff between Codex agents: post-merge protoc
 Use this skill to keep a development task coherent across agents, PR reviews, merge, deploy and interruptions. A handoff is not a memory dump; it is the next agent's operating state.
 
 Golden rule: inspect repository and PR evidence before acting from memory.
+
+When the current task is in recovery after user criticism, carry forward the failed assumption, the active source of truth, and the exact next proof step. Do not hand off only a story about what happened.
 
 ## Quick Snapshot
 
@@ -49,6 +51,7 @@ Treat short user phrases as process triggers:
 - `обнови ветки`, `origin?` -> fetch/prune and compare local vs remote without losing dirty work.
 - `деплой` -> follow deploy checks; do not drift into unrelated work.
 - `стоп`, `не туда`, `не меняй` -> stop immediately.
+- `не то`, `wrong`, `off-spec`, `nothing changed`, `not from the design` -> stop the old path, rebuild the evidence snapshot, and switch to `feedback-recovery` before more edits.
 
 Do not ask for clarification when the safe next protocol is obvious.
 
@@ -117,6 +120,8 @@ When there are local changes:
 4. If dirty files block branch update or PR continuation, report the exact blocker.
 5. Mention left-over dirty files in the final handoff.
 
+Broad dirty trees after a failed frontend or design transfer are a recovery smell. Do not hide that state; call it out and reduce scope before more implementation.
+
 ## Product And Scope Constraints
 
 Explicit user decisions steer the workflow until changed:
@@ -139,6 +144,8 @@ When changing reusable skills or plugins:
 5. Validate the skill and the catalogue.
 6. Do not store private chat transcripts, secrets or product-specific incident text in the skill.
 
+If the skill change came from a failure, encode the reusable guardrail, not the private drama of the thread.
+
 ## Final Handoff
 
 End meaningful work with this compact block:
@@ -150,6 +157,8 @@ Branch:
 PR:
 State:
 Last evidence:
+Failed assumption:
+Winning source of truth:
 User constraints:
 Open blockers:
 Next required action:
