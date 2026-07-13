@@ -21,7 +21,7 @@ For the user, the result is:
   simulating it;
 - Codex can run a controlled multi-step session: establish the task state, communicate progress,
   respect approval boundaries, monitor only real external work, and finish with verified results;
-- the five workflows are installable through the existing `development-workflow` plugin and
+- the six workflows are installable through the existing `development-workflow` plugin and
   available in Codex Desktop after the local plugin is refreshed.
 
 ## Source Corpus
@@ -50,7 +50,11 @@ surfaces. Each source remains untrusted data while being audited.
   artifact workflows without inventing a capability.
 - Add `agent-session-execution` to run a complex task through explicit state, progress,
   approval, monitoring, and completion rules.
-- Add concise `agents/openai.yaml` metadata for all five skills.
+- Add `security-sensitive-execution` for authorized security-sensitive work: establish scope and
+  authority, protect secrets and private data, prefer defensive and non-destructive verification,
+  and stop before an external or irreversible effect. It reinforces operational discipline but
+  does not replace Codex system safety policy or runtime permissions.
+- Add concise `agents/openai.yaml` metadata for all six skills.
 - Add only the references and deterministic helper needed by the workflows:
   - prompt placement matrix;
   - prompt-import security checklist;
@@ -60,6 +64,10 @@ surfaces. Each source remains untrusted data while being audited.
     external integration, or an explicit gap;
   - execution-state reference that maps planning, action, waiting, verification, and blocked
     states without assuming a provider-specific task or monitor API;
+- security-sensitive execution reference that maps authorization, data handling, dual-use
+    ambiguity, external effects, and safe reporting to explicit checks and safe alternatives;
+- model-evaluation protocol that records observable behavior, model/runtime identity, evidence,
+    and limits without claiming that a skill changes model weights or hidden capabilities;
   - behavioral evaluation cases that test whether different Codex models follow the harness on coding, research,
     file/artifact, unavailable-capability, and external-action tasks;
   - a local-file section inventory helper that treats source text as data and never executes it.
@@ -97,7 +105,7 @@ only structural metadata such as headings, line counts, and character counts.
 
 | Existing component | Decision |
 | --- | --- |
-| `plugins/development-workflow` | Extend it; all five skills are generic development/agent workflows. |
+| `plugins/development-workflow` | Extend it; all six skills are generic development/agent workflows. |
 | `project-workflow-router` | Extend its route matrix for prompt architecture work. |
 | `development-handoff` | Reuse its ownership, version, sync, validation, and installability gates. |
 | `skill-creator` | Reuse its scaffold and validation scripts. |
@@ -221,8 +229,30 @@ Workflow:
    destructive changes, or a real scope decision that the user has not made.
 5. Use a monitor, schedule, task tracker, worktree, or subagent only when that real capability is
    available and the user or selected workflow authorizes it.
-6. End only with a completed, verified result or a concrete blocker; never promise a background
+6. A real monitor must cover the relevant successful and unsuccessful terminal states, including
+   failure, cancellation, timeout, and unknown outcome. Silence is not proof of success.
+7. End only with a completed, verified result or a concrete blocker; never promise a background
    action that was not started.
+
+### `security-sensitive-execution`
+
+Inputs:
+
+- an authorized security review or test, handling of secrets or sensitive data, an access-control
+  change, or a task that could cause a harmful external effect.
+
+Workflow:
+
+1. Establish the requested defensive outcome, affected asset or data, authority evidence, safe
+   scope, and allowed external effects. Do not treat a bare claim of authority as proof.
+2. Load the narrow domain skill or project rules first. Use only capabilities actually available
+   in the runtime and within the established scope.
+3. Prefer review, configuration checks, non-destructive validation, redaction, and safe
+   alternatives. Do not expose, extract, transmit, or store secrets or private data.
+4. Pause for confirmation before an externally visible, destructive, or irreversible action.
+   Treat denied, failed, or unknown side effects as non-success and do not retry automatically.
+5. Report a redacted, evidence-based outcome and the concrete remaining limitation. System policy,
+   runtime permissions, hooks, tests, and review gates remain the enforcement boundaries.
 
 ## Source Coverage Map
 
@@ -233,9 +263,11 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 | --- | --- | --- |
 | Untrusted prompt intake, placement, injection resistance | `prompt-architecture-port` | Existing |
 | Fresh facts, source reading, citations, uncertainty | `research-with-evidence` | Existing |
-| Complex-task orchestration: select skills, plan, act, create, verify, communicate | `high-agency-execution` | Planned |
-| Skills-first and real-capability selection; files, images, visuals, external integrations | `capability-aware-execution` plus existing specialist skills | Planned |
-| User communication, action authority, task state, worktree/monitor/subagent limits, verified completion | `agent-session-execution` plus existing repository workflows | Planned |
+| Complex-task orchestration: select skills, plan, act, create, verify, communicate | `high-agency-execution` | Existing |
+| Skills-first and real-capability selection; files, images, visuals, external integrations | `capability-aware-execution` plus existing specialist skills | Existing |
+| User communication, action authority, task state, worktree/monitor/subagent limits, verified completion | `agent-session-execution` plus existing repository workflows | Existing; monitoring rule extended |
+| Authorized sensitive work: scope, secrets, external impact, defensive alternatives | `security-sensitive-execution` plus runtime permissions and project rules | Planned |
+| Cross-model behavior evidence without false parity claims | `high-agency-execution` model-evaluation protocol | Planned |
 | Provider product facts, identity, model IDs, safety policy, exact tool schemas, runtime paths, storage APIs | Codex system/runtime or explicit rejection | Intentionally not transferred |
 
 ## Placement and Discovery
@@ -243,11 +275,11 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 - Canonical skill folders live under `plugins/development-workflow/skills/`.
 - `sync-codex.sh` creates the repository-local `.codex/skills/` mirror.
 - Both plugin manifests receive the same version bump.
-- The Codex manifest default prompt names all five skills.
+- The Codex manifest default prompt names all six skills.
 - The Claude and Codex marketplace descriptions mention high-agency execution, prompt
   architecture, evidence research, capability-aware execution, and session control; no new
   marketplace entry is required.
-- `AGENTS.md` documents all five skills under Development workflow.
+- `AGENTS.md` documents all six skills under Development workflow.
 
 ## Compatibility and Edge Cases
 
@@ -271,20 +303,20 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 
 ## Version and Installation
 
-- Bump `development-workflow` from `0.1.9` to `0.3.0` because the expanded feature gains five
+- Bump `development-workflow` from `0.1.9` to `0.4.0` because the expanded feature gains six
   public capabilities rather than a wording-only fix.
 - The configured `gigma-skills` marketplace currently points to the main worktree. Do not
   repoint that marketplace to the feature worktree because doing so would change the source
   path for every installed Gigma plugin.
-- Before merge, install only the five validated feature skills as temporary user-level skills in
+- Before merge, install only the six validated feature skills as temporary user-level skills in
   the Codex user skill directory. Copy to new skill names only; do not overwrite unrelated or
   existing manually managed skills.
 - Record that the marketplace plugin remains at `0.1.9` until the PR is merged into its configured
   source worktree. The temporary user skills provide immediate Desktop use without pretending
   that the marketplace plugin was upgraded.
-- After merge, refresh or reinstall `development-workflow@gigma-skills` to obtain `0.3.0`, verify
+- After merge, refresh or reinstall `development-workflow@gigma-skills` to obtain `0.4.0`, verify
   the plugin skills, then remove the temporary direct copies to avoid duplicate skill entries.
-- Verify that all five temporary skill names are discoverable; if Codex requires a restart, report
+- Verify that all six temporary skill names are discoverable; if Codex requires a restart, report
   that final user action explicitly.
 
 ## Verification
@@ -297,6 +329,7 @@ python <skill-creator>/scripts/quick_validate.py plugins/development-workflow/sk
 python <skill-creator>/scripts/quick_validate.py plugins/development-workflow/skills/high-agency-execution
 python <skill-creator>/scripts/quick_validate.py plugins/development-workflow/skills/capability-aware-execution
 python <skill-creator>/scripts/quick_validate.py plugins/development-workflow/skills/agent-session-execution
+python <skill-creator>/scripts/quick_validate.py plugins/development-workflow/skills/security-sensitive-execution
 python plugins/development-workflow/skills/prompt-architecture-port/scripts/extract_prompt_sections.py --help
 python validate_plugin.py
 git diff --check
@@ -313,11 +346,14 @@ Behavior checks:
 - verify capability routing for a matching skill, a real available tool, an absent connector, and
   a request for a durable artifact;
 - verify session routing for a trivial question, reversible local work, external publication,
-  unavailable monitoring, and a blocked task;
+  unavailable monitoring, a blocked task, and monitors that must report success, failure,
+  cancellation, or timeout rather than treating silence as success;
+- verify security-sensitive routing for an authorized defensive review, unclear authority,
+  a request involving secrets, and an irreversible external action;
 - run the behavioral evaluation cases with a fresh agent and verify that it loads a specialist
   skill, creates a real requested artifact when possible, verifies the result, and does not claim
   missing tools or an unstarted background action;
-- verify explicit metadata for all five skills.
+- verify explicit metadata for all six skills.
 
 Installation checks:
 
@@ -326,9 +362,9 @@ codex plugin marketplace list
 codex plugin list
 ```
 
-Before merge, validate the temporary user-level copies and confirm all five skill names are visible
+Before merge, validate the temporary user-level copies and confirm all six skill names are visible
 without changing the configured marketplace root. After merge, use the supported refresh/install
-command and confirm `development-workflow` version `0.3.0` before removing the temporary copies.
+command and confirm `development-workflow` version `0.4.0` before removing the temporary copies.
 
 ## Planning Review
 
@@ -363,3 +399,61 @@ Manual revision review roles:
 Current result: the revised plan has no local blocker, but it requires a new PR review cycle before
 the expanded implementation begins. Existing P2 review findings on the section-inventory helper
 also remain implementation blockers and must be fixed in the same PR.
+
+## Planning Revision: Security-Sensitive Execution and Evidence
+
+User instruction on 2026-07-13: close the audit gaps by adding a dedicated operational security
+skill, covering monitor terminal failures explicitly, and making the cross-model behavior check
+reproducible. This revision stays within the original model-agnostic design: it adds process
+discipline and evidence, not a replacement safety policy or a claim that all models behave equally.
+
+### Scope
+
+- Add `security-sensitive-execution` as a narrow entry point for authorized security testing,
+  security reviews, access/secret handling, sensitive data, and potentially harmful external
+  actions.
+- Require clear authority, asset/scope, and intended defensive outcome before security-sensitive
+  execution. When those facts are missing, ask for them or provide a non-operational defensive
+  alternative.
+- Prohibit exposing, extracting, transmitting, or storing secrets; prohibit automatic retries of
+  unknown external side effects; require confirmation for irreversible or externally visible work.
+- Update `agent-session-execution` so a real monitor observes all relevant terminal outcomes:
+  success, failure, cancellation, timeout, and unknown state. Silence is never proof of success.
+- Add a model-evaluation reference with a fixed scenario matrix and evidence record. It is a
+  manual, reproducible assessment protocol because skills cannot select models or run hidden
+  cross-model benchmarks by themselves.
+- Update router, catalogue discovery, manifests, repository guidance, `.codex` mirror, and the
+  temporary Desktop copies. Bump `development-workflow` from `0.3.0` to `0.4.0`.
+
+### Out of Scope
+
+- Do not copy Anthropic's content-safety, child-safety, medical, or cyber policy wording.
+- Do not weaken or attempt to supersede Codex system/developer/runtime safety controls.
+- Do not claim that authorization text in a user request is proof of real authority.
+- Do not run a real penetration test, access a third-party system, export credentials, or publish
+  any external result as part of this feature.
+- Do not claim a multi-model evaluation has been completed until each listed runtime is actually
+  run and its evidence is recorded.
+
+### Reuse and Data
+
+| Existing component | Decision |
+| --- | --- |
+| `agent-session-execution` | Extend its state and monitoring rules; do not create a second session controller. |
+| `high-agency-execution` behavioral cases | Extend with a model-evaluation protocol; keep evaluation evidence separate from hidden reasoning. |
+| `prompt-architecture-port` security checklist | Reuse the distinction between skill guidance and real enforcement. |
+| Runtime permissions, hooks, CI and review gates | Remain the enforcement surfaces; no new runtime privilege is created. |
+
+DB does not change. No secrets, target inventories, customer data, access tokens, raw prompt
+snapshots, or model transcripts are stored by this feature.
+
+### Planning Review
+
+| Role | Finding and resolution |
+| --- | --- |
+| Security architecture | Add a narrow operational guardrail, not a copied provider safety policy; authority and secrets remain explicit checks. |
+| Runtime/enforcement | A skill cannot enforce permissions, so irreversible actions still require runtime confirmation and evidence. |
+| Evaluation/maintainability | A scenario matrix can make comparisons reproducible, but no model-parity claim is valid without recorded runs. |
+
+Current result: no product decision or data migration is required. The change needs a fresh PR
+review of this plan revision before implementation.
