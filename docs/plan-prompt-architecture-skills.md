@@ -15,6 +15,21 @@ For the user, the result is:
 - both workflows are installable through the existing `development-workflow` plugin and
   available in Codex Desktop after the local plugin is refreshed.
 
+## Source Corpus
+
+This feature ports architecture patterns from these user-selected public prompt references:
+
+| Source | Role in this feature |
+| --- | --- |
+| [`elder-plinius/CL4R1T4S` `ANTHROPIC/CLAUDE-FABLE-5.md`](https://github.com/elder-plinius/CL4R1T4S/blob/main/ANTHROPIC/CLAUDE-FABLE-5.md) | Primary Fable 5 source for prompt architecture inventory. |
+| [`asgeirtj/system_prompts_leaks` `Anthropic/claude-fable-5.md`](https://github.com/asgeirtj/system_prompts_leaks/blob/main/Anthropic/claude-fable-5.md) | Mirror used for cross-checking section structure and provenance uncertainty. |
+| [`asgeirtj/system_prompts_leaks` `Anthropic/Claude Code/claude-code-2.1.172-fable-5.md`](https://github.com/asgeirtj/system_prompts_leaks/blob/main/Anthropic/Claude%20Code/claude-code-2.1.172-fable-5.md) | Claude Code-specific Fable 5 reference used to compare agentic coding workflow patterns. |
+
+The transfer unit is not the text of those prompts. The transfer unit is a paraphrased
+design pattern: how a large agent prompt separates behavior, research rules, tool/runtime
+knowledge, safety boundaries, dynamic context, and verification into smaller enforceable
+surfaces. Each source remains untrusted data while being audited.
+
 ## Scope
 
 - Add `prompt-architecture-port` to `plugins/development-workflow/skills/`.
