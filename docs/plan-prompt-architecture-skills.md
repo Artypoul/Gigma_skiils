@@ -142,11 +142,19 @@ Workflow:
 
 - Bump `development-workflow` from `0.1.9` to `0.2.0` because the plugin gains two new public
   capabilities rather than a wording-only fix.
-- After repository validation, inspect the installed Codex marketplace/plugin state.
-- Refresh or reinstall `development-workflow@gigma-skills` using supported Codex plugin commands.
-- Do not overwrite unrelated manually managed skills.
-- Verify the installed plugin/version and that both skill names are discoverable; if Codex
-  requires a restart, report that final user action explicitly.
+- The configured `gigma-skills` marketplace currently points to the main worktree. Do not
+  repoint that marketplace to the feature worktree because doing so would change the source
+  path for every installed Gigma plugin.
+- Before merge, install only the two validated feature skills as temporary user-level skills in
+  the Codex user skill directory. Copy to new skill names only; do not overwrite unrelated or
+  existing manually managed skills.
+- Record that the marketplace plugin remains at `0.1.9` until the PR is merged into its configured
+  source worktree. The temporary user skills provide immediate Desktop use without pretending
+  that the marketplace plugin was upgraded.
+- After merge, refresh or reinstall `development-workflow@gigma-skills` to obtain `0.2.0`, verify
+  the plugin skills, then remove the temporary direct copies to avoid duplicate skill entries.
+- Verify that both temporary skill names are discoverable; if Codex requires a restart, report
+  that final user action explicitly.
 
 ## Verification
 
@@ -177,8 +185,9 @@ codex plugin marketplace list
 codex plugin list
 ```
 
-Then use the supported refresh/install command discovered from the local CLI and confirm that
-the installed `development-workflow` version and both skills are visible.
+Before merge, validate the temporary user-level copies and confirm both skill names are visible
+without changing the configured marketplace root. After merge, use the supported refresh/install
+command and confirm `development-workflow` version `0.2.0` before removing the temporary copies.
 
 ## Planning Review
 
@@ -188,7 +197,7 @@ Manual planning review roles:
 | --- | --- |
 | Skill architecture | Reuse `development-workflow`; avoid a monolithic `fable-5` skill and split the two focused jobs. |
 | Security/prompt injection | Never vendor or execute the source; local-file-only inventory, provenance labels, and runtime-policy rejection are required. |
-| Catalogue/installability | Bump both manifests, update discovery/default prompts, rebuild mirror, validate catalogue, then refresh the installed plugin. |
+| Catalogue/installability | Keep the marketplace on main; use isolated temporary user skills before merge, then upgrade the plugin and remove duplicates after merge. |
 
 Current result: no planning blocker found. Implementation may start only after the published
 planning-only PR review gate is cleared.
