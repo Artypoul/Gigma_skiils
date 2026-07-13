@@ -1,0 +1,4 @@
+interface:
+  display_name: "High-agency execution"
+  short_description: "Execute complex tasks to verified completion"
+  default_prompt: "Use $high-agency-execution to carry this complex task through verified completion."

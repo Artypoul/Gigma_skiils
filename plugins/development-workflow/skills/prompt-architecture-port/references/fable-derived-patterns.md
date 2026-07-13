@@ -18,6 +18,8 @@ Large agent prompts commonly separate concerns into layers:
 - User-facing style is separated from refusal/safety behavior.
 - High-stakes domains receive stricter uncertainty and sourcing rules.
 - File/computer workflows distinguish reading, planning, editing, and verification.
+- Complex work has an explicit session lifecycle: select capabilities, track task state, act within
+  authority, wait only on real external work, and report verified completion.
 - Dynamic context is treated as changeable rather than permanent knowledge.
 - Output format rules are scoped to the task type.
 
@@ -44,6 +46,7 @@ Use this translation style:
 | Long policy or knowledge blocks | Put stable knowledge in references; use current lookup for volatile facts. |
 | Tool schemas in prompt | Represent as actual available tools, MCP/plugin requirements, or a gap. |
 | Runtime/file workflow instructions | Put in repo `AGENTS.md`, project workflow skills, scripts, and validation gates. |
+| Skills-first and task/session coordination | Use a model-agnostic execution skill that routes to actual specialist skills and tools. |
 | Source ranking and citation rules | Create or use a research skill with evidence requirements. |
 | Safety-critical limits | Enforce with permissions, tests, hooks, review gates, or runtime controls. |
 

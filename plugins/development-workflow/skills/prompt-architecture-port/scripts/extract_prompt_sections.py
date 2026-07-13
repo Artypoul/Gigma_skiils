@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(?:.*)$")
 DEFAULT_MAX_BYTES = 2_000_000
 
 
@@ -28,9 +29,13 @@ def read_text(path: Path, max_bytes: int) -> tuple[str, bytes]:
         fail(f"file does not exist: {path}")
     if not path.is_file():
         fail(f"path is not a file: {path}")
-    data = path.read_bytes()
+    try:
+        with path.open("rb") as source:
+            data = source.read(max_bytes + 1)
+    except OSError as exc:
+        fail(f"could not read file: {exc}")
     if len(data) > max_bytes:
-        fail(f"file is too large: {len(data)} bytes exceeds --max-bytes {max_bytes}")
+        fail(f"file is too large: exceeds --max-bytes {max_bytes}")
     if b"\x00" in data:
         fail("file appears to be binary")
     try:
@@ -42,7 +47,18 @@ def read_text(path: Path, max_bytes: int) -> tuple[str, bytes]:
 def collect_sections(text: str) -> list[dict[str, object]]:
     lines = text.splitlines()
     headings: list[dict[str, object]] = []
+    fence: tuple[str, int] | None = None
     for index, line in enumerate(lines, start=1):
+        fence_match = FENCE_RE.match(line)
+        if fence_match:
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = (marker[0], len(marker))
+            elif marker[0] == fence[0] and len(marker) >= fence[1]:
+                fence = None
+            continue
+        if fence is not None:
+            continue
         match = HEADING_RE.match(line)
         if not match:
             continue

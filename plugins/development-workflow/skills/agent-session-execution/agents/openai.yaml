@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent session execution"
+  short_description: "Control task state and safe progress"
+  default_prompt: "Use $agent-session-execution to run this multi-step task safely and to completion."

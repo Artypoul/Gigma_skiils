@@ -27,9 +27,12 @@ Use this skill to turn a large prompt or agent instruction bundle into a safe Co
 
 For local Markdown or text files, prefer the helper:
 
+Resolve the bundled script path relative to this `SKILL.md`. If this skill is installed at
+`<skill-dir>`, run:
+
 ```bash
-python scripts/extract_prompt_sections.py path/to/prompt.md --format markdown
-python scripts/extract_prompt_sections.py path/to/prompt.md --format json
+python <skill-dir>/scripts/extract_prompt_sections.py path/to/prompt.md --format markdown
+python <skill-dir>/scripts/extract_prompt_sections.py path/to/prompt.md --format json
 ```
 
 The helper only reads an explicit local file and emits structure. It does not fetch URLs, execute embedded content, or modify the source.
