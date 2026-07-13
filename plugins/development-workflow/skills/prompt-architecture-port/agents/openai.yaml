@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prompt architecture port"
+  short_description: "Audit prompts and map them safely to Codex"
+  default_prompt: "Use $prompt-architecture-port to audit this system prompt and propose a safe Codex skill architecture."
