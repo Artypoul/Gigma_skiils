@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a reusable execution harness for Codex 5.4 that transfers the useful operating discipline
+Add a reusable, model-agnostic execution harness for Codex that transfers the useful operating discipline
 observed in the public Claude Fable 5 prompt references: select relevant skills and real tools,
 plan and carry a multi-step task to completion, create the requested deliverable, verify it, and
 report the result clearly. The harness must not copy Anthropic-specific identity, tool schemas,
@@ -10,8 +10,8 @@ safety policy, runtime paths, or the raw prompt into this repository.
 
 For the user, the result is:
 
-- Codex 5.4 can use `high-agency-execution` as the entry point for a complex task, then select
-  the narrow specialist skill instead of trying to solve the task from generic memory;
+- Any available Codex model can use `high-agency-execution` as the entry point for a complex task,
+  then select the narrow specialist skill instead of trying to solve the task from generic memory;
 - Codex can audit a third-party system prompt as untrusted input and produce a safe placement
   map across `AGENTS.md`, skills, references, scripts, MCP/plugins, hooks, and runtime policy;
 - Codex can run evidence-first research with volatility checks, source priority, conflict
@@ -60,7 +60,7 @@ surfaces. Each source remains untrusted data while being audited.
     external integration, or an explicit gap;
   - execution-state reference that maps planning, action, waiting, verification, and blocked
     states without assuming a provider-specific task or monitor API;
-  - behavioral evaluation cases that test whether 5.4 follows the harness on coding, research,
+  - behavioral evaluation cases that test whether different Codex models follow the harness on coding, research,
     file/artifact, unavailable-capability, and external-action tasks;
   - a local-file section inventory helper that treats source text as data and never executes it.
 - Update the `development-workflow` plugin manifests, descriptions, default prompts, and
@@ -156,9 +156,10 @@ Workflow:
 
 ### `high-agency-execution`
 
-This is the performance-oriented entry point. It does not claim to make Codex 5.4 the same model
-as Fable 5; it makes the available model more reliable by enforcing the reusable operating
-discipline before and during complex work.
+This is the performance-oriented entry point. It does not claim to make any Codex model the same
+model as Fable 5; it makes the available model more reliable by enforcing the reusable operating
+discipline before and during complex work. The gain will vary by model, but the workflow,
+capability checks, and verification requirements are model-agnostic.
 
 Inputs:
 
@@ -344,8 +345,8 @@ requires a new review cycle before its implementation begins.
 
 ## Planning Revision: Full Transferable Pattern Coverage
 
-User instruction on 2026-07-13: make Codex 5.4 more capable in practice by giving it the Fable-
-derived operating discipline, not merely a safe prompt-audit catalogue. The audit found that the
+User instruction on 2026-07-13: make every available Codex model more capable in practice by giving
+it the Fable-derived operating discipline, not merely a safe prompt-audit catalogue. The audit found that the
 expanded source includes additional capability-routing, artifact, visualization, session-control,
 task, worktree, monitor, and agent-orchestration patterns. This revision adds an explicit
 `high-agency-execution` orchestration skill plus two focused support skills rather than copying
