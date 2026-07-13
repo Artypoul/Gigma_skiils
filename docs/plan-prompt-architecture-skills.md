@@ -288,7 +288,7 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 
 ## Verification
 
-Repository checks:
+Post-implementation repository checks (run after the new skill directories exist):
 
 ```bash
 python <skill-creator>/scripts/quick_validate.py plugins/development-workflow/skills/prompt-architecture-port
