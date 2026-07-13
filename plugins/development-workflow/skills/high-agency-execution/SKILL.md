@@ -33,3 +33,5 @@ a claim that every model has the same intelligence or tools.
 - Do not claim a background, scheduled, or external action started unless the real capability was
   called and its result was observed.
 - For detailed behavioral checks, read `references/behavioral-evaluation.md`.
+- For a comparison across available models or runtimes, read `references/model-evaluation.md` and
+  report only observed evidence; do not infer parity from the skill text.

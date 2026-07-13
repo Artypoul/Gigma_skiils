@@ -266,8 +266,8 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 | Complex-task orchestration: select skills, plan, act, create, verify, communicate | `high-agency-execution` | Existing |
 | Skills-first and real-capability selection; files, images, visuals, external integrations | `capability-aware-execution` plus existing specialist skills | Existing |
 | User communication, action authority, task state, worktree/monitor/subagent limits, verified completion | `agent-session-execution` plus existing repository workflows | Existing; monitoring rule extended |
-| Authorized sensitive work: scope, secrets, external impact, defensive alternatives | `security-sensitive-execution` plus runtime permissions and project rules | Planned |
-| Cross-model behavior evidence without false parity claims | `high-agency-execution` model-evaluation protocol | Planned |
+| Authorized sensitive work: scope, secrets, external impact, defensive alternatives | `security-sensitive-execution` plus runtime permissions and project rules | Existing |
+| Cross-model behavior evidence without false parity claims | `high-agency-execution` model-evaluation protocol | Existing |
 | Provider product facts, identity, model IDs, safety policy, exact tool schemas, runtime paths, storage APIs | Codex system/runtime or explicit rejection | Intentionally not transferred |
 
 ## Placement and Discovery
@@ -455,5 +455,7 @@ snapshots, or model transcripts are stored by this feature.
 | Runtime/enforcement | A skill cannot enforce permissions, so irreversible actions still require runtime confirmation and evidence. |
 | Evaluation/maintainability | A scenario matrix can make comparisons reproducible, but no model-parity claim is valid without recorded runs. |
 
-Current result: no product decision or data migration is required. The change needs a fresh PR
-review of this plan revision before implementation.
+Current result: no product decision or data migration is required. The automatic plan reviewer did
+not respond after four polls, so the local security, runtime/enforcement, and
+evaluation/maintainability review served as the permitted fallback. Implementation proceeds in
+this PR and still requires a fresh external re-review after the code push.

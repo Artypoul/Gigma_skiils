@@ -20,9 +20,11 @@ permission to perform ordinary reversible steps.
    or an unresolved product choice.
 5. Use a monitor, scheduler, worktree, task tracker, or subagent only when that capability exists
    and the user or selected workflow authorizes it.
-6. Treat a failed, denied, queued, or unknown tool result as evidence, not success. Do not retry an
+6. When monitoring real external work, observe the relevant success and failure terminal states:
+   success, failure, cancellation, timeout, and unknown outcome. Silence is not proof of success.
+7. Treat a failed, denied, queued, or unknown tool result as evidence, not success. Do not retry an
    external side effect automatically when its outcome is unknown.
-7. In the final response, restate material findings rather than relying on interim updates.
+8. In the final response, restate material findings rather than relying on interim updates.
 
 ## Boundaries
 
