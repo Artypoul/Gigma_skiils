@@ -64,9 +64,9 @@ surfaces. Each source remains untrusted data while being audited.
     external integration, or an explicit gap;
   - execution-state reference that maps planning, action, waiting, verification, and blocked
     states without assuming a provider-specific task or monitor API;
-- security-sensitive execution reference that maps authorization, data handling, dual-use
+  - security-sensitive execution reference that maps authorization, data handling, dual-use
     ambiguity, external effects, and safe reporting to explicit checks and safe alternatives;
-- model-evaluation protocol that records observable behavior, model/runtime identity, evidence,
+  - model-evaluation protocol that records observable behavior, model/runtime identity, evidence,
     and limits without claiming that a skill changes model weights or hidden capabilities;
   - behavioral evaluation cases that test whether different Codex models follow the harness on coding, research,
     file/artifact, unavailable-capability, and external-action tasks;
@@ -277,8 +277,8 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 - Both plugin manifests receive the same version bump.
 - The Codex manifest default prompt names all six skills.
 - The Claude and Codex marketplace descriptions mention high-agency execution, prompt
-  architecture, evidence research, capability-aware execution, and session control; no new
-  marketplace entry is required.
+  architecture, evidence research, capability-aware execution, session control, and
+  security-sensitive execution; no new marketplace entry is required.
 - `AGENTS.md` documents all six skills under Development workflow.
 
 ## Compatibility and Edge Cases
@@ -303,7 +303,7 @@ pattern map, not a requirement to reproduce the provider's text or tool contract
 
 ## Version and Installation
 
-- Bump `development-workflow` from `0.1.9` to `0.4.0` because the expanded feature gains six
+- Bump `development-workflow` from `0.3.0` to `0.4.0` because the security revision adds a sixth
   public capabilities rather than a wording-only fix.
 - The configured `gigma-skills` marketplace currently points to the main worktree. Do not
   repoint that marketplace to the feature worktree because doing so would change the source
@@ -347,7 +347,7 @@ Behavior checks:
   a request for a durable artifact;
 - verify session routing for a trivial question, reversible local work, external publication,
   unavailable monitoring, a blocked task, and monitors that must report success, failure,
-  cancellation, or timeout rather than treating silence as success;
+  cancellation, timeout, or unknown/silent outcome rather than treating silence as success;
 - verify security-sensitive routing for an authorized defensive review, unclear authority,
   a request involving secrets, and an irreversible external action;
 - run the behavioral evaluation cases with a fresh agent and verify that it loads a specialist
