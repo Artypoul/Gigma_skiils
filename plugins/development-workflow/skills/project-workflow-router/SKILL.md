@@ -1,6 +1,6 @@
 ---
 name: project-workflow-router
-description: Load project context, then route multi-step or product-sensitive repository work to the right project skills. Use for implementation, code review, PR fixes/finalization, merge/deploy/handoff, frontend/UI, data/API, website copy, context repair, or skill-bundle design when more than one workflow may apply. Do not trigger for tiny self-contained questions, single-command checks, or simple context snapshots; use project-context-bootstrap alone for those.
+description: Load project context, then route multi-step or product-sensitive repository work to the right project skills. Use for implementation, code review, PR fixes/finalization, merge/deploy/handoff, frontend/UI, data/API, website copy, prompt architecture transfer, evidence research, context repair, or skill-bundle design when more than one workflow may apply. Do not trigger for tiny self-contained questions, single-command checks, or simple context snapshots; use project-context-bootstrap alone for those.
 ---
 
 # Project Workflow Router
@@ -20,11 +20,15 @@ Use this skill to decide which workflow chain to run. It is a router, not a repl
 | User/task signal | Skill chain |
 | --- | --- |
 | "сделай", "реализуй", "добавь", "измени" when the user is asking for code/product changes; multi-file feature, API/UI/data changes | `project-context-bootstrap` -> `feature` -> project plan/review skills -> implementation -> tests/checks -> code review/monster feedback -> finalization |
+| Complex task with several steps, code/research/files/tools, or a requested durable deliverable | `high-agency-execution` -> narrow specialist skill -> `capability-aware-execution` or `agent-session-execution` only when needed |
+| Authorized security review/test, secrets or sensitive data, access-control change, or potentially harmful external effect | `project-context-bootstrap` -> `security-sensitive-execution` -> narrow domain skill -> runtime confirmation and verification |
 | "ревью", "чек ап", "ошибки агента", "посмотри PR" | `project-context-bootstrap` -> code-review stance -> local review skills -> findings-first report |
 | "смерджил", "merged", "handoff", "чини в PR", "prod ready", deploy state | `project-context-bootstrap` -> `development-handoff` when available |
 | Frontend/UI/forms/responsive/cabinet changes | `project-context-bootstrap` -> local `frontend-plan` or equivalent -> local `frontend-safety-check`/`affordance-review` |
 | Auth/payment/subscription/webhook/user flow | `project-context-bootstrap` -> local flow/data review skills -> `feature` if implementation is needed |
 | Website meanings, landing, offer, CTA, page copy | `project-context-bootstrap` -> project-specific context skill if present -> website/copy skill |
+| Third-party system prompt, prompt leak, Fable/Claude/Gemini/Codex prompt transfer, agent instruction audit | `project-context-bootstrap` -> `prompt-architecture-port` -> implementation workflow if edits are explicitly requested |
+| Current/latest/verify/research/recommendation/source-backed question | `research-with-evidence` -> current source reading -> cited answer or bounded uncertainty |
 | GitHub review comments or failing checks | `project-context-bootstrap` -> GitHub comment/check skill when available -> fix same PR |
 | PR creation/finalization | `project-context-bootstrap` -> local `pr-finalize` or equivalent |
 | Unknown or product-sensitive choice | `project-context-bootstrap` -> ask one concrete product question before edits |

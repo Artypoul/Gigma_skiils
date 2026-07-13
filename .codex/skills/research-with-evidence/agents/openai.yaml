@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research with evidence"
+  short_description: "Verify current claims with reliable sources"
+  default_prompt: "Use $research-with-evidence to research this question and separate sourced facts from inference."

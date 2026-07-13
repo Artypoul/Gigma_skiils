@@ -1,0 +1,4 @@
+interface:
+  display_name: "Capability-aware execution"
+  short_description: "Route work to real available capabilities"
+  default_prompt: "Use $capability-aware-execution to select the real capability for this request."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security-sensitive execution"
+  short_description: "Run sensitive work within safe boundaries"
+  default_prompt: "Use $security-sensitive-execution to handle this authorized sensitive task safely."
