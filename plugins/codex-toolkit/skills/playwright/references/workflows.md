@@ -57,9 +57,9 @@ Record a trace around a suspicious flow:
 Use sessions to isolate work across projects:
 
 ```bash
-"$PWCLI" --session marketing open https://example.com
-"$PWCLI" --session marketing snapshot
-"$PWCLI" --session checkout open https://example.com/checkout
+"$PWCLI" -s=marketing open https://example.com
+"$PWCLI" -s=marketing snapshot
+"$PWCLI" -s=checkout open https://example.com/checkout
 ```
 
 Or set the session once:
@@ -92,4 +92,4 @@ Minimal example:
 
 - If an element ref fails, run `"$PWCLI" snapshot` again and retry.
 - If the page looks wrong, re-open with `--headed` and resize the window.
-- If a flow depends on prior state, use a named `--session`.
+- If a flow depends on prior state, use a named `-s=name` session.

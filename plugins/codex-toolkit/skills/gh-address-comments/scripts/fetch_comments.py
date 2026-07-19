@@ -77,6 +77,7 @@ query(
           originalStartLine
           resolvedBy { login }
           comments(first: 100) {
+            pageInfo { hasNextPage endCursor }
             nodes {
               id
               body
@@ -85,6 +86,25 @@ query(
               author { login }
             }
           }
+        }
+      }
+    }
+  }
+}
+"""
+
+THREAD_COMMENTS_QUERY = """\
+query($threadId: ID!, $commentsCursor: String) {
+  node(id: $threadId) {
+    ... on PullRequestReviewThread {
+      comments(first: 100, after: $commentsCursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          body
+          createdAt
+          updatedAt
+          author { login }
         }
       }
     }
@@ -170,6 +190,52 @@ def gh_api_graphql(
     return _run_json(cmd, stdin=QUERY)
 
 
+def gh_api_thread_comments(thread_id: str, comments_cursor: str | None = None) -> dict[str, Any]:
+    cmd = [
+        "gh",
+        "api",
+        "graphql",
+        "-F",
+        "query=@-",
+        "-F",
+        f"threadId={thread_id}",
+    ]
+    if comments_cursor:
+        cmd += ["-F", f"commentsCursor={comments_cursor}"]
+    return _run_json(cmd, stdin=THREAD_COMMENTS_QUERY)
+
+
+def _raise_graphql_errors(payload: dict[str, Any]) -> None:
+    if "errors" in payload and payload["errors"]:
+        raise RuntimeError(f"GitHub GraphQL errors:\n{json.dumps(payload['errors'], indent=2)}")
+
+
+def expand_review_thread_comments(thread: dict[str, Any]) -> None:
+    connection = thread.get("comments") or {}
+    page_info = connection.get("pageInfo") or {}
+    nodes = list(connection.get("nodes") or [])
+    cursor = page_info.get("endCursor")
+    has_next = bool(page_info.get("hasNextPage"))
+    while has_next:
+        if not cursor:
+            raise RuntimeError(f"Review thread {thread.get('id')} has another comments page but no cursor")
+        payload = gh_api_thread_comments(str(thread["id"]), str(cursor))
+        _raise_graphql_errors(payload)
+        node = payload.get("data", {}).get("node")
+        if not node:
+            raise RuntimeError(f"Review thread {thread.get('id')} was not returned by GitHub")
+        page = node["comments"]
+        nodes.extend(page.get("nodes") or [])
+        page_info = page["pageInfo"]
+        has_next = bool(page_info["hasNextPage"])
+        next_cursor = page_info.get("endCursor")
+        if has_next and next_cursor == cursor:
+            raise RuntimeError(f"Review thread {thread.get('id')} comments cursor did not advance")
+        cursor = next_cursor
+    if connection:
+        thread["comments"] = {"nodes": nodes, "pageInfo": page_info}
+
+
 def fetch_all(owner: str, repo: str, number: int) -> dict[str, Any]:
     conversation_comments: list[dict[str, Any]] = []
     reviews: list[dict[str, Any]] = []
@@ -194,8 +260,7 @@ def fetch_all(owner: str, repo: str, number: int) -> dict[str, Any]:
             threads_cursor=threads_cursor,
         )
 
-        if "errors" in payload and payload["errors"]:
-            raise RuntimeError(f"GitHub GraphQL errors:\n{json.dumps(payload['errors'], indent=2)}")
+        _raise_graphql_errors(payload)
 
         pr = payload["data"]["repository"]["pullRequest"]
         if pr_meta is None:
@@ -227,6 +292,9 @@ def fetch_all(owner: str, repo: str, number: int) -> dict[str, Any]:
 
         if not (comments_active or reviews_active or threads_active):
             break
+
+    for thread in review_threads:
+        expand_review_thread_comments(thread)
 
     assert pr_meta is not None
     return {

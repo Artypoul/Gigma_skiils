@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $pluginRoot = Split-Path -Parent $PSScriptRoot
 $control = Join-Path $pluginRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
+$artifactValidator = Join-Path $pluginRoot 'skills/first-pass-quality-gate/scripts/artifact-validator.ps1'
 $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
 $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $testRoot = Join-Path $tempRoot ('first-pass-quality-contract-' + [guid]::NewGuid().ToString('N'))
@@ -61,6 +62,25 @@ function Invoke-StateCase {
     } finally {
         if ($null -eq $previousThread) { Remove-Item Env:CODEX_THREAD_ID -ErrorAction SilentlyContinue } else { $env:CODEX_THREAD_ID = $previousThread }
     }
+}
+
+function Invoke-ArtifactCase {
+    param([Parameter(Mandatory)][string]$Path)
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $pwsh
+    foreach ($arg in @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $artifactValidator, '-Path', $Path, '-Kind', 'image')) {
+        [void]$psi.ArgumentList.Add($arg)
+    }
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+    $psi.StandardErrorEncoding = [Text.UTF8Encoding]::new($false)
+    $process = [Diagnostics.Process]::Start($psi)
+    $text = $process.StandardOutput.ReadToEnd().Trim()
+    $errorText = $process.StandardError.ReadToEnd().Trim()
+    $process.WaitForExit()
+    if (-not $text) { throw "Artifact validator returned no JSON: $errorText" }
+    @{ exitCode = $process.ExitCode; result = ($text | ConvertFrom-Json -AsHashtable) }
 }
 
 function New-BaseEvent {
@@ -366,6 +386,15 @@ try {
     $delegatePrompt = New-BaseEvent $delegation 't3' 'UserPromptSubmit'; $delegatePrompt.prompt = 'Используй одного субагента только для проверки файла.'
     $null = Invoke-HookCase $delegatePrompt
     $null = Invoke-StateCase $delegation @('-Action', 'ConfirmContext', '-ContextDisposition', 'unchanged', '-ContextNote', 'Delegation was already included in the bounded task outcome.')
+    $unrelatedPrompt = New-BaseEvent $delegation 't4' 'UserPromptSubmit'; $unrelatedPrompt.prompt = 'Покажи текущий статус без делегации.'
+    $null = Invoke-HookCase $unrelatedPrompt
+    $null = Invoke-StateCase $delegation @('-Action', 'ConfirmContext', '-ContextDisposition', 'status-only', '-ContextNote', 'Status request does not authorize delegation.')
+    $staleDelegationState = Invoke-StateCase $delegation @('-Action', 'ShowStatus')
+    Assert-True (-not [bool]$staleDelegationState.delegationCandidate -and -not $staleDelegationState.delegationCandidateTurnId) 'A later unrelated prompt must clear the previous delegation candidate.'
+    $null = Invoke-StateCase $delegation @('-Action', 'AuthorizeDelegation', '-DelegationOutcome', 'Inspect one file', '-DelegationScope', $workspace) -ExpectFailure
+    $delegatePrompt = New-BaseEvent $delegation 't5' 'UserPromptSubmit'; $delegatePrompt.prompt = 'Используй одного субагента только для проверки файла.'
+    $null = Invoke-HookCase $delegatePrompt
+    $null = Invoke-StateCase $delegation @('-Action', 'ConfirmContext', '-ContextDisposition', 'unchanged', '-ContextNote', 'The latest prompt explicitly renews bounded delegation authorization.')
     $null = Invoke-StateCase $delegation @('-Action', 'AuthorizeDelegation', '-DelegationOutcome', 'Inspect one file', '-DelegationScope', $workspace)
     Assert-True ($null -eq (Invoke-HookCase $agentCall)) 'Bounded delegation must be allowed.'
     $postAgent = New-BaseEvent $delegation 't3' 'PostToolUse'; $postAgent.tool_name = 'Agent'; $postAgent.tool_input = $agentCall.tool_input; $postAgent.tool_response = @{ success = $true }; $postAgent.tool_use_id = 'agent-1'
@@ -523,6 +552,8 @@ try {
 
     $gitAdd = New-BaseEvent $prFlow 't2' 'PreToolUse'; $gitAdd.tool_name = 'Bash'; $gitAdd.tool_input = @{ command = 'git add docs/plan-feature.md'; workdir = $workspace }; $gitAdd.tool_use_id = 'git-add'
     Assert-True ($null -eq (Invoke-HookCase $gitAdd)) 'git add must be allowed after pre-publish gates.'
+    $gitAddChmod = New-BaseEvent $prFlow 't2' 'PreToolUse'; $gitAddChmod.tool_name = 'Bash'; $gitAddChmod.tool_input = @{ command = 'git add --chmod=+x -- docs/plan-feature.md'; workdir = $workspace }; $gitAddChmod.tool_use_id = 'git-add-chmod'
+    Assert-True ($null -eq (Invoke-HookCase $gitAddChmod)) 'Explicit git add may safely set an executable bit on an exact in-scope file.'
     foreach ($case in @(
         @{ id = 'git-add-dot'; command = 'git add .' },
         @{ id = 'git-add-directory'; command = 'git add docs' },
@@ -650,6 +681,27 @@ try {
     } finally {
         Remove-Item Env:FIRST_PASS_QUALITY_TEST_STAGED_FILES -ErrorAction SilentlyContinue
     }
+
+    $truncatedWebpPath = Join-Path $workspace 'truncated.webp'
+    [byte[]]$truncatedWebp = 82,73,70,70,4,0,0,0,87,69,66,80
+    [IO.File]::WriteAllBytes($truncatedWebpPath, $truncatedWebp)
+    $truncatedWebpResult = Invoke-ArtifactCase -Path $truncatedWebpPath
+    Assert-True ($truncatedWebpResult.exitCode -ne 0 -and $truncatedWebpResult.result.status -eq 'failed') 'A header-only WebP artifact must fail validation.'
+    Assert-True (@($truncatedWebpResult.result.checks | Where-Object { $_.name -eq 'image-signature' -and $_.status -eq 'failed' }).Count -eq 1) 'A truncated WebP must fail the image signature/container check.'
+
+    $validWebpPath = Join-Path $workspace 'valid-vp8x.webp'
+    [byte[]]$validWebp = 82,73,70,70,22,0,0,0,87,69,66,80,86,80,56,88,10,0,0,0,0,0,0,0,1,0,0,2,0,0
+    [IO.File]::WriteAllBytes($validWebpPath, $validWebp)
+    $validWebpResult = Invoke-ArtifactCase -Path $validWebpPath
+    Assert-True ($validWebpResult.exitCode -eq 0 -and $validWebpResult.result.status -eq 'passed') 'A structurally valid VP8X WebP artifact must pass validation.'
+    Assert-True (@($validWebpResult.result.checks | Where-Object { $_.name -eq 'image-dimensions' -and $_.status -eq 'passed' -and $_.detail -eq '2x3' }).Count -eq 1) 'VP8X canvas dimensions must be parsed from the WebP header.'
+
+    $badTailWebpPath = Join-Path $workspace 'vp8x-bad-tail.webp'
+    [byte[]]$badTailWebp = 82,73,70,70,30,0,0,0,87,69,66,80,86,80,56,88,10,0,0,0,0,0,0,0,1,0,0,2,0,0,74,85,78,75,4,0,0,0
+    [IO.File]::WriteAllBytes($badTailWebpPath, $badTailWebp)
+    $badTailWebpResult = Invoke-ArtifactCase -Path $badTailWebpPath
+    Assert-True ($badTailWebpResult.exitCode -ne 0 -and $badTailWebpResult.result.status -eq 'failed') 'A WebP with valid VP8X dimensions but a truncated later chunk must fail validation.'
+    Assert-True (@($badTailWebpResult.result.checks | Where-Object { $_.name -eq 'image-signature' -and $_.status -eq 'failed' }).Count -eq 1) 'WebP validation must scan chunk boundaries through the declared end of the RIFF container.'
 
     $stopSession = 'contract-stop'
     Initialize-ClarifiedSession $stopSession

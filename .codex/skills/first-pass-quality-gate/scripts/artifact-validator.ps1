@@ -63,6 +63,47 @@ function Get-JpegDimensions {
     $null
 }
 
+function Get-LittleEndianUInt24 {
+    param([byte[]]$Bytes, [int]$Offset)
+    [uint32]$Bytes[$Offset] -bor ([uint32]$Bytes[$Offset + 1] -shl 8) -bor ([uint32]$Bytes[$Offset + 2] -shl 16)
+}
+
+function Get-WebpDimensions {
+    param([byte[]]$Bytes)
+    if ($Bytes.Length -lt 20) { return $null }
+    if ([Text.Encoding]::ASCII.GetString($Bytes, 0, 4) -ne 'RIFF' -or [Text.Encoding]::ASCII.GetString($Bytes, 8, 4) -ne 'WEBP') { return $null }
+    if ([int64][BitConverter]::ToUInt32($Bytes, 4) + 8 -ne $Bytes.Length) { return $null }
+    $offset = 12
+    $dimensions = $null
+    while ($offset + 8 -le $Bytes.Length) {
+        $chunkType = [Text.Encoding]::ASCII.GetString($Bytes, $offset, 4)
+        $chunkLength = [int64][BitConverter]::ToUInt32($Bytes, $offset + 4)
+        $dataOffset = $offset + 8
+        $paddedLength = $chunkLength + ($chunkLength % 2)
+        if ($dataOffset + $paddedLength -gt $Bytes.Length) { return $null }
+        if ($chunkType -eq 'VP8X' -and $chunkLength -eq 10 -and -not $dimensions) {
+            $width = 1 + (Get-LittleEndianUInt24 $Bytes ($dataOffset + 4))
+            $height = 1 + (Get-LittleEndianUInt24 $Bytes ($dataOffset + 7))
+            $dimensions = @{ width = $width; height = $height }
+        }
+        if ($chunkType -eq 'VP8L' -and $chunkLength -ge 5 -and $Bytes[$dataOffset] -eq 0x2F -and -not $dimensions) {
+            $b0 = [uint32]$Bytes[$dataOffset + 1]; $b1 = [uint32]$Bytes[$dataOffset + 2]
+            $b2 = [uint32]$Bytes[$dataOffset + 3]; $b3 = [uint32]$Bytes[$dataOffset + 4]
+            $width = 1 + ($b0 -bor (($b1 -band 0x3F) -shl 8))
+            $height = 1 + (($b1 -shr 6) -bor ($b2 -shl 2) -bor (($b3 -band 0x0F) -shl 10))
+            $dimensions = @{ width = $width; height = $height }
+        }
+        if ($chunkType -eq 'VP8 ' -and $chunkLength -ge 10 -and $Bytes[$dataOffset + 3] -eq 0x9D -and $Bytes[$dataOffset + 4] -eq 0x01 -and $Bytes[$dataOffset + 5] -eq 0x2A -and -not $dimensions) {
+            $width = [BitConverter]::ToUInt16($Bytes, $dataOffset + 6) -band 0x3FFF
+            $height = [BitConverter]::ToUInt16($Bytes, $dataOffset + 8) -band 0x3FFF
+            $dimensions = @{ width = $width; height = $height }
+        }
+        $offset = [int]($dataOffset + $paddedLength)
+    }
+    if ($offset -ne $Bytes.Length) { return $null }
+    $dimensions
+}
+
 $resolved = [IO.Path]::GetFullPath($Path)
 $result = [ordered]@{
     path = $resolved
@@ -107,7 +148,8 @@ switch ($result.kind) {
         $bytes = [IO.File]::ReadAllBytes($resolved)
         $isPng = $bytes.Length -ge 24 -and @($bytes[0..7]) -join ',' -eq '137,80,78,71,13,10,26,10' -and [Text.Encoding]::ASCII.GetString($bytes, 12, 4) -eq 'IHDR'
         $isJpeg = $bytes.Length -ge 4 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xD8 -and $bytes[-2] -eq 0xFF -and $bytes[-1] -eq 0xD9
-        $isWebp = $bytes.Length -ge 12 -and [Text.Encoding]::ASCII.GetString($bytes, 0, 4) -eq 'RIFF' -and [Text.Encoding]::ASCII.GetString($bytes, 8, 4) -eq 'WEBP' -and ([BitConverter]::ToUInt32($bytes, 4) + 8) -le $bytes.Length
+        $webpDimensions = Get-WebpDimensions $bytes
+        $isWebp = $null -ne $webpDimensions -and $webpDimensions.width -gt 0 -and $webpDimensions.height -gt 0
         $known = $isPng -or $isJpeg -or $isWebp
         $result.checks += @{ name = 'image-signature'; status = $(if ($known) { 'passed' } else { 'failed' }); detail = 'full PNG/JPEG/WEBP container signature' }
         if ($isPng) {
@@ -116,6 +158,8 @@ switch ($result.kind) {
         } elseif ($isJpeg) {
             $dimensions = Get-JpegDimensions $bytes
             $result.checks += @{ name = 'image-dimensions'; status = $(if ($dimensions -and $dimensions.width -gt 0 -and $dimensions.height -gt 0) { 'passed' } else { 'unknown' }); detail = $(if ($dimensions) { "$($dimensions.width)x$($dimensions.height)" } else { 'SOF dimensions not found' }) }
+        } elseif ($isWebp) {
+            $result.checks += @{ name = 'image-dimensions'; status = 'passed'; detail = "$($webpDimensions.width)x$($webpDimensions.height)" }
         }
     }
     'pdf' {

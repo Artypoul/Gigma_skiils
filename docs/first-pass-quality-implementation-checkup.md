@@ -18,12 +18,12 @@
 - дублирующие feature watch/turnstile hooks запрещены для одной сессии;
 - восемь user-specific feature-hook тестов заменены прямыми тестами controller;
 - test runner сам находит `pwsh` и использует системный temp path;
-- Windows и Ubuntu CI запускают полный 178-case contract suite;
+- Windows и Ubuntu CI запускают полный 187-case contract suite;
 - изолированный smoke-test запускает реальные Codex/Claude hook commands через доступный `pwsh`, проверяет их plugin data и восемью assertions доказывает, что пользовательские pointer-файлы не меняются;
 - Windows smoke-test разрешает Git Bash относительно фактического `git.exe`, чтобы не запустить несовместимый одноимённый системный `bash.exe` на CI runner;
 - каталоговый validator проверяет hook discovery и запрещает user-specific пути в hooks/tests.
 
-Четыре remote review прохода этого PR выявили 29 threads: четыре повторяли уже найденные проблемы, итого 25 уникальных дефектов, из них 11 P1. Последний проход дополнительно нашёл POSIX bootstrap deadlock, destructive push/local Git формы, unscoped `git add`, `gh pr update-branch`, неизвестные `gh` mutations и ложное production-подтверждение при отрицании. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
+Пять remote review проходов этого PR выявили 34 threads: четыре повторяли уже найденные проблемы, итого 30 уникальных дефектов, из них 11 P1. Последние проходы дополнительно нашли POSIX bootstrap deadlock, destructive/scoped Git формы, неизвестные `gh` mutations, ложное production-подтверждение при отрицании, stale delegation authorization, Playwright session/mode ошибки, nested review-comment pagination и пропуск повреждённого WebP. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
 
 ## Проверочная таблица реализации
 
@@ -51,11 +51,12 @@
 | Production только по точной сущности | Entity Lock, canonical input hash, stable/project fields | другой ID/input и replay отклоняются | Реализовано для hooked typed tools |
 | Подтверждение production одноразовое и положительное | latest-prompt confirmation, negation guard, consumed authorization | отрицание, повтор и auto-retry не дают разрешение | Реализовано |
 | Failed write не каскадирует | mutation pause + read/validator + `AcknowledgeWriteRecovery` | следующая mutation блокируется до проверки состояния | Реализовано |
-| Делегация не расширяет полномочия | explicit delegate action, bounded handoff, parent verification | unbounded spawn и mutation до parent check отклоняются | Реализовано для normal spawn path |
-| Артефакт проверяется структурно | `artifact-validator.ps1` | Markdown/JSON/image/PDF/DOCX container checks | Реализовано; visual QA отдельно |
+| Делегация не расширяет полномочия | latest-prompt turn-bound delegate action, bounded handoff, parent verification | stale/unbounded spawn и mutation до parent check отклоняются | Реализовано для normal spawn path |
+| Артефакт проверяется структурно | `artifact-validator.ps1` | Markdown/JSON/PNG/JPEG/WebP/PDF/DOCX container checks; WebP chunk/dimensions parse | Реализовано; visual QA отдельно |
+| Browser skill запускается переносимо | executable `playwright_cli.sh`, upstream `-s=name`, env-session injection | canonical/mirror mode `100755`, docs/source regression и официальный Playwright CLI contract | Реализовано |
 | Hooks действительно поставляются | `hooks/hooks.json`, `$PLUGIN_ROOT`, manifests | catalog validator проверяет структуру и переносимые пути | Реализовано |
-| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 178 positive/negative contract assertions, включая dual-shell management, move/reparse/case scope, directory/deletion-aware staging, scoped commit/push, command chaining, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
-| Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 8 stdlib tests для fork/base repo, pagination, failed-check JSON, job log, half-life, docs paths и pixel clipping | Реализовано |
+| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 187 positive/negative contract assertions, включая dual-shell management, move/reparse/case scope, scoped staging/commit/push, stale delegation, full WebP chunk validation, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
+| Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 11 stdlib tests для fork/base repo, top-level/nested pagination, failed-check JSON, job log, half-life, docs paths, pixel clipping и Playwright wrapper | Реализовано |
 | Codex и Claude используют свои plugin roots/data | `PLUGIN_ROOT`/`PLUGIN_DATA` и `CLAUDE_PLUGIN_ROOT`/`CLAUDE_PLUGIN_DATA` | 8 isolated real-command assertions через bash + `pwsh`, включая неизменность `.codex`/`.claude` pointer-файлов | Реализовано при наличии `pwsh 7` |
 
 ## Правила первой проходки

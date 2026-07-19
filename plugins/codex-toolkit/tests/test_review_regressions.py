@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -92,6 +93,75 @@ class FetchCommentsRegressionTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in result["reviews"]], ["review-1"])
         self.assertEqual([item["id"] for item in result["review_threads"]], ["thread-1"])
         self.assertEqual(len(calls), 2)
+
+    def test_review_thread_comments_are_paginated(self) -> None:
+        def connection(nodes, has_next=False, cursor=None):
+            return {
+                "nodes": nodes,
+                "pageInfo": {"hasNextPage": has_next, "endCursor": cursor},
+            }
+
+        first_page = {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "number": 7,
+                        "url": "https://github.com/base/repo/pull/7",
+                        "title": "PR",
+                        "state": "OPEN",
+                        "comments": connection([]),
+                        "reviews": connection([]),
+                        "reviewThreads": connection([
+                            {
+                                "id": "thread-1",
+                                "comments": connection([{"id": "reply-1"}], True, "reply-page-2"),
+                            }
+                        ]),
+                    }
+                }
+            }
+        }
+        second_page = {
+            "data": {
+                "node": {
+                    "comments": connection([{"id": "reply-2"}]),
+                }
+            }
+        }
+        with (
+            patch.object(fetch_comments, "gh_api_graphql", return_value=first_page),
+            patch.object(fetch_comments, "gh_api_thread_comments", return_value=second_page) as nested,
+        ):
+            result = fetch_comments.fetch_all("base", "repo", 7)
+        replies = result["review_threads"][0]["comments"]["nodes"]
+        self.assertEqual([reply["id"] for reply in replies], ["reply-1", "reply-2"])
+        nested.assert_called_once_with("thread-1", "reply-page-2")
+
+
+class PlaywrightWrapperRegressionTests(unittest.TestCase):
+    def test_session_flag_matches_upstream_cli(self) -> None:
+        skill_root = PLUGIN_ROOT / "skills/playwright"
+        wrapper = (skill_root / "scripts/playwright_cli.sh").read_text(encoding="utf-8")
+        docs = "\n".join(
+            (skill_root / relative).read_text(encoding="utf-8")
+            for relative in ("references/cli.md", "references/workflows.md")
+        )
+        self.assertIn('-s|-s=*)', wrapper)
+        self.assertIn('cmd+=("-s=${PLAYWRIGHT_CLI_SESSION}")', wrapper)
+        self.assertNotIn("--session", wrapper + docs)
+
+    def test_wrapper_is_executable_in_git_index(self) -> None:
+        repo_root = PLUGIN_ROOT.parents[1]
+        targets = (
+            "plugins/codex-toolkit/skills/playwright/scripts/playwright_cli.sh",
+            ".codex/skills/playwright/scripts/playwright_cli.sh",
+        )
+        for target in targets:
+            output = subprocess.check_output(
+                ["git", "-C", str(repo_root), "ls-files", "--stage", target],
+                text=True,
+            )
+            self.assertTrue(output.startswith("100755 "), f"{target}: {output}")
 
 
 class CheckInspectionRegressionTests(unittest.TestCase):

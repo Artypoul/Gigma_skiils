@@ -98,8 +98,8 @@ Resolve `PLAYWRIGHT_SKILL_ROOT` from the location of the loaded `SKILL.md`; do n
 Use a named session to isolate work:
 
 ```bash
-"$PWCLI" --session todo open https://demo.playwright.dev/todomvc
-"$PWCLI" --session todo snapshot
+"$PWCLI" -s=todo open https://demo.playwright.dev/todomvc
+"$PWCLI" -s=todo snapshot
 ```
 
 Or set an environment variable once:

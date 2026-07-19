@@ -215,6 +215,7 @@ function Read-State {
             if (-not $state.task.ContainsKey('workflowStage')) { $state.task.workflowStage = 'none' }
             if (-not $state.task.ContainsKey('prePublishWhen')) { $state.task.prePublishWhen = @($state.task.doneWhen) }
         }
+        if ($state -and -not $state.ContainsKey('delegationCandidateTurnId')) { $state.delegationCandidateTurnId = $null }
         $state
     } catch { $null }
 }
@@ -266,6 +267,7 @@ function New-State {
         confirmationCandidate = $false
         confirmationTurnId = $null
         delegationCandidate = $false
+        delegationCandidateTurnId = $null
         lastPromptHash = $null
         lastPromptAt = $null
         task = $null
@@ -572,6 +574,7 @@ function Get-GitAddFiles {
     $endOptions = $false
     foreach ($token in $tokens) {
         if (-not $endOptions -and $token -eq '--') { $endOptions = $true; continue }
+        if (-not $endOptions -and $token -match '^--chmod=[+-]x$') { continue }
         if (-not $endOptions -and $token.StartsWith('-')) { return @() }
         if ($token -in @('.', '..') -or $token -match '[*?\[]' -or $token.StartsWith(':(')) { return @() }
         $value = $token
@@ -838,6 +841,8 @@ function Invoke-UserPromptSubmit {
         $state.promptCount = [int]$state.promptCount + 1
         $state.confirmationCandidate = $false
         $state.confirmationTurnId = $null
+        $state.delegationCandidate = $false
+        $state.delegationCandidateTurnId = $null
         if ($state.task) {
             $state.task.productionAuthorized = $false
             $state.task.productionAuthorizationTurnIdHash = $null
@@ -882,7 +887,10 @@ function Invoke-UserPromptSubmit {
             $state.confirmationCandidate = $true
             $state.confirmationTurnId = [string]$HookData.turn_id
         }
-        if ($delegationRequested) { $state.delegationCandidate = $true }
+        if ($delegationRequested) {
+            $state.delegationCandidate = $true
+            $state.delegationCandidateTurnId = [string]$HookData.turn_id
+        }
         Write-State -Path $path -State $state
         Set-CurrentSessionIndex -Root $Root -State $state
         Write-Telemetry -Root $Root -Record @{
@@ -1522,7 +1530,7 @@ function Invoke-StateAction {
                 if (-not $state.task) { throw 'Task Lock is missing.' }
                 if (-not $DelegationOutcome -or -not $DelegationScope) { throw 'DelegationOutcome and DelegationScope are required.' }
                 if ('delegate' -notin @($state.task.allowedActions)) { throw 'The Task Lock does not allow delegation.' }
-                if (-not $state.delegationCandidate) { throw 'The latest user prompt does not explicitly authorize delegation.' }
+                if (-not $state.delegationCandidate -or -not $state.delegationCandidateTurnId -or [string]$state.delegationCandidateTurnId -ne [string]$state.turnId) { throw 'The latest user prompt does not explicitly authorize delegation.' }
                 if ($state.delegation -and -not $state.delegation.verified) { throw 'Existing delegated work must be verified before another delegation.' }
                 $state.delegation = @{
                     outcome = Get-NormalizedText $DelegationOutcome 500
@@ -1537,6 +1545,7 @@ function Invoke-StateAction {
                     verifiedAt = $null
                 }
                 $state.delegationCandidate = $false
+                $state.delegationCandidateTurnId = $null
                 $resultBox.value = @{ action = 'AuthorizeDelegation'; delegation = $state.delegation }
             }
             'VerifyDelegation' {
