@@ -396,8 +396,7 @@ function Test-IsQualityControlCommand {
     $allowedRoot = '\$\(\s*\$env:PLUGIN_ROOT\s*\?\?\s*\$env:CLAUDE_PLUGIN_ROOT\s*\)'
     $controllerRelative = 'skills[\\/]first-pass-quality-gate[\\/]scripts[\\/]quality-control\.ps1'
     $canonicalPath = ('^\s*&\s*["'']?{0}[\\/]{1}["'']?' -f $allowedRoot, $controllerRelative)
-    $absolutePath = ('(?i)^\s*&\s*["'']?(?:[A-Z]:[\\/]|/).*?first-pass-quality[\\/].*?{0}["'']?' -f $controllerRelative)
-    if ($Command -notmatch $canonicalPath -and $Command -notmatch $absolutePath) { return $false }
+    if ($Command -notmatch $canonicalPath) { return $false }
     if ($Command -notmatch '(?i)-Action\s+(StartTask|ConfirmContext|SetGate|SetEntityLock|AuthorizeProduction|AddEvidence|SetStatus|AuthorizeDelegation|VerifyDelegation|AcknowledgeWriteRecovery|ShowStatus|ResetTask|Version)\b') { return $false }
     if ($Command -notmatch '^\s*&\s*') { return $false }
     if ($Command -match '[\r\n;|><`]|&&|\|\|') { return $false }
@@ -419,7 +418,14 @@ function Test-IsGhApiExternalWrite {
 function Test-IsCurlExternalWrite {
     param([AllowNull()][string]$Command)
     if ([string]::IsNullOrWhiteSpace($Command) -or $Command -notmatch '(?i:\bcurl(?:\.exe)?\b)') { return $false }
-    $Command -match '(?:\s(?-i:-d|-F|-T)(?=\s|=)|\s(?-i:--data(?:-[a-z-]+)?|--json|--form(?:-string)?|--upload-file)(?=\s|=)|\s(?-i:-X|--request)(?:\s+|=)(?i:POST|PUT|PATCH|DELETE)\b)'
+    $Command -match '(?:\s(?-i:-d|-F|-T)|\s(?-i:--data(?:-[a-z-]+)?|--json|--form(?:-string)?|--upload-file)(?=\s|=)|\s(?-i:-X)(?:\s*|=)(?i:POST|PUT|PATCH|DELETE)\b|\s(?-i:--request)(?:\s+|=)(?i:POST|PUT|PATCH|DELETE)\b)'
+}
+
+function Test-IsGitForcePush {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command) -or $Command -notmatch '(?i)\bgit\s+push\b') { return $false }
+    if ($Command -match '(?i)(?:^|\s)(?:--force(?:-with-lease|-if-includes)?|-f)(?=\s|=|$)') { return $true }
+    $Command -match '(?i)\bgit\s+push\b[^\r\n]*\s\+\S+'
 }
 
 function Test-IsRawFileMutationCommand {
@@ -440,10 +446,10 @@ function Get-ToolClassification {
     if ($ToolName -eq 'Bash') {
         $readPattern = '(?i)^\s*(rg\b|git\s+(status|diff|log|show|rev-parse|branch\s+--show-current|remote\s+-v)\b|gh\s+pr\s+(view|status|checks|diff)\b|gh\s+api\b|Get-Content\b|Get-ChildItem\b|Get-Item\b|Test-Path\b|Resolve-Path\b|Get-FileHash\b|Select-String\b|where\.exe\b|codex\s+(--version|features\s+list|plugin\s+list|doctor)\b)'
         $validatePattern = '(?i)(run-contract-tests\.ps1|artifact-validator\.ps1|quick_validate\.py|validate_plugin\.py|\bpytest\b|\bPester\b|\bnpm\s+(run\s+)?test\b|\bpnpm\s+(run\s+)?test\b|\bdotnet\s+test\b|\bcargo\s+test\b|\bgit\s+diff\s+--check\b)'
-        $productionPattern = '(?i)\b(kubectl\s+(apply|delete|rollout|set|patch)|terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|git\s+push\s+.*(--force|-f)|deploy|release\s+promote)\b'
+        $productionPattern = '(?i)\b(kubectl\s+(apply|delete|rollout|set|patch)|terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|deploy|release\s+promote)\b'
         $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync|gh\s+(pr\s+(close|reopen)|issue\s+(create|edit|close)))\b'
         $writePattern = '(?i)\b(git\s+(merge|rebase|reset|clean)|npm\s+(install|uninstall)|pnpm\s+(add|remove|install)|yarn\s+(add|remove|install)|pip\s+install)\b'
-        if ($command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
+        if ((Test-IsGitForcePush $command) -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
         if ($command -match '(?i)\bgit\s+commit\b') { return @{ kind = 'commit'; command = $command } }
         if ($command -match '(?i)\bgit\s+push\b') { return @{ kind = 'push'; command = $command } }
         if ($command -match '(?i)\bgit\s+add\b') { return @{ kind = 'vcs-stage'; command = $command } }
@@ -484,6 +490,39 @@ function Get-PathStringComparison {
     [StringComparison]::Ordinal
 }
 
+function Test-PathHasReparseComponent {
+    param([Parameter(Mandatory)][string]$Candidate, [Parameter(Mandatory)][string]$Root)
+    $candidateFull = [IO.Path]::GetFullPath($Candidate).TrimEnd('\', '/')
+    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $comparison = Get-PathStringComparison
+    $paths = [Collections.Generic.List[string]]::new()
+    $paths.Add($rootFull)
+    $relative = [IO.Path]::GetRelativePath($rootFull, $candidateFull)
+    if ($relative -ne '.') {
+        $current = $rootFull
+        foreach ($segment in $relative.Split([IO.Path]::DirectorySeparatorChar, [StringSplitOptions]::RemoveEmptyEntries)) {
+            $current = Join-Path $current $segment
+            $paths.Add($current)
+        }
+    }
+    foreach ($path in $paths) {
+        if ($env:FIRST_PASS_QUALITY_TEST_DATA -and $env:FIRST_PASS_QUALITY_TEST_REPARSE_COMPONENT -and $path.Equals([IO.Path]::GetFullPath($env:FIRST_PASS_QUALITY_TEST_REPARSE_COMPONENT).TrimEnd('\', '/'), $comparison)) {
+            return $true
+        }
+        try {
+            $attributes = [IO.File]::GetAttributes($path)
+            if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
+        } catch [IO.FileNotFoundException] {
+            continue
+        } catch [IO.DirectoryNotFoundException] {
+            continue
+        } catch {
+            return $true
+        }
+    }
+    $false
+}
+
 function Test-PathWithinScope {
     param([Parameter(Mandatory)][string]$Candidate, [Parameter(Mandatory)][object[]]$Roots)
     $candidateFull = [IO.Path]::GetFullPath($Candidate).TrimEnd('\', '/')
@@ -491,9 +530,12 @@ function Test-PathWithinScope {
     foreach ($root in $Roots) {
         if (-not $root) { continue }
         $rootFull = [IO.Path]::GetFullPath([string]$root).TrimEnd('\', '/')
-        if ($candidateFull.Equals($rootFull, $comparison)) { return $true }
+        if ($candidateFull.Equals($rootFull, $comparison)) {
+            if (-not (Test-PathHasReparseComponent -Candidate $candidateFull -Root $rootFull)) { return $true }
+            continue
+        }
         $prefix = $rootFull + [IO.Path]::DirectorySeparatorChar
-        if ($candidateFull.StartsWith($prefix, $comparison)) { return $true }
+        if ($candidateFull.StartsWith($prefix, $comparison) -and -not (Test-PathHasReparseComponent -Candidate $candidateFull -Root $rootFull)) { return $true }
     }
     $false
 }

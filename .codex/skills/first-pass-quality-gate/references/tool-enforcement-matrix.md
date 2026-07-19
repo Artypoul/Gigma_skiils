@@ -3,9 +3,9 @@
 | Improvement target | Instrumentation | Enforced by |
 | --- | --- | --- |
 | No tool use before task boundary | Clarification gate and Task Lock | `UserPromptSubmit`, `PreToolUse`, `Stop`, `StartTask` |
-| First pass stays on scope | OS-aware absolute `scopePaths`, enforced `allowedActions`, parsed source/move targets, fail-closed non-Git dirty policy | `PreToolUse`, `PermissionRequest`, `PostToolUse` |
-| Task Lock bootstrap cannot deadlock | Canonical one-line controller invocation; chained commands and extra subexpressions rejected | `Test-IsQualityControlCommand`, `PreToolUse` |
-| Shell/API mutations do not masquerade as reads | POSIX/PowerShell filesystem patterns, curl data options, and `gh api` method/field rules | `Get-ToolClassification`, `PreToolUse` |
+| First pass stays on scope | OS-aware absolute `scopePaths`, enforced `allowedActions`, parsed source/move targets, reparse-component rejection, fail-closed non-Git dirty policy | `PreToolUse`, `PermissionRequest`, `PostToolUse` |
+| Task Lock bootstrap cannot deadlock or run a look-alike | Canonical one-line plugin-root invocation only; absolute/relative look-alikes, chained commands and extra subexpressions rejected | `Test-IsQualityControlCommand`, `PreToolUse` |
+| Shell/API mutations do not masquerade as reads | POSIX/PowerShell filesystem patterns, attached/long curl write options, `gh api` method/field rules, force flags and plus-prefixed refspecs | `Get-ToolClassification`, `PreToolUse` |
 | Project skills remain authoritative | Workflow id/stage, phase Task Locks, narrower write scope, explicit precedence | `StartTask`, `PreToolUse`, skill instructions |
 | New user input is reconciled | Context reset plus recorded disposition/note; changed scope requires a fresh Task Lock | `UserPromptSubmit`, `ConfirmContext`, `PreToolUse` |
 | Compaction does not erase intent | State snapshot and restore message | `PreCompact`, `PostCompact` |

@@ -127,6 +127,10 @@ try {
     $managementCall.tool_input.command = '& "skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
     $managementCall.tool_use_id = 'management-relative-lookalike'
     Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A relative look-alike controller path must not receive management bypass.'
+    $managementLookalike = Join-Path $testRoot 'first-pass-quality/skills/first-pass-quality-gate/scripts/quality-control.ps1'
+    $managementCall.tool_input.command = "& `"$managementLookalike`" -Action StartTask -Outcome test"
+    $managementCall.tool_use_id = 'management-absolute-lookalike'
+    Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'An absolute look-alike controller path outside the plugin root must not receive management bypass.'
 
     $session = 'contract-local'
     Initialize-ClarifiedSession $session
@@ -216,6 +220,24 @@ try {
         Assert-True ((Invoke-HookCase $casePatch).hookSpecificOutput.permissionDecision -eq 'deny') 'Case-sensitive runtimes must not equate differently-cased scope paths.'
     } finally {
         Remove-Item Env:FIRST_PASS_QUALITY_FORCE_CASE_SENSITIVE -ErrorAction SilentlyContinue
+    }
+
+    $reparseGuard = 'contract-reparse-scope'
+    Initialize-ClarifiedSession $reparseGuard
+    $null = Invoke-StateCase $reparseGuard @(
+        '-Action', 'StartTask', '-Outcome', 'Reject reparse escapes', '-Scope', $workspace, '-WriteScope', $workspace,
+        '-Mode', 'local-change', '-Risk', 'medium', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'reparse boundary enforced', '-AllowDirty'
+    )
+    $reparsePatch = New-BaseEvent $reparseGuard 't2' 'PreToolUse'
+    $reparsePatch.tool_name = 'apply_patch'
+    $reparsePatch.tool_input = @{ patch = "*** Begin Patch`n*** Add File: linked-out/escape.txt`n+outside`n*** End Patch"; workdir = $workspace }
+    $reparsePatch.tool_use_id = 'reparse-component-outside'
+    $env:FIRST_PASS_QUALITY_TEST_REPARSE_COMPONENT = Join-Path $workspace 'linked-out'
+    try {
+        Assert-True ((Invoke-HookCase $reparsePatch).hookSpecificOutput.permissionDecision -eq 'deny') 'A path through a symlink or junction component must not pass lexical WriteScope checks.'
+    } finally {
+        Remove-Item Env:FIRST_PASS_QUALITY_TEST_REPARSE_COMPONENT -ErrorAction SilentlyContinue
     }
 
     $postWrite = New-BaseEvent $session 't2' 'PostToolUse'
@@ -394,6 +416,8 @@ try {
     Assert-True ((Invoke-HookCase $curlData).hookSpecificOutput.permissionDecision -eq 'deny') 'curl -d must be classified as an external write.'
     $curlJson = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $curlJson.tool_name = 'Bash'; $curlJson.tool_input = @{ command = 'curl --json @body.json https://api.example/items'; workdir = $workspace }; $curlJson.tool_use_id = 'curl-json'
     Assert-True ((Invoke-HookCase $curlJson).hookSpecificOutput.permissionDecision -eq 'deny') 'curl --json must be classified as an external write.'
+    $curlAttachedMethod = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $curlAttachedMethod.tool_name = 'Bash'; $curlAttachedMethod.tool_input = @{ command = 'curl -XPOST https://api.example/items'; workdir = $workspace }; $curlAttachedMethod.tool_use_id = 'curl-attached-method'
+    Assert-True ((Invoke-HookCase $curlAttachedMethod).hookSpecificOutput.permissionDecision -eq 'deny') 'curl -XPOST must be classified as an external write.'
     $curlHead = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $curlHead.tool_name = 'Bash'; $curlHead.tool_input = @{ command = 'curl -I https://api.example/items'; workdir = $workspace }; $curlHead.tool_use_id = 'curl-head'
     Assert-True ($null -eq (Invoke-HookCase $curlHead)) 'A curl header read without data or a mutating method must remain executable.'
     $ghFieldWrite = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $ghFieldWrite.tool_name = 'Bash'; $ghFieldWrite.tool_input = @{ command = 'gh api repos/o/r/issues/1/comments -f body=hello'; workdir = $workspace }; $ghFieldWrite.tool_use_id = 'gh-field-write'
@@ -487,6 +511,8 @@ try {
     Assert-True ((Invoke-HookCase $typedMerge).hookSpecificOutput.permissionDecision -eq 'deny') 'PR mode must not authorize merge.'
     $forcePush = New-BaseEvent $prFlow 't2' 'PreToolUse'; $forcePush.tool_name = 'Bash'; $forcePush.tool_input = @{ command = 'git push --force origin feature/example'; workdir = $workspace }; $forcePush.tool_use_id = 'force-push'
     Assert-True ((Invoke-HookCase $forcePush).hookSpecificOutput.permissionDecision -eq 'deny') 'PR mode must not authorize force-push.'
+    $plusForcePush = New-BaseEvent $prFlow 't2' 'PreToolUse'; $plusForcePush.tool_name = 'Bash'; $plusForcePush.tool_input = @{ command = 'git push origin +HEAD:main'; workdir = $workspace }; $plusForcePush.tool_use_id = 'plus-force-push'
+    Assert-True ((Invoke-HookCase $plusForcePush).hookSpecificOutput.permissionDecision -eq 'deny') 'PR mode must not authorize a plus-prefixed force-push refspec.'
     $createPrPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $createPrPost.tool_name = 'Bash'; $createPrPost.tool_input = $createPr.tool_input; $createPrPost.tool_response = @{ exit_code = 0 }; $createPrPost.tool_use_id = 'gh-pr-create'
     $null = Invoke-HookCase $createPrPost
     $null = Invoke-StateCase $prFlow @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'pr-created', '-EvidenceStatus', 'passed', '-Subject', 'https://github.test/o/r/pull/1', '-ExpectedToolName', 'Bash')
