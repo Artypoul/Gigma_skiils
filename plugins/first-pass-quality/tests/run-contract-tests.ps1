@@ -497,6 +497,22 @@ try {
     $ghFieldRead = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $ghFieldRead.tool_name = 'Bash'; $ghFieldRead.tool_input = @{ command = 'gh api repos/o/r/issues/1 --method GET -f per_page=1'; workdir = $workspace }; $ghFieldRead.tool_use_id = 'gh-field-get'
     Assert-True ($null -eq (Invoke-HookCase $ghFieldRead)) 'gh api fields with explicit GET must remain readable.'
     foreach ($case in @(
+        @{ id = 'irm-post'; command = 'irm https://api.example/items -Method POST' },
+        @{ id = 'iwr-patch'; command = 'iwr https://api.example/items/1 -Method PATCH' }
+    )) {
+        $event = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "PowerShell REST alias mutation '$($case.command)' must require a typed production wrapper."
+    }
+    foreach ($case in @(
+        @{ id = 'kubectl-create'; command = 'kubectl -n prod create -f deployment.yaml' },
+        @{ id = 'kubectl-scale'; command = 'kubectl --context prod scale deployment/app --replicas=0' }
+    )) {
+        $event = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Mutating Kubernetes command '$($case.command)' must be classified as production shell."
+    }
+    $kubectlRead = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $kubectlRead.tool_name = 'Bash'; $kubectlRead.tool_input = @{ command = 'kubectl --context=prod get pods'; workdir = $workspace }; $kubectlRead.tool_use_id = 'kubectl-get'
+    Assert-True ($null -eq (Invoke-HookCase $kubectlRead)) 'A recognized read-only kubectl command must remain executable.'
+    foreach ($case in @(
         @{ id = 'reset-hard'; command = 'git reset --hard HEAD' },
         @{ id = 'clean-force'; command = 'git clean -fd' }
     )) {
@@ -619,6 +635,13 @@ try {
     try {
         Assert-True ($null -eq (Invoke-HookCase $push)) 'A successful commit must not invalidate publish evidence before a same-branch push.'
         foreach ($case in @(
+            @{ id = 'head-only-push'; command = 'git push origin HEAD' },
+            @{ id = 'head-full-current-push'; command = 'git push origin HEAD:refs/heads/feature/example' }
+        )) {
+            $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+            Assert-True ($null -eq (Invoke-HookCase $event)) "Safe current-branch push '$($case.command)' must be allowed."
+        }
+        foreach ($case in @(
             @{ id = 'cross-branch-push'; command = 'git push origin HEAD:main' },
             @{ id = 'other-branch-push'; command = 'git push origin other-branch' }
         )) {
@@ -653,8 +676,16 @@ try {
         $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
         Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Destructive push '$($case.command)' must not be authorized by PR mode."
     }
-    $updateBranch = New-BaseEvent $prFlow 't2' 'PreToolUse'; $updateBranch.tool_name = 'Bash'; $updateBranch.tool_input = @{ command = 'gh pr update-branch 23'; workdir = $workspace }; $updateBranch.tool_use_id = 'gh-pr-update-branch'
-    Assert-True ($null -eq (Invoke-HookCase $updateBranch)) 'gh pr update-branch must require and honor PR publish gates as a push-equivalent action.'
+    $updateBranch = New-BaseEvent $prFlow 't2' 'PreToolUse'; $updateBranch.tool_name = 'Bash'; $updateBranch.tool_input = @{ command = 'gh pr update-branch --rebase'; workdir = $workspace }; $updateBranch.tool_use_id = 'gh-pr-update-branch'
+    Assert-True ($null -eq (Invoke-HookCase $updateBranch)) 'Selector-free gh pr update-branch must infer the current PR and honor publish gates as a push-equivalent action.'
+    foreach ($case in @(
+        @{ id = 'update-other-number'; command = 'gh pr update-branch 23' },
+        @{ id = 'update-other-url'; command = 'gh pr update-branch https://github.test/o/r/pull/23' },
+        @{ id = 'update-other-branch'; command = 'gh pr update-branch feature/other' }
+    )) {
+        $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "gh pr update-branch selector '$($case.command)' must not escape the current locked PR."
+    }
     $createPrPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $createPrPost.tool_name = 'Bash'; $createPrPost.tool_input = $createPr.tool_input; $createPrPost.tool_response = @{ exit_code = 0 }; $createPrPost.tool_use_id = 'gh-pr-create'
     $null = Invoke-HookCase $createPrPost
     $null = Invoke-StateCase $prFlow @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'pr-created', '-EvidenceStatus', 'passed', '-Subject', 'https://github.test/o/r/pull/1', '-ExpectedToolName', 'Bash')

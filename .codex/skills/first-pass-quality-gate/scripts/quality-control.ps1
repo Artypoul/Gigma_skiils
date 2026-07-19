@@ -489,7 +489,50 @@ function Test-IsSafeGitPushCommand {
     $branch = Get-CurrentGitBranch -Cwd $Cwd
     if (-not $branch) { return $false }
     $refspec = [string]$positionals[1]
-    $refspec -in @($branch, "HEAD:$branch", "$branch`:$branch", "refs/heads/$branch`:refs/heads/$branch")
+    $refspec -in @('HEAD', $branch, "HEAD:$branch", "HEAD:refs/heads/$branch", "$branch`:$branch", "refs/heads/$branch`:refs/heads/$branch")
+}
+
+function Test-IsSafeGhPrUpdateBranchCommand {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $match = [regex]::Match($Command, '(?is)^\s*gh(?:\.exe)?\s+pr\s+update-branch(?<tail>.*?)\s*$')
+    if (-not $match.Success) { return $false }
+    $tokens = @(Get-ShellCommandTokens $match.Groups['tail'].Value)
+    foreach ($token in $tokens) {
+        if ($token -eq '--rebase') { continue }
+        return $false
+    }
+    $true
+}
+
+function Test-IsKubectlProductionCommand {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $match = [regex]::Match($Command, '(?is)^\s*kubectl(?:\.exe)?\s+(?<tail>.+?)\s*$')
+    if (-not $match.Success) { return $false }
+    $tokens = @(Get-ShellCommandTokens $match.Groups['tail'].Value)
+    $valueOptions = @(
+        '--as', '--as-group', '--cache-dir', '--certificate-authority', '--client-certificate', '--client-key',
+        '--cluster', '--context', '--kubeconfig', '--namespace', '-n', '--request-timeout', '--server',
+        '--tls-server-name', '--token', '--user', '--v'
+    )
+    $verbIndex = -1
+    for ($index = 0; $index -lt $tokens.Count; $index++) {
+        $token = [string]$tokens[$index]
+        if ($token -in $valueOptions) { $index++; continue }
+        if ($token.StartsWith('-')) { continue }
+        $verbIndex = $index
+        break
+    }
+    if ($verbIndex -lt 0) { return $true }
+    $verb = ([string]$tokens[$verbIndex]).ToLowerInvariant()
+    $subcommand = if ($verbIndex + 1 -lt $tokens.Count) { ([string]$tokens[$verbIndex + 1]).ToLowerInvariant() } else { '' }
+    if ($verb -eq 'config') { return $subcommand -notin @('current-context', 'get-contexts', 'view') }
+    if ($verb -eq 'auth') { return $subcommand -notin @('can-i', 'whoami') }
+    $verb -notin @(
+        'api-resources', 'api-versions', 'cluster-info', 'completion', 'describe', 'diff', 'explain',
+        'get', 'help', 'logs', 'options', 'top', 'version', 'wait'
+    )
 }
 
 function Test-IsRawFileMutationCommand {
@@ -510,10 +553,10 @@ function Get-ToolClassification {
     if ($ToolName -eq 'Bash') {
         $readPattern = '(?i)^\s*(rg\b|git\s+(status|diff|log|show|rev-parse|branch\s+--show-current|remote\s+(-v|get-url)|ls-files|ls-tree|cat-file)\b|gh\s+pr\s+(view|status|checks|diff|list)\b|gh\s+(issue|repo|run|workflow)\s+(view|list|status|watch)\b|gh\s+search\b|gh\s+auth\s+status\b|gh\s+(--version|version)\b|Get-Content\b|Get-ChildItem\b|Get-Item\b|Test-Path\b|Resolve-Path\b|Get-FileHash\b|Select-String\b|where\.exe\b|codex\s+(--version|features\s+list|plugin\s+list|doctor)\b)'
         $validatePattern = '(?i)(run-contract-tests\.ps1|artifact-validator\.ps1|quick_validate\.py|validate_plugin\.py|\bpytest\b|\bPester\b|\bnpm\s+(run\s+)?test\b|\bpnpm\s+(run\s+)?test\b|\bdotnet\s+test\b|\bcargo\s+test\b|\bgit\s+diff\s+--check\b)'
-        $productionPattern = '(?i)\b(kubectl\s+(apply|delete|rollout|set|patch)|terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|deploy|release\s+promote)\b'
-        $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync)\b'
+        $productionPattern = '(?i)\b(terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|deploy|release\s+promote)\b'
+        $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync)\b'
         $writePattern = '(?i)\b(git\s+(merge|rebase|reset|clean)|npm\s+(install|uninstall)|pnpm\s+(add|remove|install)|yarn\s+(add|remove|install)|pip\s+install)\b'
-        if ((Test-IsDangerousGitPush $command) -or $command -match '(?i)^\s*git\s+(reset|clean|checkout|restore|switch)\b' -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
+        if ((Test-IsDangerousGitPush $command) -or (Test-IsKubectlProductionCommand $command) -or $command -match '(?i)^\s*git\s+(reset|clean|checkout|restore|switch)\b' -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
         if ($command -match '(?i)\bgit\s+commit\b') {
             if (-not (Test-IsSafeGitCommitCommand $command)) { return @{ kind = 'production-shell'; command = $command } }
             return @{ kind = 'commit'; command = $command }
@@ -1004,6 +1047,9 @@ function Invoke-PreToolUse {
         }
         if ($classification.kind -eq 'push' -and $command -match '(?i)^\s*git(?:\.exe)?\s+push\b' -and -not (Test-IsSafeGitPushCommand -Command $command -Cwd $workdir)) {
             $decisionBox.value = New-PreToolDeny 'Normal PR push must explicitly target the current branch with no cross-branch refspec or unsupported option.'; return
+        }
+        if ($classification.kind -eq 'push' -and $command -match '(?i)^\s*gh(?:\.exe)?\s+pr\s+update-branch\b' -and -not (Test-IsSafeGhPrUpdateBranchCommand -Command $command)) {
+            $decisionBox.value = New-PreToolDeny 'gh pr update-branch may target only the PR inferred from the current branch; explicit number, URL, branch, repo, and unsupported options are denied.'; return
         }
         if ($classification.kind -eq 'vcs-stage') {
             $files = @(Get-GitAddFiles -Command $command -Cwd $workdir)
