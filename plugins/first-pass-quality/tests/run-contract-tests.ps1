@@ -131,6 +131,9 @@ try {
     New-Item -ItemType Directory -Path $workspace -Force | Out-Null
     $env:FIRST_PASS_QUALITY_TEST_DATA = $testRoot
     Assert-True ((Get-Content -LiteralPath $control -Raw) -match '--diff-filter=ACDMRTUXB') 'Staged-index discovery must include deleted files.'
+    $skillText = Get-Content -LiteralPath (Join-Path $pluginRoot 'skills/first-pass-quality-gate/SKILL.md') -Raw
+    Assert-True ($skillText.Contains('standalone `.codex/skills` mirror')) 'Skill instructions must document standalone Codex mirror mode.'
+    Assert-True ($skillText.Contains('<absolute loaded skill directory>/scripts/quality-control.ps1')) 'Mirror mode must invoke the controller through the loaded skill absolute path.'
 
     $management = 'contract-management-bootstrap'
     Initialize-ClarifiedSession $management
@@ -162,6 +165,31 @@ try {
     $managementCall.tool_input.command = 'pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1.evil" -Action StartTask -Outcome test'
     $managementCall.tool_use_id = 'management-posix-suffix-lookalike'
     Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A suffixed POSIX controller look-alike must not receive management bypass.'
+
+    $fullySpecifiedSession = 'contract-fully-specified'
+    $fullySpecifiedStart = New-BaseEvent $fullySpecifiedSession 't0' 'SessionStart'
+    $fullySpecifiedStart.Remove('turn_id')
+    $fullySpecifiedStart.source = 'startup'
+    $null = Invoke-HookCase $fullySpecifiedStart
+    $fullySpecifiedPrompt = New-BaseEvent $fullySpecifiedSession 't1' 'UserPromptSubmit'
+    $fullySpecifiedPrompt.prompt = 'Create one local report in the workspace; done when the file exists and its validator passes.'
+    $null = Invoke-HookCase $fullySpecifiedPrompt
+    $fullySpecifiedArgs = @(
+        '-Action', 'StartTask', '-Outcome', 'Create one validated local report', '-Scope', $workspace,
+        '-Mode', 'local-change', '-Risk', 'low', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'report exists~~validator passes', '-AllowDirty'
+    )
+    $null = Invoke-StateCase $fullySpecifiedSession $fullySpecifiedArgs -ExpectFailure
+    $fullySpecifiedResult = Invoke-StateCase $fullySpecifiedSession @(
+        $fullySpecifiedArgs + @(
+            '-FullySpecified', '-SpecificationBasis',
+            'The prompt fixes the outcome, workspace scope, and two completion criteria.'
+        )
+    )
+    Assert-True ($fullySpecifiedResult.gates.clarification -eq 'passed') 'A fully specified request must be able to create a Task Lock without a redundant question.'
+    Assert-True ($fullySpecifiedResult.clarificationSatisfiedBy -eq 'fully-specified') 'The audited clarification shortcut must record how the gate was satisfied.'
+    $fullySpecifiedState = Invoke-StateCase $fullySpecifiedSession @('-Action', 'ShowStatus')
+    Assert-True (-not [string]::IsNullOrWhiteSpace([string]$fullySpecifiedState.specificationBasisHash)) 'The fully specified basis must be stored as a non-empty hash.'
 
     $session = 'contract-local'
     Initialize-ClarifiedSession $session

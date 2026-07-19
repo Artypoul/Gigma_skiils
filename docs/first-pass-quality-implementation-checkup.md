@@ -18,23 +18,24 @@
 - дублирующие feature watch/turnstile hooks запрещены для одной сессии;
 - восемь user-specific feature-hook тестов заменены прямыми тестами controller;
 - test runner сам находит `pwsh` и использует системный temp path;
-- Windows и Ubuntu CI запускают полный 187-case contract suite;
+- Windows и Ubuntu CI запускают полный 193-case contract suite;
 - изолированный smoke-test запускает реальные Codex/Claude hook commands через доступный `pwsh`, проверяет их plugin data и восемью assertions доказывает, что пользовательские pointer-файлы не меняются;
 - Windows smoke-test разрешает Git Bash относительно фактического `git.exe`, чтобы не запустить несовместимый одноимённый системный `bash.exe` на CI runner;
 - каталоговый validator проверяет hook discovery и запрещает user-specific пути в hooks/tests.
 
-Пять remote review проходов этого PR выявили 34 threads: четыре повторяли уже найденные проблемы, итого 30 уникальных дефектов, из них 11 P1. Последние проходы дополнительно нашли POSIX bootstrap deadlock, destructive/scoped Git формы, неизвестные `gh` mutations, ложное production-подтверждение при отрицании, stale delegation authorization, Playwright session/mode ошибки, nested review-comment pagination и пропуск повреждённого WebP. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
+Шесть remote review проходов этого PR выявили 38 threads: четыре повторяли уже найденные проблемы, итого 34 уникальных дефекта, из них 11 P1. Последние проходы дополнительно нашли POSIX bootstrap deadlock, destructive/scoped Git формы, неизвестные `gh` mutations, ложное production-подтверждение при отрицании, stale delegation authorization, Playwright session/mode ошибки, nested review-comment pagination, пропуск повреждённого WebP, отсутствующий SAM ONNX exporter, лишнюю обязательность `networkx`, deadlock полностью заданной задачи и нерабочий bootstrap standalone mirror. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
 
 ## Проверочная таблица реализации
 
 | Требование | Инструмент реализации | Проверка | Статус |
 | --- | --- | --- | --- |
-| Один вопрос до новой задачи | `UserPromptSubmit`, clarification state, `Stop` | До ответа пользователя tool call блокируется; один короткий вопрос разрешён | Реализовано |
+| Не спрашивать лишнее и не обходить строгие project rules | clarification state + audited `StartTask -FullySpecified -SpecificationBasis` | Неполная задача требует вопрос; полностью заданная получает Task Lock с hash основания; более строгий `AGENTS.md` сохраняет приоритет | Реализовано |
 | Не повторять вопрос для продолжения | `ConfirmContext`, `StartTask -Continuation` | Continuation сохраняет границы или создаёт новый Task Lock | Реализовано |
 | Зафиксировать первую проходку | `StartTask`: outcome, scope, write scope, mode, risk, actions, workflow/stage, criteria | Неполный Task Lock отклоняется | Реализовано |
 | Не выйти за область | OS-aware scope/write scope, source + `Move to:` target parser, reparse-component guard, dirty guard | Destination move, неверный case, symlink/junction escape и запись вне write scope блокируются | Реализовано для hooked local tools |
 | Реально применять allowed actions | safe Git/GitHub allowlists + tool-kind classification до вызова | Неавторизованный write/commit/push/PR/delegate блокируется; POSIX writes, curl/`gh api`, releases/workflows/secrets не проходят как execute/read | Реализовано |
 | Не заблокировать создание Task Lock | canonical plugin-root invocation для PowerShell и POSIX `pwsh`, management classifier без command chaining | Оба documented `StartTask` проходят до lock; look-alike, `;`, pipeline, redirection, extra subexpression и chained call отклоняются | Реализовано |
+| Разрешать controller path в standalone mirror | абсолютный путь каталога к загруженному `SKILL.md`, без plugin env и без алиасов/копий | Skill содержит отдельные PowerShell/POSIX пути и не обещает Task Lock state без предварительной hook-инициализации | Реализовано |
 | Не включить чужие изменения в commit | explicit non-glob `git add` path parser + staged-index WriteScope/ownership check | `git add .`, broad/directory/outside staging, `commit -a`/`--amend`/pathspec и чужой staged file отклоняются | Реализовано |
 | Не путать продолжение со stop | negated-stop normalization до stop classification | `don't stop` не включает stopOverride, явный `стоп` включает | Реализовано |
 | Пережить новый prompt/compaction | context reset, `ConfirmContext`, `PreCompact`, `PostCompact` | Запись блокируется до reconciliation | Реализовано |
@@ -54,14 +55,16 @@
 | Делегация не расширяет полномочия | latest-prompt turn-bound delegate action, bounded handoff, parent verification | stale/unbounded spawn и mutation до parent check отклоняются | Реализовано для normal spawn path |
 | Артефакт проверяется структурно | `artifact-validator.ps1` | Markdown/JSON/PNG/JPEG/WebP/PDF/DOCX container checks; WebP chunk/dimensions parse | Реализовано; visual QA отдельно |
 | Browser skill запускается переносимо | executable `playwright_cli.sh`, upstream `-s=name`, env-session injection | canonical/mirror mode `100755`, docs/source regression и официальный Playwright CLI contract | Реализовано |
+| Документированная SAM-команда существует | dependency-lazy `scripts/export_onnx_model.py` | `--help` работает без torch/SAM; CLI принимает checkpoint/model/output и экспортирует официальный decoder contract | Реализовано |
+| Ownership map не требует лишнюю зависимость | условная загрузка `networkx` только для communities/GraphML | `--no-communities --no-cochange` запускается без `networkx`; default community mode по-прежнему fail-closed | Реализовано |
 | Hooks действительно поставляются | `hooks/hooks.json`, `$PLUGIN_ROOT`, manifests | catalog validator проверяет структуру и переносимые пути | Реализовано |
-| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 187 positive/negative contract assertions, включая dual-shell management, move/reparse/case scope, scoped staging/commit/push, stale delegation, full WebP chunk validation, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
-| Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 11 stdlib tests для fork/base repo, top-level/nested pagination, failed-check JSON, job log, half-life, docs paths, pixel clipping и Playwright wrapper | Реализовано |
+| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 193 positive/negative contract assertions, включая dual-shell/mirror bootstrap, audited fully-specified Task Lock, move/reparse/case scope, scoped staging/commit/push, stale delegation, full WebP chunk validation, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
+| Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 14 stdlib tests для fork/base repo, top-level/nested pagination, failed-check JSON, job log, half-life, docs paths, optional `networkx`, SAM exporter, pixel clipping и Playwright wrapper | Реализовано |
 | Codex и Claude используют свои plugin roots/data | `PLUGIN_ROOT`/`PLUGIN_DATA` и `CLAUDE_PLUGIN_ROOT`/`CLAUDE_PLUGIN_DATA` | 8 isolated real-command assertions через bash + `pwsh`, включая неизменность `.codex`/`.claude` pointer-файлов | Реализовано при наличии `pwsh 7` |
 
 ## Правила первой проходки
 
-1. Для новой задачи задать Art один короткий вопрос об ожидаемом результате и дождаться ответа. Для уже уточнённого продолжения вопрос не повторять.
+1. Сначала применить ближайший `AGENTS.md`: если он требует вопрос для каждой новой задачи, задать его. Когда более строгого правила нет, спрашивать только при недостающем outcome/scope/DoneWhen или продуктовом выборе; полностью заданный prompt фиксировать через audited `-FullySpecified -SpecificationBasis`. Для продолжения вопрос не повторять.
 2. До первой мутации создать Task Lock: outcome, абсолютный scope, более узкий write scope при необходимости, out-of-scope, mode, risk, workflow/stage, allowed actions, pre-publish criteria и DoneWhen.
 3. До действия загрузить ближайшие project rules и нужные skills. Generic first-pass не подменяет локальный workflow и не ослабляет более строгий gate.
 4. После нового сообщения, resume или compaction выполнить context reconciliation. Расширение/замена задачи требует нового Task Lock с `-Continuation`.
@@ -109,5 +112,6 @@ git diff --check
 - Вне Git dirty overlap нельзя доказать автоматически; запись требует явного `-AllowDirty`.
 - Structural artifact validation не доказывает визуальное качество.
 - Hooks из обновлённого plugin начинают реально действовать только после установки/reload, новой Codex-задачи и подтверждения trust.
+- Standalone `.codex/skills` mirror может запускать controller по абсолютному пути загруженного skill, но сам по себе не активирует lifecycle hooks.
 - Claude hook-команды требуют PowerShell 7 (`pwsh`) в `PATH`; текущий smoke-test подтверждает Claude variables через bash + `pwsh` на Windows, но не является нативным macOS/Linux тестом.
 - Этот PR публикует код и tests, но сам не устанавливает plugin и не меняет глобальные hooks пользователя.

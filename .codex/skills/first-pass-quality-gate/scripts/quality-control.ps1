@@ -17,6 +17,8 @@ param(
     [string]$AllowedActions,
     [switch]$AllowDirty,
     [switch]$Continuation,
+    [switch]$FullySpecified,
+    [string]$SpecificationBasis,
     [string]$ContextDisposition,
     [string]$ContextNote,
     [string]$Gate,
@@ -216,6 +218,8 @@ function Read-State {
             if (-not $state.task.ContainsKey('prePublishWhen')) { $state.task.prePublishWhen = @($state.task.doneWhen) }
         }
         if ($state -and -not $state.ContainsKey('delegationCandidateTurnId')) { $state.delegationCandidateTurnId = $null }
+        if ($state -and -not $state.ContainsKey('clarificationSatisfiedBy')) { $state.clarificationSatisfiedBy = $null }
+        if ($state -and -not $state.ContainsKey('specificationBasisHash')) { $state.specificationBasisHash = $null }
         $state
     } catch { $null }
 }
@@ -261,6 +265,8 @@ function New-State {
         promptCount = 0
         clarificationAsked = $false
         clarified = $false
+        clarificationSatisfiedBy = $null
+        specificationBasisHash = $null
         autoReview = $false
         stopOverride = $false
         contextConfirmed = $false
@@ -815,7 +821,7 @@ function Invoke-SessionStart {
     @{
         hookSpecificOutput = @{
             hookEventName = 'SessionStart'
-            additionalContext = 'First-Pass Quality enforcement is active. Ask one clarification question for a new task, then create a Task Lock with $first-pass-quality-gate before any tool use.'
+            additionalContext = 'First-Pass Quality enforcement is active. For a fully specified new task, create an audited Task Lock with -FullySpecified and -SpecificationBasis; otherwise ask one clarification question. Create the Task Lock before any non-management tool use.'
         }
     }
 }
@@ -866,11 +872,15 @@ function Invoke-UserPromptSubmit {
         } elseif ($autoReview -and -not $state.task) {
             $state.autoReview = $true
             $state.clarified = $true
+            $state.clarificationSatisfiedBy = 'automated-review'
+            $state.specificationBasisHash = Get-Hash ([string]$HookData.prompt)
             $state.phase = 'clarified'
             $state.gates.clarification = 'passed'
             $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'Fully specified automated review detected. Create the review Task Lock now; do not ask the standard clarification question.' } }
         } elseif ($state.phase -eq 'awaiting_clarification' -and $state.clarificationAsked) {
             $state.clarified = $true
+            $state.clarificationSatisfiedBy = 'user-answer'
+            $state.specificationBasisHash = Get-Hash ([string]$HookData.prompt)
             $state.phase = 'clarified'
             $state.gates.clarification = 'passed'
             $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'Clarification answer received. Create a Task Lock with $first-pass-quality-gate before using tools.' } }
@@ -881,7 +891,7 @@ function Invoke-UserPromptSubmit {
         } elseif ($state.phase -eq 'needs_task_decision') {
             $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'Decide whether this is a continuation. For a clarified continuation create a new Task Lock with -Continuation; otherwise ask one concise clarification question.' } }
         } else {
-            $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'New task detected. Ask Art one concise clarification question and wait before using tools.' } }
+            $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'New task detected. If the prompt already fixes outcome, scope, and completion criteria with no unresolved product choice, create StartTask with -FullySpecified and -SpecificationBasis. Otherwise ask Art one concise clarification question and wait.' } }
         }
         if ($confirm) {
             $state.confirmationCandidate = $true
@@ -916,7 +926,7 @@ function Invoke-PreToolUse {
         if ($state.stopOverride) { $decisionBox.value = New-PreToolDeny 'Art requested stop; no further tool use is allowed.'; return }
         if ($classification.kind -eq 'management') { return }
         if (-not $state.task) {
-            $decisionBox.value = New-PreToolDeny 'Task Lock is missing. Ask the required clarification question, then run StartTask from $first-pass-quality-gate.'
+            $decisionBox.value = New-PreToolDeny 'Task Lock is missing. For a fully specified request use audited StartTask -FullySpecified -SpecificationBasis; otherwise ask the required clarification question, then run StartTask.'
             return
         }
         if ([string]$state.status -ne 'active') { $decisionBox.value = New-PreToolDeny "Task is already terminal ($($state.status)); start a new Task Lock before more tools."; return }
@@ -1309,8 +1319,20 @@ function Invoke-StateAction {
         if (-not $state) { throw 'Quality state is missing for this session.' }
         switch ($Action) {
             'StartTask' {
-                if (-not $state.clarified -and -not $state.autoReview -and -not ($Continuation -and $state.phase -eq 'needs_task_decision')) {
-                    throw 'Clarification gate is not passed. Ask Art one concise question and wait, or use -Continuation only for an already clarified continuation.'
+                if ($FullySpecified -and [string]::IsNullOrWhiteSpace($SpecificationBasis)) {
+                    throw 'SpecificationBasis is required with -FullySpecified so the skipped clarification is auditable.'
+                }
+                if (-not $FullySpecified -and -not [string]::IsNullOrWhiteSpace($SpecificationBasis)) {
+                    throw 'SpecificationBasis may be used only with -FullySpecified.'
+                }
+                $fullySpecifiedStart = -not $state.clarified -and [bool]$FullySpecified
+                if (-not $state.clarified -and -not $state.autoReview -and -not ($Continuation -and $state.phase -eq 'needs_task_decision') -and -not $fullySpecifiedStart) {
+                    throw 'Clarification gate is not passed. Ask Art one concise question and wait, use audited -FullySpecified -SpecificationBasis for an already complete request, or use -Continuation only for an already clarified continuation.'
+                }
+                if ($fullySpecifiedStart) {
+                    $state.clarified = $true
+                    $state.clarificationSatisfiedBy = 'fully-specified'
+                    $state.specificationBasisHash = Get-Hash (Get-NormalizedText $SpecificationBasis 700)
                 }
                 if ($Mode -notin @('report-only', 'local-change', 'pr', 'production')) { throw 'Mode must be report-only, local-change, pr, or production.' }
                 if ($Risk -notin @('low', 'medium', 'high')) { throw 'Risk must be low, medium, or high.' }
@@ -1395,7 +1417,7 @@ function Invoke-StateAction {
                     review = if ($reviewRequired) { 'pending' } else { 'not_required' }
                 }
                 $state.terminal = @{ reason = $null; limitations = @(); nextAction = $null; hardBlocker = $false }
-                $resultBox.value = @{ action = 'StartTask'; sessionIdHash = (Get-Hash $id).Substring(0, 16); task = $state.task; gates = $state.gates }
+                $resultBox.value = @{ action = 'StartTask'; sessionIdHash = (Get-Hash $id).Substring(0, 16); clarificationSatisfiedBy = $state.clarificationSatisfiedBy; task = $state.task; gates = $state.gates }
             }
             'ConfirmContext' {
                 if (-not $state.task) { throw 'Task Lock is missing.' }

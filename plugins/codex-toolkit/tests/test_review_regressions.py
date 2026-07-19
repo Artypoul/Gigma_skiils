@@ -6,6 +6,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -34,6 +35,10 @@ inspect_pr_checks = load_module(
 community_maintainers = load_module(
     "codex_toolkit_community_maintainers",
     "skills/security-ownership-map/scripts/community_maintainers.py",
+)
+run_ownership_map = load_module(
+    "codex_toolkit_run_ownership_map",
+    "skills/security-ownership-map/scripts/run_ownership_map.py",
 )
 translation_bounds = load_module(
     "codex_toolkit_translation_bounds",
@@ -199,6 +204,62 @@ class OwnershipRegressionTests(unittest.TestCase):
         self.assertTrue(targets)
         for target in targets:
             self.assertTrue((skill_root / "scripts" / target).is_file(), target)
+
+    def test_networkx_is_optional_when_graph_outputs_are_disabled(self) -> None:
+        real_import = __import__
+
+        def import_without_networkx(name, *args, **kwargs):
+            if name == "networkx" or name.startswith("networkx."):
+                raise ImportError("networkx intentionally unavailable")
+            return real_import(name, *args, **kwargs)
+
+        argv = ["run_ownership_map.py", "--no-communities", "--no-cochange"]
+        with (
+            patch.object(sys, "argv", argv),
+            patch("builtins.__import__", side_effect=import_without_networkx),
+            patch.object(
+                run_ownership_map.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=0),
+            ) as run,
+        ):
+            self.assertEqual(run_ownership_map.main(), 0)
+        command = run.call_args.args[0]
+        self.assertIn("--no-communities", command)
+        self.assertIn("--no-cochange", command)
+
+    def test_networkx_is_still_required_for_default_community_output(self) -> None:
+        real_import = __import__
+
+        def import_without_networkx(name, *args, **kwargs):
+            if name == "networkx" or name.startswith("networkx."):
+                raise ImportError("networkx intentionally unavailable")
+            return real_import(name, *args, **kwargs)
+
+        with (
+            patch.object(sys, "argv", ["run_ownership_map.py"]),
+            patch("builtins.__import__", side_effect=import_without_networkx),
+            patch.object(run_ownership_map.subprocess, "run") as run,
+        ):
+            self.assertEqual(run_ownership_map.main(), 2)
+        run.assert_not_called()
+
+
+class SegmentAnythingRegressionTests(unittest.TestCase):
+    def test_documented_onnx_exporter_exists_and_help_is_dependency_free(self) -> None:
+        skill_root = PLUGIN_ROOT / "skills/segment-anything-model"
+        script = skill_root / "scripts/export_onnx_model.py"
+        self.assertTrue(script.is_file())
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--checkpoint", result.stdout)
+        self.assertIn("--model-type", result.stdout)
+        self.assertIn("--output", result.stdout)
 
 
 class PixelTranslationRegressionTests(unittest.TestCase):

@@ -15,19 +15,37 @@ Hook execution requires PowerShell 7 (`pwsh`) on `PATH`. If the runtime does not
 
 Run every controller action as its own one-line shell tool call. The hook recognizes the canonical root expression shown below without allowing chained commands.
 
-When the shell tool is POSIX Bash, invoke the same action through `pwsh` and the real plugin root. Use `CLAUDE_PLUGIN_ROOT` instead of `PLUGIN_ROOT` in a Claude plugin runtime:
+In a plugin runtime, use the real plugin root. When the shell tool is POSIX Bash, invoke the same action through `pwsh`. Use `CLAUDE_PLUGIN_ROOT` instead of `PLUGIN_ROOT` in a Claude plugin runtime:
 
 ```bash
 pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
 ```
 
+In a standalone `.codex/skills` mirror there is no plugin-root environment variable. Resolve the absolute directory containing this loaded `SKILL.md` from the skill catalog, and invoke its controller directly. Replace the placeholder with that existing directory; do not create an alias, symlink, copy, or alternate route:
+
+```powershell
+& "<absolute loaded skill directory>/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
+```
+
+```bash
+pwsh -NoProfile -File "<absolute loaded skill directory>/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
+```
+
+The absolute path above resolves the mirror controller when compatible hooks have already initialized task state. A standalone mirror does not activate lifecycle hooks by itself; without those hooks, follow the protocol manually and report mechanical enforcement as unavailable instead of claiming that Task Lock state or pre-tool blocking is active.
+
 ## First-Pass Protocol
 
-1. Ask Art one concise clarification question when the task is new and not already specified. If the message is an answer or continuation, continue.
+1. Ask Art one concise clarification question when a new task is missing the expected outcome, absolute scope, completion criteria, or a material product choice. If all of those are already explicit and higher-priority project rules permit skipping the question, use `-FullySpecified -SpecificationBasis "<why the current prompt is complete>"`; the controller stores only its hash for audit. If the message is an answer or continuation, continue.
 2. Create a Task Lock before mutation. Use `-AllowDirty` only when Art explicitly authorized edits in a non-Git scope or an intentional dirty overlap:
 
 ```powershell
 & "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
+```
+
+For an already complete new request, add the audited shortcut to that same command:
+
+```powershell
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -FullySpecified -SpecificationBasis "Current prompt fixes outcome, scope, and DoneWhen with no unresolved product choice." -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
 ```
 
 3. Confirm context after every new user message, resume, or compaction:
