@@ -20,3 +20,17 @@ jobs:
 
       - name: Validate plugins and Codex mirror
         run: python validate_plugin.py
+
+  first-pass-quality-contract:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run first-pass quality contract suite
+        shell: pwsh
+        run: ./plugins/first-pass-quality/tests/run-contract-tests.ps1
+
+      - name: Smoke-test Codex and Claude hook commands
+        shell: pwsh
+        run: ./plugins/first-pass-quality/tests/run-hook-config-smoke.ps1

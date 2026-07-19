@@ -1,0 +1,4 @@
+interface:
+  display_name: "First-Pass Quality Gate"
+  short_description: "Enforce fresh evidence and safe completion"
+  default_prompt: "Use $first-pass-quality-gate to lock scope, validate fresh evidence, and report an honest status."

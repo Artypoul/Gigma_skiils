@@ -154,6 +154,59 @@ def validate_plugin_manifests(plugin_path: Path) -> None:
     require_string(claude, "description", claude_manifest)
 
 
+def validate_plugin_hooks(plugin_path: Path) -> None:
+    """Validate hook discovery and reject user-specific paths in runtime/tests."""
+
+    codex_manifest = plugin_path / ".codex-plugin" / "plugin.json"
+    manifest = load_json(codex_manifest)
+    interface = manifest.get("interface")
+    capabilities = interface.get("capabilities", []) if isinstance(interface, dict) else []
+    declares_hooks = any(str(value).lower() == "hooks" for value in capabilities)
+
+    hooks_dir = plugin_path / "hooks"
+    hooks_path = hooks_dir / "hooks.json"
+    if declares_hooks and not hooks_path.is_file():
+        fail(f"{rel(codex_manifest)} declares hooks but {rel(hooks_path)} is missing")
+    if hooks_dir.is_dir() and not hooks_path.is_file():
+        fail(f"{rel(hooks_dir)} exists without hooks.json")
+
+    if hooks_path.is_file():
+        config = load_json(hooks_path)
+        event_map = config.get("hooks")
+        if not isinstance(event_map, dict) or not event_map:
+            fail(f"{rel(hooks_path)} missing non-empty hooks object")
+        else:
+            for event, bindings in event_map.items():
+                if not isinstance(bindings, list) or not bindings:
+                    fail(f"{rel(hooks_path)} event {event!r} must contain hook bindings")
+                    continue
+                for binding in bindings:
+                    commands = binding.get("hooks") if isinstance(binding, dict) else None
+                    if not isinstance(commands, list) or not commands:
+                        fail(f"{rel(hooks_path)} event {event!r} has an empty binding")
+                        continue
+                    for command in commands:
+                        if not isinstance(command, dict) or command.get("type") != "command":
+                            fail(f"{rel(hooks_path)} event {event!r} must use command hooks")
+                            continue
+                        if not isinstance(command.get("command"), str) or not command["command"].strip():
+                            fail(f"{rel(hooks_path)} event {event!r} missing command")
+
+    user_path = re.compile(r"(?i)(?:[A-Z]:\\Users\\[^\\/\s]+|/Users/[^/\s]+|/home/[^/\s]+)")
+    for root in (hooks_dir, plugin_path / "tests"):
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in {".json", ".md", ".ps1", ".py", ".sh", ".yaml", ".yml"}:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if user_path.search(text):
+                fail(f"{rel(path)} contains a user-specific absolute path")
+
+
 FRONTMATTER_RE = re.compile(r"\A---\r?\n(?P<body>.*?)\r?\n---\r?\n", re.DOTALL)
 FIELD_RE = re.compile(r"^(?P<key>[A-Za-z_][A-Za-z0-9_-]*):\s*(?P<value>.*)$")
 
@@ -305,6 +358,7 @@ def main() -> int:
     validate_marketplaces(plugin_names)
     for plugin_path in plugin_paths:
         validate_plugin_manifests(plugin_path)
+        validate_plugin_hooks(plugin_path)
     validate_skills(plugin_paths)
     validate_codex_mirror(plugin_paths)
     validate_glaim_guardrails()

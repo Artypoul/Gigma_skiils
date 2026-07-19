@@ -1,0 +1,114 @@
+---
+name: first-pass-quality-gate
+description: Use for Codex or Claude agent tasks that involve tools, multiple steps, code changes, documents, artifacts, PRs, production data, external writes, delegation, or any user-visible deliverable. It turns the first pass into an explicit Task Lock with gates for context, scope, risk, evidence, review, production authorization, and final status.
+---
+
+# First-Pass Quality Gate
+
+## Required Use
+
+Use this skill before the first tool call for any non-trivial task: file inspection, code change, artifact creation, PR work, production/external mutation, connector write, browser automation, document generation, or multi-step analysis.
+
+Skip only for a direct answer that needs no tools, no current state, and no persistent artifact.
+
+Hook execution requires PowerShell 7 (`pwsh`) on `PATH`. If the runtime does not provide it, report mechanical enforcement as unavailable and do not claim that Task Lock hooks are active.
+
+## First-Pass Protocol
+
+1. Ask Art one concise clarification question when the task is new and not already specified. If the message is an answer or continuation, continue.
+2. Create a Task Lock before mutation. Use `-AllowDirty` only when Art explicitly authorized edits in a non-Git scope or an intentional dirty overlap:
+
+```powershell
+$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
+& (Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
+```
+
+3. Confirm context after every new user message, resume, or compaction:
+
+```powershell
+$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
+& (Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action ConfirmContext -ContextDisposition unchanged -ContextNote "<why the Task Lock still matches>"
+```
+
+If the message extends or replaces the requested outcome, create a fresh Task Lock with `-Continuation` instead of confirming unchanged context.
+
+4. Run the smallest real validators that prove each DoneWhen criterion. Every passed item must use a successful non-management tool result produced after the latest write and name that tool exactly:
+
+```powershell
+$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
+& (Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action AddEvidence -CriterionId C1 -Validator "contract-test" -EvidenceStatus passed -Subject "<file, URL, command, or artifact>" -ExpectedToolName Bash
+```
+
+5. For local/report work, pass acceptance then selfReview. For PR work, record separate `PrePublishWhen` criteria, pass publish then selfReview before `commit`/`push`/PR operations, and pass final acceptance plus required review before `ready`. A later content/external write resets these gates; VCS bookkeeping does not, while every new push reopens required review.
+6. Finish with an explicit terminal status: ready, partial, blocked, or unknown. Do not present active work as complete.
+
+## Modes
+
+- `report-only`: read, inspect, and report. No edits or external writes.
+- `local-change`: local file edits and local validation.
+- `pr`: local edits plus normal branch commit/push and PR create/edit/comment/review when Art asked for PR work. Use `PrePublishWhen`; merge and force-push are not included.
+- `production`: any live/external/entity mutation. Requires Entity Lock and explicit user confirmation.
+
+## Production Rule
+
+Never do production, merge, deploy, force-push, money, account, or non-PR external-entity mutations through raw shell commands. Normal PR lifecycle operations are dev workflow in `pr` mode; merge/deploy remain production. Register the exact typed production tool input and stable ID fields, then wait for Art's confirmation phrase in the latest prompt, for example:
+
+```text
+Подтверждаю выполнение в production.
+```
+
+Then run:
+
+```powershell
+$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
+$qualityController = Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
+& $qualityController -Action SetEntityLock -EntityType "<type>" -StableId "<stable id>" -StableIdField "<input.id.path>" -ProjectId "<project>" -ProjectIdField "<input.project.path>" -Environment production -Intent write -WrapperToolName "<mcp_or_app_tool>" -ExpectedToolInputJson '<exact JSON arguments>' -ExpectedBeforeHash "<before>" -ChangeHash "<change>"
+& $qualityController -Action ConfirmContext -ContextDisposition unchanged -ContextNote "Exact entity and change remain unchanged."
+& $qualityController -Action AuthorizeProduction
+```
+
+Authorization is one-shot. A changed input, different stable ID, second call, failed/unknown outcome, or later user prompt requires a new lock/confirmation cycle; never auto-retry.
+
+## Delegation Rule
+
+Delegation requires explicit user authorization and `delegate` in `AllowedActions`. After the subagent returns, run an independent parent read/test, then record verification before any mutation or `ready` status:
+
+```powershell
+$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
+$qualityController = Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
+& $qualityController -Action AuthorizeDelegation -DelegationOutcome "<bounded outcome>" -DelegationScope "<bounded scope>"
+& $qualityController -Action VerifyDelegation -DelegationEvidence "<what the parent independently checked>"
+```
+
+## Workflow Compatibility
+
+This skill is an enforcement envelope, not a replacement for project-local skills. Apply precedence as: user/safety authority, nearest project rules and project skills, selected workflow skill, then generic first-pass defaults. Never weaken a stricter gate.
+
+For `$feature`, use phase Task Locks:
+
+- `planning`: repository `Scope`, plan-only `WriteScope`, `Workflow feature`, `WorkflowStage planning`, pre-publish plan checks, and final evidence for the published planning PR/review.
+- `implementation`: a fresh `StartTask -Continuation`, approved implementation `WriteScope`, `WorkflowStage implementation`, tests/diff checks before publication, and final evidence/review for the current code diff.
+
+One global clarification answer satisfies `$feature` too; do not ask the same question twice. A report that a PR was merged never authorizes deploy by itself.
+
+The quality controller is the canonical `$feature` enforcement path when this plugin is active: a successful push reopens the required review gate, and `ready` remains blocked until the current review passes. Do not register a second watch/turnstile pair for the same session; legacy global feature hooks are optional compatibility helpers, not a prerequisite for this plugin.
+
+## Status Commands
+
+```powershell
+$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
+$qualityController = Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
+& $qualityController -Action SetGate -Gate publish -GateStatus passed
+& $qualityController -Action SetGate -Gate selfReview -GateStatus passed
+& $qualityController -Action SetGate -Gate acceptance -GateStatus passed
+& $qualityController -Action SetStatus -FinalStatus ready
+& $qualityController -Action ShowStatus
+```
+
+For partial, blocked, or unknown, include `-Reason`, at least one `-Limitations` item, and `-NextAction`. After a failed write, inspect current state and run `AcknowledgeWriteRecovery` before another mutation.
+
+## References
+
+- `references/task-lock-schema.md`: field contract for Task Lock and terminal state.
+- `references/risk-and-evidence.md`: how to choose risk, validators, and evidence quality.
+- `references/tool-enforcement-matrix.md`: which hooks and scripts enforce each improvement.

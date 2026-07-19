@@ -1,0 +1,36 @@
+{
+  "name": "first-pass-quality",
+  "version": "0.3.0+codex.20260719183504",
+  "description": "Enforces task scope, fresh evidence, one-shot production identity, and honest completion in Codex.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-quality",
+    "task-lock",
+    "evidence",
+    "hooks",
+    "codex",
+    "feature-workflow",
+    "pull-request",
+    "production-safety"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "First-Pass Quality",
+    "shortDescription": "Task locks, evidence gates, and production-safe completion for Codex.",
+    "longDescription": "First-Pass Quality adds a Codex skill and lifecycle hooks: clarify once, create phase-aware Task Locks, reconcile new input, separate pre-publish PR evidence from final acceptance, preserve project workflow skills, bind production calls to exact typed inputs with one-shot confirmation, verify delegated work in the parent, and prevent false-ready answers.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": [
+      "skills",
+      "hooks",
+      "local-state",
+      "quality-gates"
+    ],
+    "defaultPrompt": [
+      "Use $first-pass-quality-gate to lock scope, verify fresh evidence, and report an honest status."
+    ]
+  }
+}

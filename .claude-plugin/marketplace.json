@@ -51,6 +51,11 @@
       "name": "codex-toolkit",
       "source": "./plugins/codex-toolkit",
       "description": "General-purpose agent skills for browser and Electron automation, deterministic image operations, screenshots, GitHub review and CI fixes, security review and threat modeling, provisioning safety, admin UX refinement, and doc-first feature delivery."
+    },
+    {
+      "name": "first-pass-quality",
+      "source": "./plugins/first-pass-quality",
+      "description": "Phase-aware Task Locks, fresh evidence gates, project-workflow compatibility, bounded delegation, one-shot production authorization, and honest completion. Hooks require pwsh 7 on PATH."
     }
   ]
 }

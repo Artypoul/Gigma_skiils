@@ -111,6 +111,18 @@
         "authentication": "ON_USE"
       },
       "category": "Productivity"
+    },
+    {
+      "name": "first-pass-quality",
+      "source": {
+        "source": "local",
+        "path": "./plugins/first-pass-quality"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
     }
   ]
 }
