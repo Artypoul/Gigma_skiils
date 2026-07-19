@@ -46,6 +46,11 @@
       "name": "frontend-workflow",
       "source": "./plugins/frontend-workflow",
       "description": "Generic frontend engineering skills for planning before code, RTK Query review, affordance and hidden-regression audits, and safe PR finalization across React and TypeScript web apps."
+    },
+    {
+      "name": "codex-toolkit",
+      "source": "./plugins/codex-toolkit",
+      "description": "General-purpose agent skills for browser and Electron automation, deterministic image operations, screenshots, GitHub review and CI fixes, security review and threat modeling, provisioning safety, admin UX refinement, and doc-first feature delivery."
     }
   ]
 }

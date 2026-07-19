@@ -1,0 +1,4 @@
+interface:
+  display_name: "Provisioning Flows"
+  short_description: "Создание сущностей и выдача доступа"
+  default_prompt: "Use $provisioning-flows to design a safe get-or-create flow for an external entity."
