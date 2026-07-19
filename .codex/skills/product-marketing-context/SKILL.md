@@ -1,6 +1,6 @@
 ---
 name: product-marketing-context
-description: "Create a reusable product marketing context file covering product, audience, problem, JTBD, alternatives, value proposition, positioning, proof, objections, and voice of customer. Use this skill whenever the user asks to define the product context, ICP, audience, positioning foundation, website brief, or inputs before writing site copy. Triggers on ЦА, ICP, JTBD, продуктовый контекст, позиционирование, бриф сайта, вводные, кому продаём, проблема клиента, alternatives, product marketing. Also triggers before website structure or copy work when the context is missing."
+description: "Create a reusable product marketing context file covering product, market, audience, problem, JTBD, buying triggers, alternatives, value proposition, sales angle, positioning, proof, objections, and voice of customer. Use this skill whenever the user asks to define the product context, ICP, market, audience, positioning foundation, sales context, website brief, or inputs before writing site copy. Triggers on ЦА, ICP, JTBD, продуктовый контекст, позиционирование, бриф сайта, вводные, кому продаём, что продаём, почему купят, проблема клиента, market, demand, alternatives, product marketing, marketing, sales."
 category: strategy-and-discovery
 catalog_summary: "Reusable product, audience, problem, alternatives, proof, and messaging context"
 display_order: 2
@@ -11,7 +11,7 @@ metadata:
 ---
 # Product Marketing Context
 
-Создай базовый контекст, на который будут опираться структура сайта, SEO и тексты.
+Создай базовый продуктово-коммерческий контекст, на который будут опираться структура сайта, SEO и тексты.
 
 ---
 
@@ -20,6 +20,7 @@ metadata:
 - Нужно собрать вводные перед сайтом, лендингом или текстами.
 - Пользователь просит определить ЦА, ICP, сегменты, боли, JTBD, альтернативы.
 - Нужно понять, что писать в hero и почему аудитории это важно.
+- Нужно понять, кому мы продаём, почему человек купит, и какой коммерческий угол безопасно обещать.
 - Сайт уже есть, но тексты звучат общо и непонятно.
 - Нужно создать файл `.agents/product-marketing.md` или `product-marketing-context.md`.
 
@@ -37,12 +38,14 @@ metadata:
 Желательно получить:
 
 - описание продукта или услуги;
+- категория и рынок, если известны;
 - аудитория и сегменты;
 - главная проблема;
+- buying trigger / событие покупки;
 - текущие альтернативы;
 - конкуренты;
 - proof: кейсы, цифры, отзывы, логотипы, опыт;
-- бизнес-модель и CTA;
+- бизнес-модель, коммерческая цель и CTA;
 - география и язык;
 - ограничения по бренду, регуляторике, продукту.
 
@@ -59,6 +62,12 @@ metadata:
 ### 2. Audience
 
 Главный сегмент, вторичные сегменты, покупательская роль, контекст использования.
+
+Отдельно различай:
+
+- кто пользуется;
+- кто платит;
+- кто одобряет покупку.
 
 ### 3. Trigger event
 
@@ -94,13 +103,15 @@ Who → Why → What before → How → What after → Alternatives.
 
 1. Проверь, есть ли существующий контекст в проекте.
 2. Раздели аудитории на сегменты. Не смешивай всех в одну ЦА.
-3. Для главного сегмента опиши ситуацию, триггер и JTBD.
-4. Назови альтернативы и слабости текущего способа.
-5. Сформулируй ценность через «до → как → после».
-6. Запиши proof points отдельно от claims.
-7. Составь message inventory для сайта.
-8. Отметь рисковые гипотезы, которые нужно проверить интервью, аналитикой или продажами.
-9. Сохрани результат как `product-marketing.md` или предложи вставить в `.agents/product-marketing.md`.
+3. Для главного сегмента опиши ситуацию, buying trigger и JTBD.
+4. Раздели пользователя, покупателя и согласующего, если это разные роли.
+5. Назови альтернативы и слабости текущего способа.
+6. Сформулируй ценность через «до → как → после».
+7. Отдели safe commercial claims от risky claims: обещать можно только то, что либо доказано, либо явно помечено как гипотеза.
+8. Запиши proof points отдельно от claims.
+9. Составь message inventory для сайта и продаж.
+10. Отметь рисковые гипотезы, которые нужно проверить интервью, аналитикой или продажами.
+11. Сохрани результат как `product-marketing.md` или предложи вставить в `.agents/product-marketing.md`.
 
 ---
 
@@ -110,6 +121,7 @@ Who → Why → What before → How → What after → Alternatives.
 - Описание продукта вместо описания ценности для пользователя.
 - «Уникальность: качество и сервис» без доказательств.
 - Игнорирование альтернативы «ничего не менять».
+- Смешивание маркетинга, продаж и продукта в один размытый тезис.
 - Обещания без proof.
 - Смешивание желаний бизнеса и языка клиента.
 - Начало с features, а не с проблемы и результата.

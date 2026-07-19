@@ -1,6 +1,6 @@
 ---
 name: meaning-positioning
-description: "Find the core meanings, positioning, offer, message hierarchy, objections, proof, and website narrative for a product or service. Use this skill whenever the user asks for смыслы, позиционирование, оффер, УТП, ценностное предложение, message map, hero message, brand narrative, or why customers should choose us. Triggers on смыслы сайта, оффер, УТП, value proposition, positioning, JTBD, why us, key message, narrative, message hierarchy. Also triggers when copy sounds generic and needs sharper strategic meaning before rewriting."
+description: "Find the core meanings, positioning, offer, sales angle, message hierarchy, objections, proof, and website narrative for a product or service. Use this skill whenever the user asks for смыслы, позиционирование, оффер, УТП, ценностное предложение, продающий лендинг, упаковка, message map, hero message, brand narrative, how to sell it on the site, or why customers should choose us. Triggers on смыслы сайта, оффер, УТП, value proposition, positioning, JTBD, why us, key message, narrative, message hierarchy, маркетинг, продажи, как продавать, продающий текст. Also triggers when copy sounds generic and needs sharper strategic meaning before rewriting."
 category: strategy-and-discovery
 catalog_summary: "Meanings, offer, positioning, message hierarchy, objections, proof"
 display_order: 3
@@ -11,7 +11,7 @@ metadata:
 ---
 # Meaning Positioning
 
-Найди смысловую основу сайта: что говорим, кому, почему это важно, чем отличаемся и почему нам верить.
+Найди смысловую основу сайта: что говорим, кому, почему это важно, чем отличаемся, почему нам верить и какой коммерческий угол действительно поможет продавать.
 
 ---
 
@@ -19,6 +19,7 @@ metadata:
 
 - Пользователь просит «найти смыслы», «сделать оффер», «сформулировать УТП».
 - Нужно понять, какой hero должен быть на сайте.
+- Нужно понять, как продавать продукт на лендинге без пустых обещаний.
 - Продукт есть, но текст звучит как у всех.
 - Нужно сделать message hierarchy для сайта или лендинга.
 - Нужно снять objections и объяснить отличие от альтернатив.
@@ -40,6 +41,7 @@ metadata:
 - текущие альтернативы;
 - отличие от альтернатив;
 - доказательства;
+- какие claims нельзя обещать без подтверждения;
 - желаемый CTA;
 - ограничения по тону.
 
@@ -73,6 +75,12 @@ metadata:
 
 Почему claim можно считать правдой: кейсы, цифры, процесс, демонстрации, отзывы, примеры.
 
+Отделяй:
+
+- safe commercial claim;
+- sharp but still defensible claim;
+- risky claim that needs explicit validation.
+
 ---
 
 ## Workflow
@@ -80,12 +88,13 @@ metadata:
 1. Определи главный сегмент и его конкретную ситуацию.
 2. Сформулируй JTBD: когда, хочу, чтобы.
 3. Назови альтернативы и то, почему они недостаточны.
-4. Составь список возможных claims.
+4. Составь список возможных claims и sales angles.
 5. Для каждого claim найди proof или пометь как гипотезу.
 6. Выбери главный message: самый важный, дифференцирующий и доказуемый.
 7. Построй hierarchy: hero → supporting claims → benefits → proof → objections → CTA.
 8. Создай 3 варианта позиционирования: safe, sharp, bold.
-9. Рекомендую один вариант и объясни почему.
+9. Для каждого варианта пометь уровень коммерческого риска.
+10. Рекомендую один вариант и объясни почему.
 
 ---
 
@@ -96,6 +105,7 @@ metadata:
 - Текст говорит о компании, а не о прогрессе клиента.
 - Главное сообщение не отличает продукт от альтернатив.
 - Hero обещает больше, чем можно доказать.
+- Hero старается быть продающим, но продаёт выдуманный outcome.
 - У разных блоков страницы разная логика и нет единой narrative line.
 - Слишком много смыслов, нет приоритета.
 

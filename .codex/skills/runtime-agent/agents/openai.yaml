@@ -1,0 +1,4 @@
+interface:
+  display_name: "GLAIM: runtime agent"
+  short_description: "Agent courier claim and materials protocol"
+  default_prompt: "Use $runtime-agent to implement or debug a GLAIM runtime agent claim loop with managed materials."
