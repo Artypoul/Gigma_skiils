@@ -3,7 +3,9 @@
 | Improvement target | Instrumentation | Enforced by |
 | --- | --- | --- |
 | No tool use before task boundary | Clarification gate and Task Lock | `UserPromptSubmit`, `PreToolUse`, `Stop`, `StartTask` |
-| First pass stays on scope | Absolute `scopePaths`, enforced `allowedActions`, parsed patch targets, fail-closed non-Git dirty policy | `PreToolUse`, `PermissionRequest`, `PostToolUse` |
+| First pass stays on scope | OS-aware absolute `scopePaths`, enforced `allowedActions`, parsed source/move targets, fail-closed non-Git dirty policy | `PreToolUse`, `PermissionRequest`, `PostToolUse` |
+| Task Lock bootstrap cannot deadlock | Canonical one-line controller invocation; chained commands and extra subexpressions rejected | `Test-IsQualityControlCommand`, `PreToolUse` |
+| Shell/API mutations do not masquerade as reads | POSIX/PowerShell filesystem patterns, curl data options, and `gh api` method/field rules | `Get-ToolClassification`, `PreToolUse` |
 | Project skills remain authoritative | Workflow id/stage, phase Task Locks, narrower write scope, explicit precedence | `StartTask`, `PreToolUse`, skill instructions |
 | New user input is reconciled | Context reset plus recorded disposition/note; changed scope requires a fresh Task Lock | `UserPromptSubmit`, `ConfirmContext`, `PreToolUse` |
 | Compaction does not erase intent | State snapshot and restore message | `PreCompact`, `PostCompact` |

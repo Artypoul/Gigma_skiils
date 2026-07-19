@@ -65,16 +65,6 @@ def run_gh_command(args: Sequence[str], cwd: Path) -> GhResult:
     return GhResult(process.returncode, process.stdout, process.stderr)
 
 
-def run_gh_command_raw(args: Sequence[str], cwd: Path) -> tuple[int, bytes, str]:
-    process = subprocess.run(
-        ["gh", *args],
-        cwd=cwd,
-        capture_output=True,
-    )
-    stderr = process.stderr.decode(errors="replace")
-    return process.returncode, process.stdout, stderr
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -185,6 +175,9 @@ def fetch_checks(pr_value: str, repo_root: Path) -> list[dict[str, Any]] | None:
         ["pr", "checks", pr_value, "--json", ",".join(primary_fields)],
         cwd=repo_root,
     )
+    data = parse_checks_json(result.stdout)
+    if data is not None:
+        return data
     if result.returncode != 0:
         message = "\n".join(filter(None, [result.stderr, result.stdout])).strip()
         available_fields = parse_available_fields(message)
@@ -206,6 +199,9 @@ def fetch_checks(pr_value: str, repo_root: Path) -> list[dict[str, Any]] | None:
                 ["pr", "checks", pr_value, "--json", ",".join(selected_fields)],
                 cwd=repo_root,
             )
+            data = parse_checks_json(result.stdout)
+            if data is not None:
+                return data
             if result.returncode != 0:
                 message = (result.stderr or result.stdout or "").strip()
                 print(message or "Error: gh pr checks failed.", file=sys.stderr)
@@ -213,13 +209,18 @@ def fetch_checks(pr_value: str, repo_root: Path) -> list[dict[str, Any]] | None:
         else:
             print(message or "Error: gh pr checks failed.", file=sys.stderr)
             return None
-    try:
-        data = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError:
-        print("Error: unable to parse checks JSON.", file=sys.stderr)
+    print("Error: unable to parse checks JSON.", file=sys.stderr)
+    return None
+
+
+def parse_checks_json(stdout: str) -> list[dict[str, Any]] | None:
+    if not stdout.strip():
         return None
-    if not isinstance(data, list):
-        print("Error: unexpected checks JSON shape.", file=sys.stderr)
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
         return None
     return data
 
@@ -335,24 +336,20 @@ def fetch_check_log(
     job_id: str | None,
     repo_root: Path,
 ) -> tuple[str, str, str]:
+    job_error = ""
+    if job_id:
+        job_log, job_error = fetch_job_log(run_id, job_id, repo_root)
+        if not job_error:
+            return job_log, "", "ok"
+
     log_text, log_error = fetch_run_log(run_id, repo_root)
     if not log_error:
         return log_text, "", "ok"
 
-    if is_log_pending_message(log_error) and job_id:
-        job_log, job_error = fetch_job_log(job_id, repo_root)
-        if job_log:
-            return job_log, "", "ok"
-        if job_error and is_log_pending_message(job_error):
-            return "", job_error, "pending"
-        if job_error:
-            return "", job_error, "error"
-        return "", log_error, "pending"
-
-    if is_log_pending_message(log_error):
-        return "", log_error, "pending"
-
-    return "", log_error, "error"
+    combined_error = "; ".join(error for error in (job_error, log_error) if error)
+    if any(is_log_pending_message(error) for error in (job_error, log_error) if error):
+        return "", combined_error, "pending"
+    return "", combined_error or "Unable to fetch check logs.", "error"
 
 
 def fetch_run_log(run_id: str, repo_root: Path) -> tuple[str, str]:
@@ -363,32 +360,15 @@ def fetch_run_log(run_id: str, repo_root: Path) -> tuple[str, str]:
     return result.stdout, ""
 
 
-def fetch_job_log(job_id: str, repo_root: Path) -> tuple[str, str]:
-    repo_slug = fetch_repo_slug(repo_root)
-    if not repo_slug:
-        return "", "Error: unable to resolve repository name for job logs."
-    endpoint = f"/repos/{repo_slug}/actions/jobs/{job_id}/logs"
-    returncode, stdout_bytes, stderr = run_gh_command_raw(["api", endpoint], cwd=repo_root)
-    if returncode != 0:
-        message = (stderr or stdout_bytes.decode(errors="replace")).strip()
-        return "", message or "gh api job logs failed"
-    if is_zip_payload(stdout_bytes):
-        return "", "Job logs returned a zip archive; unable to parse."
-    return stdout_bytes.decode(errors="replace"), ""
-
-
-def fetch_repo_slug(repo_root: Path) -> str | None:
-    result = run_gh_command(["repo", "view", "--json", "nameWithOwner"], cwd=repo_root)
+def fetch_job_log(run_id: str, job_id: str, repo_root: Path) -> tuple[str, str]:
+    result = run_gh_command(
+        ["run", "view", run_id, "--job", job_id, "--log"],
+        cwd=repo_root,
+    )
     if result.returncode != 0:
-        return None
-    try:
-        data = json.loads(result.stdout or "{}")
-    except json.JSONDecodeError:
-        return None
-    name_with_owner = data.get("nameWithOwner")
-    if not name_with_owner:
-        return None
-    return str(name_with_owner)
+        error = (result.stderr or result.stdout or "").strip()
+        return "", error or "gh run view --job failed"
+    return result.stdout, ""
 
 
 def normalize_field(value: Any) -> str:
@@ -418,10 +398,6 @@ def parse_available_fields(message: str) -> list[str]:
 def is_log_pending_message(message: str) -> bool:
     lowered = message.lower()
     return any(marker in lowered for marker in PENDING_LOG_MARKERS)
-
-
-def is_zip_payload(payload: bytes) -> bool:
-    return payload.startswith(b"PK")
 
 
 def extract_failure_snippet(log_text: str, max_lines: int, context: int) -> str:

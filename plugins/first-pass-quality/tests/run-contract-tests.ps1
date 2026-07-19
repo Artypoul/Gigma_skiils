@@ -111,6 +111,23 @@ try {
     New-Item -ItemType Directory -Path $workspace -Force | Out-Null
     $env:FIRST_PASS_QUALITY_TEST_DATA = $testRoot
 
+    $management = 'contract-management-bootstrap'
+    Initialize-ClarifiedSession $management
+    $managementCall = New-BaseEvent $management 't2' 'PreToolUse'
+    $managementCall.tool_name = 'Bash'
+    $managementCall.tool_input = @{
+        command = '& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
+        workdir = $workspace
+    }
+    $managementCall.tool_use_id = 'management-start-task'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'The documented one-line StartTask command must bypass the missing-lock gate as management.'
+    $managementCall.tool_input.command += '; Remove-Item outside.txt'
+    $managementCall.tool_use_id = 'management-chained-command'
+    Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A chained command must not inherit management bypass.'
+    $managementCall.tool_input.command = '& "skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
+    $managementCall.tool_use_id = 'management-relative-lookalike'
+    Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A relative look-alike controller path must not receive management bypass.'
+
     $session = 'contract-local'
     Initialize-ClarifiedSession $session
     $startTask = Invoke-StateCase $session @(
@@ -136,6 +153,70 @@ try {
     $claudeOutside = New-BaseEvent $session 't2' 'PreToolUse'
     $claudeOutside.tool_name = 'Edit'; $claudeOutside.tool_input = @{ file_path = (Join-Path $testRoot 'outside.txt'); old_string = 'old'; new_string = 'new' }; $claudeOutside.tool_use_id = 'claude-edit-outside'
     Assert-True ((Invoke-HookCase $claudeOutside).hookSpecificOutput.permissionDecision -eq 'deny') 'Claude Edit must not escape the locked write scope.'
+
+    $moveGuard = 'contract-move-scope'
+    Initialize-ClarifiedSession $moveGuard
+    $docsScope = Join-Path $workspace 'docs'
+    New-Item -ItemType Directory -Path $docsScope -Force | Out-Null
+    $null = Invoke-StateCase $moveGuard @(
+        '-Action', 'StartTask', '-Outcome', 'Move only inside docs', '-Scope', $workspace, '-WriteScope', $docsScope,
+        '-Mode', 'local-change', '-Risk', 'medium', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'plan moved', '-AllowDirty'
+    )
+    $moveOutside = New-BaseEvent $moveGuard 't2' 'PreToolUse'
+    $moveOutside.tool_name = 'apply_patch'
+    $moveOutsidePatch = @'
+*** Begin Patch
+*** Update File: docs/plan.md
+*** Move to: outside.md
+@@
+-old
++new
+*** End Patch
+'@
+    $moveOutside.tool_input = @{ patch = $moveOutsidePatch; workdir = $workspace }
+    $moveOutside.tool_use_id = 'move-outside-write-scope'
+    Assert-True ((Invoke-HookCase $moveOutside).hookSpecificOutput.permissionDecision -eq 'deny') 'apply_patch Move to destinations must remain inside WriteScope.'
+    $moveInside = New-BaseEvent $moveGuard 't2' 'PreToolUse'
+    $moveInside.tool_name = 'apply_patch'
+    $moveInsidePatch = @'
+*** Begin Patch
+*** Update File: docs/plan.md
+*** Move to: docs/renamed.md
+@@
+-old
++new
+*** End Patch
+'@
+    $moveInside.tool_input = @{ patch = $moveInsidePatch; workdir = $workspace }
+    $moveInside.tool_use_id = 'move-inside-write-scope'
+    Assert-True ($null -eq (Invoke-HookCase $moveInside)) 'An in-scope apply_patch move must remain allowed.'
+
+    $caseGuard = 'contract-case-sensitive-scope'
+    Initialize-ClarifiedSession $caseGuard
+    $caseScope = Join-Path $workspace 'case-scope'
+    New-Item -ItemType Directory -Path $caseScope -Force | Out-Null
+    $null = Invoke-StateCase $caseGuard @(
+        '-Action', 'StartTask', '-Outcome', 'Respect exact path casing', '-Scope', $workspace, '-WriteScope', $caseScope,
+        '-Mode', 'local-change', '-Risk', 'medium', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'case boundary enforced', '-AllowDirty'
+    )
+    $casePatch = New-BaseEvent $caseGuard 't2' 'PreToolUse'
+    $casePatch.tool_name = 'apply_patch'
+    $casePatchText = @'
+*** Begin Patch
+*** Add File: CASE-SCOPE/result.txt
++wrong case
+*** End Patch
+'@
+    $casePatch.tool_input = @{ patch = $casePatchText; workdir = $workspace }
+    $casePatch.tool_use_id = 'case-sensitive-outside'
+    $env:FIRST_PASS_QUALITY_FORCE_CASE_SENSITIVE = '1'
+    try {
+        Assert-True ((Invoke-HookCase $casePatch).hookSpecificOutput.permissionDecision -eq 'deny') 'Case-sensitive runtimes must not equate differently-cased scope paths.'
+    } finally {
+        Remove-Item Env:FIRST_PASS_QUALITY_FORCE_CASE_SENSITIVE -ErrorAction SilentlyContinue
+    }
 
     $postWrite = New-BaseEvent $session 't2' 'PostToolUse'
     $postWrite.tool_name = 'apply_patch'
@@ -290,6 +371,36 @@ try {
     $ghApiWrite = New-BaseEvent $actionGuard 't2' 'PreToolUse'; $ghApiWrite.tool_name = 'Bash'; $ghApiWrite.tool_input = @{ command = 'gh api repos/o/r/issues/1 -X PATCH -f title=changed'; workdir = $workspace }; $ghApiWrite.tool_use_id = 'gh-api-write'
     Assert-True ((Invoke-HookCase $ghApiWrite).hookSpecificOutput.permissionDecision -eq 'deny') 'Mutating gh api calls must not be misclassified as reads.'
 
+    $shellGuard = 'contract-shell-classification'
+    Initialize-ClarifiedSession $shellGuard
+    $null = Invoke-StateCase $shellGuard @(
+        '-Action', 'StartTask', '-Outcome', 'Allow execution but block unscoped mutations', '-Scope', $workspace,
+        '-Mode', 'local-change', '-Risk', 'medium', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'classification enforced', '-AllowedActions', 'read~~write~~execute~~validate', '-AllowDirty'
+    )
+    foreach ($case in @(
+        @{ id = 'rm'; command = 'rm result.txt' },
+        @{ id = 'mv'; command = 'mv old.txt new.txt' },
+        @{ id = 'cp'; command = 'cp source.txt copy.txt' },
+        @{ id = 'mkdir'; command = 'mkdir output' },
+        @{ id = 'touch'; command = 'touch created.txt' },
+        @{ id = 'sed'; command = 'sed -i.bak s/old/new/ result.txt' }
+    )) {
+        $event = New-BaseEvent $shellGuard 't2' 'PreToolUse'
+        $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = "posix-$($case.id)"
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "POSIX mutation '$($case.command)' must not fall through as execute."
+    }
+    $curlData = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $curlData.tool_name = 'Bash'; $curlData.tool_input = @{ command = "curl -d '{}' https://api.example/items"; workdir = $workspace }; $curlData.tool_use_id = 'curl-data'
+    Assert-True ((Invoke-HookCase $curlData).hookSpecificOutput.permissionDecision -eq 'deny') 'curl -d must be classified as an external write.'
+    $curlJson = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $curlJson.tool_name = 'Bash'; $curlJson.tool_input = @{ command = 'curl --json @body.json https://api.example/items'; workdir = $workspace }; $curlJson.tool_use_id = 'curl-json'
+    Assert-True ((Invoke-HookCase $curlJson).hookSpecificOutput.permissionDecision -eq 'deny') 'curl --json must be classified as an external write.'
+    $curlHead = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $curlHead.tool_name = 'Bash'; $curlHead.tool_input = @{ command = 'curl -I https://api.example/items'; workdir = $workspace }; $curlHead.tool_use_id = 'curl-head'
+    Assert-True ($null -eq (Invoke-HookCase $curlHead)) 'A curl header read without data or a mutating method must remain executable.'
+    $ghFieldWrite = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $ghFieldWrite.tool_name = 'Bash'; $ghFieldWrite.tool_input = @{ command = 'gh api repos/o/r/issues/1/comments -f body=hello'; workdir = $workspace }; $ghFieldWrite.tool_use_id = 'gh-field-write'
+    Assert-True ((Invoke-HookCase $ghFieldWrite).hookSpecificOutput.permissionDecision -eq 'deny') 'gh api fields without explicit GET must be classified as an external write.'
+    $ghFieldRead = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $ghFieldRead.tool_name = 'Bash'; $ghFieldRead.tool_input = @{ command = 'gh api repos/o/r/issues/1 --method GET -f per_page=1'; workdir = $workspace }; $ghFieldRead.tool_use_id = 'gh-field-get'
+    Assert-True ($null -eq (Invoke-HookCase $ghFieldRead)) 'gh api fields with explicit GET must remain readable.'
+
     $freshness = 'contract-freshness'
     Initialize-ClarifiedSession $freshness
     $null = Invoke-StateCase $freshness @(
@@ -401,6 +512,10 @@ try {
     $null = Invoke-HookCase $nonStopPrompt
     $nonStopState = Invoke-StateCase $stopSession @('-Action', 'ShowStatus')
     Assert-True (-not [bool]$nonStopState.stopOverride) 'A word containing стоп must not trigger the stop override.'
+    $negatedStopPrompt = New-BaseEvent $stopSession 't2' 'UserPromptSubmit'; $negatedStopPrompt.prompt = "don't stop until the tests pass"
+    $null = Invoke-HookCase $negatedStopPrompt
+    $negatedStopState = Invoke-StateCase $stopSession @('-Action', 'ShowStatus')
+    Assert-True (-not [bool]$negatedStopState.stopOverride) 'A negated stop phrase must request continuation, not activate stopOverride.'
     $stopPrompt = New-BaseEvent $stopSession 't2' 'UserPromptSubmit'; $stopPrompt.prompt = 'стоп'
     $null = Invoke-HookCase $stopPrompt
     $stopState = Invoke-StateCase $stopSession @('-Action', 'ShowStatus')

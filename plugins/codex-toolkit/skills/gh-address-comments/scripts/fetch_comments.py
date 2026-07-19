@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 QUERY = """\
 query(
@@ -116,18 +117,20 @@ def _ensure_gh_authenticated() -> None:
 
 
 def gh_pr_view_json(fields: str) -> dict[str, Any]:
-    # fields is a comma-separated list like: "number,headRepositoryOwner,headRepository"
+    # fields is a comma-separated list like: "number,url"
     return _run_json(["gh", "pr", "view", "--json", fields])
 
 
 def get_current_pr_ref() -> tuple[str, str, int]:
     """
     Resolve the PR for the current branch (whatever gh considers associated).
-    Works for cross-repo PRs too, by reading head repository owner/name.
+    The PR number belongs to the base repository, including for fork PRs.
     """
-    pr = gh_pr_view_json("number,headRepositoryOwner,headRepository")
-    owner = pr["headRepositoryOwner"]["login"]
-    repo = pr["headRepository"]["name"]
+    pr = gh_pr_view_json("number,url")
+    parts = [part for part in urlparse(str(pr.get("url", ""))).path.split("/") if part]
+    if len(parts) < 4 or parts[2] != "pull":
+        raise RuntimeError(f"Unable to derive base repository from PR URL: {pr.get('url')!r}")
+    owner, repo = parts[0], parts[1]
     number = int(pr["number"])
     return owner, repo, number
 
@@ -175,6 +178,9 @@ def fetch_all(owner: str, repo: str, number: int) -> dict[str, Any]:
     comments_cursor: str | None = None
     reviews_cursor: str | None = None
     threads_cursor: str | None = None
+    comments_active = True
+    reviews_active = True
+    threads_active = True
 
     pr_meta: dict[str, Any] | None = None
 
@@ -206,15 +212,20 @@ def fetch_all(owner: str, repo: str, number: int) -> dict[str, Any]:
         r = pr["reviews"]
         t = pr["reviewThreads"]
 
-        conversation_comments.extend(c.get("nodes") or [])
-        reviews.extend(r.get("nodes") or [])
-        review_threads.extend(t.get("nodes") or [])
+        if comments_active:
+            conversation_comments.extend(c.get("nodes") or [])
+            comments_active = bool(c["pageInfo"]["hasNextPage"])
+            comments_cursor = c["pageInfo"]["endCursor"] if comments_active else None
+        if reviews_active:
+            reviews.extend(r.get("nodes") or [])
+            reviews_active = bool(r["pageInfo"]["hasNextPage"])
+            reviews_cursor = r["pageInfo"]["endCursor"] if reviews_active else None
+        if threads_active:
+            review_threads.extend(t.get("nodes") or [])
+            threads_active = bool(t["pageInfo"]["hasNextPage"])
+            threads_cursor = t["pageInfo"]["endCursor"] if threads_active else None
 
-        comments_cursor = c["pageInfo"]["endCursor"] if c["pageInfo"]["hasNextPage"] else None
-        reviews_cursor = r["pageInfo"]["endCursor"] if r["pageInfo"]["hasNextPage"] else None
-        threads_cursor = t["pageInfo"]["endCursor"] if t["pageInfo"]["hasNextPage"] else None
-
-        if not (comments_cursor or reviews_cursor or threads_cursor):
+        if not (comments_active or reviews_active or threads_active):
             break
 
     assert pr_meta is not None

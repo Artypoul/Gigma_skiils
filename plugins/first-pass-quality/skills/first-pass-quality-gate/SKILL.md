@@ -13,21 +13,21 @@ Skip only for a direct answer that needs no tools, no current state, and no pers
 
 Hook execution requires PowerShell 7 (`pwsh`) on `PATH`. If the runtime does not provide it, report mechanical enforcement as unavailable and do not claim that Task Lock hooks are active.
 
+Run every controller action as its own one-line shell tool call. The hook recognizes the canonical root expression shown below without allowing chained commands.
+
 ## First-Pass Protocol
 
 1. Ask Art one concise clarification question when the task is new and not already specified. If the message is an answer or continuation, continue.
 2. Create a Task Lock before mutation. Use `-AllowDirty` only when Art explicitly authorized edits in a non-Git scope or an intentional dirty overlap:
 
 ```powershell
-$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
-& (Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
 ```
 
 3. Confirm context after every new user message, resume, or compaction:
 
 ```powershell
-$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
-& (Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action ConfirmContext -ContextDisposition unchanged -ContextNote "<why the Task Lock still matches>"
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action ConfirmContext -ContextDisposition unchanged -ContextNote "<why the Task Lock still matches>"
 ```
 
 If the message extends or replaces the requested outcome, create a fresh Task Lock with `-Continuation` instead of confirming unchanged context.
@@ -35,8 +35,7 @@ If the message extends or replaces the requested outcome, create a fresh Task Lo
 4. Run the smallest real validators that prove each DoneWhen criterion. Every passed item must use a successful non-management tool result produced after the latest write and name that tool exactly:
 
 ```powershell
-$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
-& (Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action AddEvidence -CriterionId C1 -Validator "contract-test" -EvidenceStatus passed -Subject "<file, URL, command, or artifact>" -ExpectedToolName Bash
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action AddEvidence -CriterionId C1 -Validator "contract-test" -EvidenceStatus passed -Subject "<file, URL, command, or artifact>" -ExpectedToolName Bash
 ```
 
 5. For local/report work, pass acceptance then selfReview. For PR work, record separate `PrePublishWhen` criteria, pass publish then selfReview before `commit`/`push`/PR operations, and pass final acceptance plus required review before `ready`. A later content/external write resets these gates; VCS bookkeeping does not, while every new push reopens required review.
@@ -60,11 +59,9 @@ Never do production, merge, deploy, force-push, money, account, or non-PR extern
 Then run:
 
 ```powershell
-$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
-$qualityController = Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
-& $qualityController -Action SetEntityLock -EntityType "<type>" -StableId "<stable id>" -StableIdField "<input.id.path>" -ProjectId "<project>" -ProjectIdField "<input.project.path>" -Environment production -Intent write -WrapperToolName "<mcp_or_app_tool>" -ExpectedToolInputJson '<exact JSON arguments>' -ExpectedBeforeHash "<before>" -ChangeHash "<change>"
-& $qualityController -Action ConfirmContext -ContextDisposition unchanged -ContextNote "Exact entity and change remain unchanged."
-& $qualityController -Action AuthorizeProduction
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action SetEntityLock -EntityType "<type>" -StableId "<stable id>" -StableIdField "<input.id.path>" -ProjectId "<project>" -ProjectIdField "<input.project.path>" -Environment production -Intent write -WrapperToolName "<mcp_or_app_tool>" -ExpectedToolInputJson '<exact JSON arguments>' -ExpectedBeforeHash "<before>" -ChangeHash "<change>"
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action ConfirmContext -ContextDisposition unchanged -ContextNote "Exact entity and change remain unchanged."
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action AuthorizeProduction
 ```
 
 Authorization is one-shot. A changed input, different stable ID, second call, failed/unknown outcome, or later user prompt requires a new lock/confirmation cycle; never auto-retry.
@@ -74,10 +71,8 @@ Authorization is one-shot. A changed input, different stable ID, second call, fa
 Delegation requires explicit user authorization and `delegate` in `AllowedActions`. After the subagent returns, run an independent parent read/test, then record verification before any mutation or `ready` status:
 
 ```powershell
-$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
-$qualityController = Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
-& $qualityController -Action AuthorizeDelegation -DelegationOutcome "<bounded outcome>" -DelegationScope "<bounded scope>"
-& $qualityController -Action VerifyDelegation -DelegationEvidence "<what the parent independently checked>"
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action AuthorizeDelegation -DelegationOutcome "<bounded outcome>" -DelegationScope "<bounded scope>"
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action VerifyDelegation -DelegationEvidence "<what the parent independently checked>"
 ```
 
 ## Workflow Compatibility
@@ -96,13 +91,11 @@ The quality controller is the canonical `$feature` enforcement path when this pl
 ## Status Commands
 
 ```powershell
-$qualityRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'Plugin root is unavailable.' }
-$qualityController = Join-Path $qualityRoot 'skills/first-pass-quality-gate/scripts/quality-control.ps1'
-& $qualityController -Action SetGate -Gate publish -GateStatus passed
-& $qualityController -Action SetGate -Gate selfReview -GateStatus passed
-& $qualityController -Action SetGate -Gate acceptance -GateStatus passed
-& $qualityController -Action SetStatus -FinalStatus ready
-& $qualityController -Action ShowStatus
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action SetGate -Gate publish -GateStatus passed
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action SetGate -Gate selfReview -GateStatus passed
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action SetGate -Gate acceptance -GateStatus passed
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action SetStatus -FinalStatus ready
+& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action ShowStatus
 ```
 
 For partial, blocked, or unknown, include `-Reason`, at least one `-Limitations` item, and `-NextAction`. After a failed write, inspect current state and run `AcknowledgeWriteRecovery` before another mutation.

@@ -21,8 +21,17 @@ jobs:
       - name: Validate plugins and Codex mirror
         run: python validate_plugin.py
 
+      - name: Run Codex Toolkit review regression tests
+        run: python -m unittest discover -s plugins/codex-toolkit/tests -p "test_*.py"
+
   first-pass-quality-contract:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,5 +41,6 @@ jobs:
         run: ./plugins/first-pass-quality/tests/run-contract-tests.ps1
 
       - name: Smoke-test Codex and Claude hook commands
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./plugins/first-pass-quality/tests/run-hook-config-smoke.ps1

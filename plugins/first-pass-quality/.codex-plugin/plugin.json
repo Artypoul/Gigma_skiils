@@ -1,6 +1,6 @@
 {
   "name": "first-pass-quality",
-  "version": "0.3.0+codex.20260719183958",
+  "version": "0.3.0+codex.20260719191550",
   "description": "Enforces task scope, fresh evidence, one-shot production identity, and honest completion in Codex.",
   "author": {
     "name": "Artypoul"

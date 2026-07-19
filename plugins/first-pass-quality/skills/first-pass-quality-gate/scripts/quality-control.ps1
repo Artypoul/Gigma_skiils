@@ -393,10 +393,42 @@ function Get-CommandText {
 function Test-IsQualityControlCommand {
     param([AllowNull()][string]$Command)
     if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
-    if ($Command -notmatch '(?i)first-pass-quality[\\/].*first-pass-quality-gate[\\/].*quality-control\.ps1') { return $false }
+    $allowedRoot = '\$\(\s*\$env:PLUGIN_ROOT\s*\?\?\s*\$env:CLAUDE_PLUGIN_ROOT\s*\)'
+    $controllerRelative = 'skills[\\/]first-pass-quality-gate[\\/]scripts[\\/]quality-control\.ps1'
+    $canonicalPath = ('^\s*&\s*["'']?{0}[\\/]{1}["'']?' -f $allowedRoot, $controllerRelative)
+    $absolutePath = ('(?i)^\s*&\s*["'']?(?:[A-Z]:[\\/]|/).*?first-pass-quality[\\/].*?{0}["'']?' -f $controllerRelative)
+    if ($Command -notmatch $canonicalPath -and $Command -notmatch $absolutePath) { return $false }
     if ($Command -notmatch '(?i)-Action\s+(StartTask|ConfirmContext|SetGate|SetEntityLock|AuthorizeProduction|AddEvidence|SetStatus|AuthorizeDelegation|VerifyDelegation|AcknowledgeWriteRecovery|ShowStatus|ResetTask|Version)\b') { return $false }
-    if ($Command -match '[\r\n;|><`]') { return $false }
+    if ($Command -notmatch '^\s*&\s*') { return $false }
+    if ($Command -match '[\r\n;|><`]|&&|\|\|') { return $false }
+    $withoutAllowedRoot = [regex]::Replace($Command, $allowedRoot, '')
+    if ($withoutAllowedRoot -match '\$\(') { return $false }
+    $withoutLeadingCall = [regex]::Replace($withoutAllowedRoot, '^\s*&\s*', '')
+    if ($withoutLeadingCall -match '&') { return $false }
     $true
+}
+
+function Test-IsGhApiExternalWrite {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command) -or $Command -notmatch '(?i)\bgh\s+api\b') { return $false }
+    if ($Command -match '(?i)(?:--method|-X)(?:\s+|=)(POST|PUT|PATCH|DELETE)\b') { return $true }
+    if ($Command -match '(?i)(?:--method|-X)(?:\s+|=)GET\b') { return $false }
+    $Command -match '(?:^|\s)(?:(?-i:-f|-F)(?=\s|=)|(?-i:--raw-field|--field|--input)(?=\s|=))'
+}
+
+function Test-IsCurlExternalWrite {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command) -or $Command -notmatch '(?i:\bcurl(?:\.exe)?\b)') { return $false }
+    $Command -match '(?:\s(?-i:-d|-F|-T)(?=\s|=)|\s(?-i:--data(?:-[a-z-]+)?|--json|--form(?:-string)?|--upload-file)(?=\s|=)|\s(?-i:-X|--request)(?:\s+|=)(?i:POST|PUT|PATCH|DELETE)\b)'
+}
+
+function Test-IsRawFileMutationCommand {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $powerShell = '(?i)\b(Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|New-Item)\b'
+    $posix = '(?i)(?:^|[;&|]\s*|\s)(rm|mv|cp|mkdir|touch)(?:\.exe)?(?=\s|$)|\bsed(?:\.exe)?\b[^\r\n;|&]*\s-i(?:[^\s]*)?(?=\s|$)'
+    $redirection = '(^|\s)(>>?|2>)\s*[^&]'
+    $Command -match "$powerShell|$posix|$redirection"
 }
 
 function Get-ToolClassification {
@@ -409,16 +441,16 @@ function Get-ToolClassification {
         $readPattern = '(?i)^\s*(rg\b|git\s+(status|diff|log|show|rev-parse|branch\s+--show-current|remote\s+-v)\b|gh\s+pr\s+(view|status|checks|diff)\b|gh\s+api\b|Get-Content\b|Get-ChildItem\b|Get-Item\b|Test-Path\b|Resolve-Path\b|Get-FileHash\b|Select-String\b|where\.exe\b|codex\s+(--version|features\s+list|plugin\s+list|doctor)\b)'
         $validatePattern = '(?i)(run-contract-tests\.ps1|artifact-validator\.ps1|quick_validate\.py|validate_plugin\.py|\bpytest\b|\bPester\b|\bnpm\s+(run\s+)?test\b|\bpnpm\s+(run\s+)?test\b|\bdotnet\s+test\b|\bcargo\s+test\b|\bgit\s+diff\s+--check\b)'
         $productionPattern = '(?i)\b(kubectl\s+(apply|delete|rollout|set|patch)|terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|git\s+push\s+.*(--force|-f)|deploy|release\s+promote)\b'
-        $externalWritePattern = '(?i)\b(curl|Invoke-RestMethod|Invoke-WebRequest)\b.*\b(POST|PUT|PATCH|DELETE)\b|\bgh\s+api\b.*(?:--method|-X)\s+(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync|gh\s+(pr\s+(close|reopen)|issue\s+(create|edit|close)))\b'
-        $writePattern = '(?i)\b(Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|New-Item|git\s+(merge|rebase|reset|clean)|npm\s+(install|uninstall)|pnpm\s+(add|remove|install)|yarn\s+(add|remove|install)|pip\s+install)\b|(^|\s)(>>?|2>)\s*[^&]'
+        $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync|gh\s+(pr\s+(close|reopen)|issue\s+(create|edit|close)))\b'
+        $writePattern = '(?i)\b(git\s+(merge|rebase|reset|clean)|npm\s+(install|uninstall)|pnpm\s+(add|remove|install)|yarn\s+(add|remove|install)|pip\s+install)\b'
         if ($command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
         if ($command -match '(?i)\bgit\s+commit\b') { return @{ kind = 'commit'; command = $command } }
         if ($command -match '(?i)\bgit\s+push\b') { return @{ kind = 'push'; command = $command } }
         if ($command -match '(?i)\bgit\s+add\b') { return @{ kind = 'vcs-stage'; command = $command } }
         if ($command -match '(?i)\bgh\s+pr\s+(create|edit|comment|review|ready)\b') { return @{ kind = 'pr-write'; command = $command } }
-        if ($command -match $externalWritePattern) { return @{ kind = 'external-write'; command = $command } }
+        if ((Test-IsCurlExternalWrite $command) -or (Test-IsGhApiExternalWrite $command) -or $command -match $externalWritePattern) { return @{ kind = 'external-write'; command = $command } }
         if ($command -match $validatePattern) { return @{ kind = 'validate'; command = $command } }
-        if ($command -match $writePattern) { return @{ kind = 'write'; command = $command } }
+        if ((Test-IsRawFileMutationCommand $command) -or $command -match $writePattern) { return @{ kind = 'write'; command = $command } }
         if ($command -match $readPattern) { return @{ kind = 'read'; command = $command } }
         return @{ kind = 'execute'; command = $command }
     }
@@ -446,15 +478,22 @@ function Get-ToolWorkdir {
     [IO.Path]::GetFullPath($Fallback)
 }
 
+function Get-PathStringComparison {
+    if ($env:FIRST_PASS_QUALITY_FORCE_CASE_SENSITIVE -eq '1') { return [StringComparison]::Ordinal }
+    if ([OperatingSystem]::IsWindows()) { return [StringComparison]::OrdinalIgnoreCase }
+    [StringComparison]::Ordinal
+}
+
 function Test-PathWithinScope {
     param([Parameter(Mandatory)][string]$Candidate, [Parameter(Mandatory)][object[]]$Roots)
     $candidateFull = [IO.Path]::GetFullPath($Candidate).TrimEnd('\', '/')
+    $comparison = Get-PathStringComparison
     foreach ($root in $Roots) {
         if (-not $root) { continue }
         $rootFull = [IO.Path]::GetFullPath([string]$root).TrimEnd('\', '/')
-        if ($candidateFull.Equals($rootFull, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ($candidateFull.Equals($rootFull, $comparison)) { return $true }
         $prefix = $rootFull + [IO.Path]::DirectorySeparatorChar
-        if ($candidateFull.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ($candidateFull.StartsWith($prefix, $comparison)) { return $true }
     }
     $false
 }
@@ -475,6 +514,11 @@ function Get-ApplyPatchFiles {
         }
     } elseif ($ToolInput) { $text = [string]$ToolInput }
     foreach ($match in [regex]::Matches($text, '(?m)^\*\*\* (?:Update|Add|Delete) File:\s*(.+?)\s*$')) {
+        $value = $match.Groups[1].Value.Trim()
+        if (-not [IO.Path]::IsPathRooted($value)) { $value = Join-Path $Cwd $value }
+        $files += [IO.Path]::GetFullPath($value)
+    }
+    foreach ($match in [regex]::Matches($text, '(?m)^\*\*\* Move to:\s*(.+?)\s*$')) {
         $value = $match.Groups[1].Value.Trim()
         if (-not [IO.Path]::IsPathRooted($value)) { $value = Join-Path $Cwd $value }
         $files += [IO.Path]::GetFullPath($value)
@@ -638,7 +682,12 @@ function Invoke-UserPromptSubmit {
         $state.lastPromptHash = Get-Hash $prompt
         $state.lastPromptAt = Get-UtcNow
         $correction = $prompt -match '(?i)(опять|ошиб|не так|не туда|накосяч|ты не сделал|wrong|incorrect)'
-        $stop = $prompt -match '(?i)(^|\s)(стоп|оставь|не туда|pause|stop)(\s|$)'
+        $stopCandidate = [regex]::Replace(
+            $prompt,
+            "(?i)\b(?:do\s+not|don['’]?t|never)\s+(?:please\s+)?(?:stop|pause)\b|(?i)(?:^|\s)не\s+(?:стоп|stop|pause|останавливайся|останавливай|прекращай)(?=\s|$)",
+            ''
+        )
+        $stop = $stopCandidate -match '(?i)(^|\s)(стоп|оставь|не туда|pause|stop)(\s|$)'
         $confirm = $prompt -match '(?is)((подтверждаю|да,?\s*(выполняй|делай|запускай)|confirm(ed)?).{0,60}(production|продакш|боев)|(production|продакш|боев).{0,60}(подтверждаю|выполняй|делай|confirm|execute))'
         $delegationRequested = $prompt -match '(?is)(субагент|подагент|делегир|параллельн.*агент|subagent|delegate|spawn\s+agent)'
         $autoReview = $prompt -match '(?is)(monster|монстр).*(PR\s*#?\d+).*(base|head).*(checklist|чек)'
@@ -778,15 +827,16 @@ function Invoke-PreToolUse {
             if (-not $state.task.allowDirty) {
                 if (-not (Get-GitRoot -Cwd $workdir)) { $decisionBox.value = New-PreToolDeny 'Dirty overlap cannot be verified outside Git. Use -AllowDirty only when Art explicitly authorized editing this non-Git scope.'; return }
                 $dirty = @(Get-DirtyFiles -Cwd $workdir)
+                $pathComparison = Get-PathStringComparison
                 foreach ($file in $files) {
-                    $isDirty = @($dirty | Where-Object { $_.Equals($file, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
-                    $owned = @($state.agentChangedFiles | Where-Object { ([string]$_).Equals($file, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+                    $isDirty = @($dirty | Where-Object { $_.Equals($file, $pathComparison) }).Count -gt 0
+                    $owned = @($state.agentChangedFiles | Where-Object { ([string]$_).Equals($file, $pathComparison) }).Count -gt 0
                     if ($isDirty -and -not $owned) { $decisionBox.value = New-PreToolDeny "Target file already has user changes and dirty overlap is not authorized: $file"; return }
                 }
             }
         }
         $command = [string]$classification.command
-        if ($toolName -eq 'Bash' -and $classification.kind -eq 'write' -and $command -match '(?i)\b(Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|New-Item)\b|(^|\s)(>>?|2>)\s*[^&]') {
+        if ($toolName -eq 'Bash' -and $classification.kind -eq 'write' -and (Test-IsRawFileMutationCommand $command)) {
             $decisionBox.value = New-PreToolDeny 'Raw shell filesystem mutation cannot be scoped reliably. Use apply_patch/Edit/Write for local files.'; return
         }
         if ($classification.kind -in @('commit', 'push', 'pr-write')) {

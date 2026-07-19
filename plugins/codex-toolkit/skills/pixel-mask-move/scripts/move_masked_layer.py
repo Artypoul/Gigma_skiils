@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from alpha_qc import inspect_rgba
+from translation_bounds import ensure_translation_fits
 
 
 def args() -> argparse.Namespace:
@@ -28,6 +29,20 @@ def args() -> argparse.Namespace:
 
 def translate(array: np.ndarray, dx: int, dy: int) -> np.ndarray:
     height, width = array.shape[:2]
+    if array.ndim >= 3 and array.shape[2] >= 4:
+        visible_y, visible_x = np.nonzero(array[:, :, 3] > 0)
+        if visible_x.size:
+            ensure_translation_fits(
+                bounds=(
+                    int(visible_x.min()),
+                    int(visible_y.min()),
+                    int(visible_x.max()) + 1,
+                    int(visible_y.max()) + 1,
+                ),
+                canvas_size=(width, height),
+                dx=dx,
+                dy=dy,
+            )
     moved = np.zeros_like(array)
     src_x1, src_x2 = max(0, -dx), min(width, width - dx)
     src_y1, src_y2 = max(0, -dy), min(height, height - dy)
