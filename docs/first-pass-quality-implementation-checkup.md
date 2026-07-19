@@ -20,6 +20,7 @@
 - test runner сам находит `pwsh` и использует системный temp path;
 - Windows CI запускает полный 103-case contract suite;
 - изолированный smoke-test запускает реальные Codex/Claude hook commands через доступный `pwsh`, проверяет их plugin data и восемью assertions доказывает, что пользовательские pointer-файлы не меняются;
+- Windows smoke-test разрешает Git Bash относительно фактического `git.exe`, чтобы не запустить несовместимый одноимённый системный `bash.exe` на CI runner;
 - каталоговый validator проверяет hook discovery и запрещает user-specific пути в hooks/tests.
 
 ## Проверочная таблица реализации

@@ -20,6 +20,24 @@ function Assert-True {
     if (-not $Condition) { throw "Assertion failed: $Message" }
 }
 
+function Get-BashRuntime {
+    $candidates = [Collections.Generic.List[string]]::new()
+    $gitCommand = Get-Command git -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($gitCommand -and $gitCommand.Source) {
+        $gitRoot = Split-Path -Parent (Split-Path -Parent $gitCommand.Source)
+        $candidates.Add((Join-Path $gitRoot 'bin/bash.exe'))
+    }
+    if ($env:ProgramFiles) { $candidates.Add((Join-Path $env:ProgramFiles 'Git/bin/bash.exe')) }
+    if (${env:ProgramFiles(x86)}) { $candidates.Add((Join-Path ${env:ProgramFiles(x86)} 'Git/bin/bash.exe')) }
+    foreach ($command in @(Get-Command bash -All -ErrorAction SilentlyContinue)) {
+        if ($command.Source) { $candidates.Add([string]$command.Source) }
+    }
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return [IO.Path]::GetFullPath($candidate) }
+    }
+    throw 'A bash runtime was not found. Install Git Bash or provide bash on PATH.'
+}
+
 function Get-FileFingerprint {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return 'missing' }
@@ -47,7 +65,7 @@ function Invoke-ProcessJson {
     $stdout = $process.StandardOutput.ReadToEnd().Trim()
     $stderr = $process.StandardError.ReadToEnd().Trim()
     $process.WaitForExit()
-    if ($process.ExitCode -ne 0) { throw "$FileName failed: $stderr" }
+    if ($process.ExitCode -ne 0) { throw "$FileName exited $($process.ExitCode). stdout: $stdout; stderr: $stderr" }
     if (-not $stdout) { throw "$FileName returned no hook output." }
     $stdout | ConvertFrom-Json -AsHashtable
 }
@@ -101,7 +119,8 @@ try {
     Remove-Item Env:PLUGIN_ROOT, Env:PLUGIN_DATA -ErrorAction SilentlyContinue
     $env:CLAUDE_PLUGIN_ROOT = $pluginRoot
     $env:CLAUDE_PLUGIN_DATA = Join-Path $testRoot 'claude-plugin-data'
-    $claude = Invoke-ProcessJson -FileName 'bash' -Arguments @('-lc', $portableCommand) -InputJson (New-SessionStartJson 'claude-hook-smoke')
+    $bashRuntime = Get-BashRuntime
+    $claude = Invoke-ProcessJson -FileName $bashRuntime -Arguments @('-lc', $portableCommand) -InputJson (New-SessionStartJson 'claude-hook-smoke')
     $claudePointer = Get-Content -LiteralPath $pointer -Raw | ConvertFrom-Json -AsHashtable
     Assert-True ($claude.hookSpecificOutput.hookEventName -eq 'SessionStart') 'Portable command must return typed SessionStart output with Claude variables.'
     Assert-True ([string]$claudePointer.dataRoot -eq (Join-Path $env:CLAUDE_PLUGIN_DATA 'first-pass-quality')) 'Portable command must bind state to CLAUDE_PLUGIN_DATA.'
@@ -113,7 +132,7 @@ try {
     [pscustomobject]@{
         status = 'passed'
         assertions = $script:Assertions
-        runtimes = @('codex-windows', 'claude-bash-with-pwsh')
+        runtimes = @('codex-windows', "claude-bash-with-pwsh:$bashRuntime")
     } | ConvertTo-Json
 } finally {
     foreach ($name in $saved.Keys) {
