@@ -18,12 +18,12 @@
 - дублирующие feature watch/turnstile hooks запрещены для одной сессии;
 - восемь user-specific feature-hook тестов заменены прямыми тестами controller;
 - test runner сам находит `pwsh` и использует системный temp path;
-- Windows и Ubuntu CI запускают полный 145-case contract suite;
+- Windows и Ubuntu CI запускают полный 178-case contract suite;
 - изолированный smoke-test запускает реальные Codex/Claude hook commands через доступный `pwsh`, проверяет их plugin data и восемью assertions доказывает, что пользовательские pointer-файлы не меняются;
 - Windows smoke-test разрешает Git Bash относительно фактического `git.exe`, чтобы не запустить несовместимый одноимённый системный `bash.exe` на CI runner;
 - каталоговый validator проверяет hook discovery и запрещает user-specific пути в hooks/tests.
 
-Три remote review прохода этого PR выявили 22 threads: четыре повторяли уже найденные проблемы, итого 18 уникальных дефектов. Пять замечаний имели P1: documented `StartTask` блокировался собственным hook, `apply_patch Move to:` не проверял destination, `curl -XPOST` проходил как execute, plus-prefixed refspec обходил force-push guard, а абсолютный look-alike controller получал management bypass. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
+Четыре remote review прохода этого PR выявили 29 threads: четыре повторяли уже найденные проблемы, итого 25 уникальных дефектов, из них 11 P1. Последний проход дополнительно нашёл POSIX bootstrap deadlock, destructive push/local Git формы, unscoped `git add`, `gh pr update-branch`, неизвестные `gh` mutations и ложное production-подтверждение при отрицании. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
 
 ## Проверочная таблица реализации
 
@@ -33,8 +33,9 @@
 | Не повторять вопрос для продолжения | `ConfirmContext`, `StartTask -Continuation` | Continuation сохраняет границы или создаёт новый Task Lock | Реализовано |
 | Зафиксировать первую проходку | `StartTask`: outcome, scope, write scope, mode, risk, actions, workflow/stage, criteria | Неполный Task Lock отклоняется | Реализовано |
 | Не выйти за область | OS-aware scope/write scope, source + `Move to:` target parser, reparse-component guard, dirty guard | Destination move, неверный case, symlink/junction escape и запись вне write scope блокируются | Реализовано для hooked local tools |
-| Реально применять allowed actions | классификация tool kind до вызова | Неавторизованный write/commit/push/PR/delegate блокируется; POSIX file writes, curl data и `gh api` fields не проходят как execute/read | Реализовано |
-| Не заблокировать создание Task Lock | canonical one-line controller invocation, management classifier без command chaining | Documented `StartTask` проходит до lock; `;`, pipeline, redirection, extra subexpression и chained call отклоняются | Реализовано |
+| Реально применять allowed actions | safe Git/GitHub allowlists + tool-kind classification до вызова | Неавторизованный write/commit/push/PR/delegate блокируется; POSIX writes, curl/`gh api`, releases/workflows/secrets не проходят как execute/read | Реализовано |
+| Не заблокировать создание Task Lock | canonical plugin-root invocation для PowerShell и POSIX `pwsh`, management classifier без command chaining | Оба documented `StartTask` проходят до lock; look-alike, `;`, pipeline, redirection, extra subexpression и chained call отклоняются | Реализовано |
+| Не включить чужие изменения в commit | explicit non-glob `git add` path parser + staged-index WriteScope/ownership check | `git add .`, broad/directory/outside staging, `commit -a`/`--amend`/pathspec и чужой staged file отклоняются | Реализовано |
 | Не путать продолжение со stop | negated-stop normalization до stop classification | `don't stop` не включает stopOverride, явный `стоп` включает | Реализовано |
 | Пережить новый prompt/compaction | context reset, `ConfirmContext`, `PreCompact`, `PostCompact` | Запись блокируется до reconciliation | Реализовано |
 | Не принимать старое доказательство | last write timestamp + exact tool name/result | Evidence до последней записи или от другого tool отклоняется | Реализовано |
@@ -46,14 +47,14 @@
 | Не считать failed push новым diff | success-aware `PostToolUse` | Failed push не переоткрывает уже пройденный review, но включает recovery pause | Реализовано |
 | Совместимость с `$feature` | `Workflow feature`, обязательный `WorkflowStage`, отдельные phase Task Locks | Missing stage и plan-write вне `WriteScope` отклоняются | Реализовано |
 | Не дублировать feature hooks | first-pass controller — canonical; legacy watch/turnstile — только fallback | Static skill/catalog review + controller contract tests | Реализовано |
-| Merge не равен deploy | PR mode не разрешает merge/force-push/deploy | typed merge, force flags и plus-prefixed force refspec отклоняются | Реализовано |
+| Merge не равен deploy | PR mode разрешает только explicit same-branch normal push и не разрешает merge/destructive/cross-branch push/deploy | typed merge, force/plus/delete/mirror/prune/wildcard/cross-branch refspec отклоняются | Реализовано |
 | Production только по точной сущности | Entity Lock, canonical input hash, stable/project fields | другой ID/input и replay отклоняются | Реализовано для hooked typed tools |
-| Подтверждение production одноразовое | latest-prompt confirmation consumed в `PreToolUse` | повтор и auto-retry невозможны | Реализовано |
+| Подтверждение production одноразовое и положительное | latest-prompt confirmation, negation guard, consumed authorization | отрицание, повтор и auto-retry не дают разрешение | Реализовано |
 | Failed write не каскадирует | mutation pause + read/validator + `AcknowledgeWriteRecovery` | следующая mutation блокируется до проверки состояния | Реализовано |
 | Делегация не расширяет полномочия | explicit delegate action, bounded handoff, parent verification | unbounded spawn и mutation до parent check отклоняются | Реализовано для normal spawn path |
 | Артефакт проверяется структурно | `artifact-validator.ps1` | Markdown/JSON/image/PDF/DOCX container checks | Реализовано; visual QA отдельно |
 | Hooks действительно поставляются | `hooks/hooks.json`, `$PLUGIN_ROOT`, manifests | catalog validator проверяет структуру и переносимые пути | Реализовано |
-| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 145 positive/negative contract assertions, включая strict management root, move/reparse target, case-sensitive scope, shell/API writes, force refspec и Claude `Edit`/`Write` | Реализовано |
+| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 178 positive/negative contract assertions, включая dual-shell management, move/reparse/case scope, directory/deletion-aware staging, scoped commit/push, command chaining, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
 | Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 8 stdlib tests для fork/base repo, pagination, failed-check JSON, job log, half-life, docs paths и pixel clipping | Реализовано |
 | Codex и Claude используют свои plugin roots/data | `PLUGIN_ROOT`/`PLUGIN_DATA` и `CLAUDE_PLUGIN_ROOT`/`CLAUDE_PLUGIN_DATA` | 8 isolated real-command assertions через bash + `pwsh`, включая неизменность `.codex`/`.claude` pointer-файлов | Реализовано при наличии `pwsh 7` |
 

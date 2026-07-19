@@ -15,6 +15,12 @@ Hook execution requires PowerShell 7 (`pwsh`) on `PATH`. If the runtime does not
 
 Run every controller action as its own one-line shell tool call. The hook recognizes the canonical root expression shown below without allowing chained commands.
 
+When the shell tool is POSIX Bash, invoke the same action through `pwsh` and the real plugin root. Use `CLAUDE_PLUGIN_ROOT` instead of `PLUGIN_ROOT` in a Claude plugin runtime:
+
+```bash
+pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
+```
+
 ## First-Pass Protocol
 
 1. Ask Art one concise clarification question when the task is new and not already specified. If the message is an answer or continuation, continue.

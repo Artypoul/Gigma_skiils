@@ -394,11 +394,16 @@ function Test-IsQualityControlCommand {
     param([AllowNull()][string]$Command)
     if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
     $allowedRoot = '\$\(\s*\$env:PLUGIN_ROOT\s*\?\?\s*\$env:CLAUDE_PLUGIN_ROOT\s*\)'
+    $posixRoot = '\$(?:\{)?(?:PLUGIN_ROOT|CLAUDE_PLUGIN_ROOT)(?:\})?'
     $controllerRelative = 'skills[\\/]first-pass-quality-gate[\\/]scripts[\\/]quality-control\.ps1'
-    $canonicalPath = ('^\s*&\s*["'']?{0}[\\/]{1}["'']?' -f $allowedRoot, $controllerRelative)
-    if ($Command -notmatch $canonicalPath) { return $false }
+    $canonicalPath = ('^\s*&\s*["'']?{0}[\\/]{1}["'']?(?=\s+-Action\b)' -f $allowedRoot, $controllerRelative)
+    $posixPath = ('^\s*pwsh(?:\.exe)?\s+-NoProfile\s+-File\s+["'']?{0}[\\/]{1}["'']?(?=\s+-Action\b)' -f $posixRoot, $controllerRelative)
+    $isPowerShellCall = $Command -match $canonicalPath
+    $isPosixCall = $Command -match $posixPath
+    if (-not $isPowerShellCall -and -not $isPosixCall) { return $false }
     if ($Command -notmatch '(?i)-Action\s+(StartTask|ConfirmContext|SetGate|SetEntityLock|AuthorizeProduction|AddEvidence|SetStatus|AuthorizeDelegation|VerifyDelegation|AcknowledgeWriteRecovery|ShowStatus|ResetTask|Version)\b') { return $false }
-    if ($Command -notmatch '^\s*&\s*') { return $false }
+    if ($isPowerShellCall -and $Command -notmatch '^\s*&\s*') { return $false }
+    if ($isPosixCall -and $Command -notmatch '^\s*pwsh(?:\.exe)?\s+') { return $false }
     if ($Command -match '[\r\n;|><`]|&&|\|\|') { return $false }
     $withoutAllowedRoot = [regex]::Replace($Command, $allowedRoot, '')
     if ($withoutAllowedRoot -match '\$\(') { return $false }
@@ -421,11 +426,62 @@ function Test-IsCurlExternalWrite {
     $Command -match '(?:\s(?-i:-d|-F|-T)|\s(?-i:--data(?:-[a-z-]+)?|--json|--form(?:-string)?|--upload-file)(?=\s|=)|\s(?-i:-X)(?:\s*|=)(?i:POST|PUT|PATCH|DELETE)\b|\s(?-i:--request)(?:\s+|=)(?i:POST|PUT|PATCH|DELETE)\b)'
 }
 
-function Test-IsGitForcePush {
+function Test-IsDangerousGitPush {
     param([AllowNull()][string]$Command)
     if ([string]::IsNullOrWhiteSpace($Command) -or $Command -notmatch '(?i)\bgit\s+push\b') { return $false }
-    if ($Command -match '(?i)(?:^|\s)(?:--force(?:-with-lease|-if-includes)?|-f)(?=\s|=|$)') { return $true }
-    $Command -match '(?i)\bgit\s+push\b[^\r\n]*\s\+\S+'
+    if ($Command -match '(?i)(?:^|\s)(?:--force(?:-with-lease|-if-includes)?|-f|--delete|-d|--mirror|--prune|--all|--tags|--follow-tags)(?=\s|=|$)') { return $true }
+    $Command -match '(?i)\bgit\s+push\b[^\r\n]*(?:\s\+\S+|\s:\S+|\s\S*[?*\[]\S*)'
+}
+
+function Test-IsSafeGitCommitCommand {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $match = [regex]::Match($Command, '(?is)^\s*git(?:\.exe)?\s+commit\s+(?<tail>.+?)\s*$')
+    if (-not $match.Success) { return $false }
+    $tokens = @(Get-ShellCommandTokens $match.Groups['tail'].Value)
+    $hasMessage = $false
+    for ($index = 0; $index -lt $tokens.Count; $index++) {
+        $token = [string]$tokens[$index]
+        if ($token -in @('-m', '--message')) {
+            $index++
+            if ($index -ge $tokens.Count) { return $false }
+            $hasMessage = $true
+            continue
+        }
+        if ($token -match '^(?:-m.+|--message=.+)$') { $hasMessage = $true; continue }
+        if ($token -in @('--no-verify', '--signoff', '-s', '--quiet', '-q') -or $token -match '^(?:-S.*|--gpg-sign(?:=.*)?)$') { continue }
+        return $false
+    }
+    $hasMessage
+}
+
+function Get-CurrentGitBranch {
+    param([Parameter(Mandatory)][string]$Cwd)
+    if ($env:FIRST_PASS_QUALITY_TEST_DATA -and $env:FIRST_PASS_QUALITY_TEST_BRANCH) { return $env:FIRST_PASS_QUALITY_TEST_BRANCH }
+    try {
+        $branch = (& git -C $Cwd branch --show-current 2>$null | Select-Object -First 1)
+        if ($LASTEXITCODE -eq 0 -and $branch) { return ([string]$branch).Trim() }
+    } catch { }
+    $null
+}
+
+function Test-IsSafeGitPushCommand {
+    param([AllowNull()][string]$Command, [Parameter(Mandatory)][string]$Cwd)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $match = [regex]::Match($Command, '(?is)^\s*git(?:\.exe)?\s+push\s+(?<tail>.+?)\s*$')
+    if (-not $match.Success) { return $false }
+    $tokens = @(Get-ShellCommandTokens $match.Groups['tail'].Value)
+    $positionals = @()
+    foreach ($token in $tokens) {
+        if ($token -in @('-u', '--set-upstream', '--porcelain', '--quiet', '-q', '--verbose', '-v')) { continue }
+        if ($token.StartsWith('-')) { return $false }
+        $positionals += $token
+    }
+    if ($positionals.Count -ne 2) { return $false }
+    $branch = Get-CurrentGitBranch -Cwd $Cwd
+    if (-not $branch) { return $false }
+    $refspec = [string]$positionals[1]
+    $refspec -in @($branch, "HEAD:$branch", "$branch`:$branch", "refs/heads/$branch`:refs/heads/$branch")
 }
 
 function Test-IsRawFileMutationCommand {
@@ -444,20 +500,27 @@ function Get-ToolClassification {
     if ($ToolName -match '^(Agent|spawn_agent)$') { return @{ kind = 'delegation'; command = $command } }
     if ($ToolName -match '^(apply_patch|Edit|Write)$') { return @{ kind = 'write'; command = $command } }
     if ($ToolName -eq 'Bash') {
-        $readPattern = '(?i)^\s*(rg\b|git\s+(status|diff|log|show|rev-parse|branch\s+--show-current|remote\s+-v)\b|gh\s+pr\s+(view|status|checks|diff)\b|gh\s+api\b|Get-Content\b|Get-ChildItem\b|Get-Item\b|Test-Path\b|Resolve-Path\b|Get-FileHash\b|Select-String\b|where\.exe\b|codex\s+(--version|features\s+list|plugin\s+list|doctor)\b)'
+        $readPattern = '(?i)^\s*(rg\b|git\s+(status|diff|log|show|rev-parse|branch\s+--show-current|remote\s+(-v|get-url)|ls-files|ls-tree|cat-file)\b|gh\s+pr\s+(view|status|checks|diff|list)\b|gh\s+(issue|repo|run|workflow)\s+(view|list|status|watch)\b|gh\s+search\b|gh\s+auth\s+status\b|gh\s+(--version|version)\b|Get-Content\b|Get-ChildItem\b|Get-Item\b|Test-Path\b|Resolve-Path\b|Get-FileHash\b|Select-String\b|where\.exe\b|codex\s+(--version|features\s+list|plugin\s+list|doctor)\b)'
         $validatePattern = '(?i)(run-contract-tests\.ps1|artifact-validator\.ps1|quick_validate\.py|validate_plugin\.py|\bpytest\b|\bPester\b|\bnpm\s+(run\s+)?test\b|\bpnpm\s+(run\s+)?test\b|\bdotnet\s+test\b|\bcargo\s+test\b|\bgit\s+diff\s+--check\b)'
         $productionPattern = '(?i)\b(kubectl\s+(apply|delete|rollout|set|patch)|terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|deploy|release\s+promote)\b'
-        $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync|gh\s+(pr\s+(close|reopen)|issue\s+(create|edit|close)))\b'
+        $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync)\b'
         $writePattern = '(?i)\b(git\s+(merge|rebase|reset|clean)|npm\s+(install|uninstall)|pnpm\s+(add|remove|install)|yarn\s+(add|remove|install)|pip\s+install)\b'
-        if ((Test-IsGitForcePush $command) -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
-        if ($command -match '(?i)\bgit\s+commit\b') { return @{ kind = 'commit'; command = $command } }
+        if ((Test-IsDangerousGitPush $command) -or $command -match '(?i)^\s*git\s+(reset|clean|checkout|restore|switch)\b' -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
+        if ($command -match '(?i)\bgit\s+commit\b') {
+            if (-not (Test-IsSafeGitCommitCommand $command)) { return @{ kind = 'production-shell'; command = $command } }
+            return @{ kind = 'commit'; command = $command }
+        }
         if ($command -match '(?i)\bgit\s+push\b') { return @{ kind = 'push'; command = $command } }
         if ($command -match '(?i)\bgit\s+add\b') { return @{ kind = 'vcs-stage'; command = $command } }
-        if ($command -match '(?i)\bgh\s+pr\s+(create|edit|comment|review|ready)\b') { return @{ kind = 'pr-write'; command = $command } }
+        if ($command -match '(?i)^\s*gh\s+pr\s+update-branch\b') { return @{ kind = 'push'; command = $command } }
+        if ($command -match '(?i)^\s*gh\s+pr\s+(create|edit|comment|review|ready|close|reopen)\b') { return @{ kind = 'pr-write'; command = $command } }
         if ((Test-IsCurlExternalWrite $command) -or (Test-IsGhApiExternalWrite $command) -or $command -match $externalWritePattern) { return @{ kind = 'external-write'; command = $command } }
         if ($command -match $validatePattern) { return @{ kind = 'validate'; command = $command } }
         if ((Test-IsRawFileMutationCommand $command) -or $command -match $writePattern) { return @{ kind = 'write'; command = $command } }
         if ($command -match $readPattern) { return @{ kind = 'read'; command = $command } }
+        if ($command -match '(?i)^\s*gh\s+api\b') { return @{ kind = 'read'; command = $command } }
+        if ($command -match '(?i)^\s*gh\b') { return @{ kind = 'external-write'; command = $command } }
+        if ($command -match '(?i)^\s*git\b') { return @{ kind = 'production-shell'; command = $command } }
         return @{ kind = 'execute'; command = $command }
     }
     if ($ToolName -match '^(view_image|get_goal|list_mcp_resources|list_mcp_resource_templates|read_mcp_resource|codex_app__read_thread_terminal)$') {
@@ -482,6 +545,47 @@ function Get-ToolWorkdir {
         }
     }
     [IO.Path]::GetFullPath($Fallback)
+}
+
+function Get-ShellCommandTokens {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return @() }
+    $tokens = @()
+    foreach ($match in [regex]::Matches($Command, '"(?:\\.|[^"])*"|''[^'']*''|\S+')) {
+        $value = $match.Value
+        if ($value.Length -ge 2 -and (($value[0] -eq '"' -and $value[$value.Length - 1] -eq '"') -or ($value[0] -eq "'" -and $value[$value.Length - 1] -eq "'"))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        $tokens += $value
+    }
+    @($tokens)
+}
+
+function Get-GitAddFiles {
+    param([AllowNull()][string]$Command, [Parameter(Mandatory)][string]$Cwd)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return @() }
+    $match = [regex]::Match($Command, '(?is)^\s*git(?:\.exe)?\s+add(?:\s+(?<tail>.*))?$')
+    if (-not $match.Success) { return @() }
+    $tokens = @(Get-ShellCommandTokens $match.Groups['tail'].Value)
+    if ($tokens.Count -eq 0) { return @() }
+    $files = @()
+    $endOptions = $false
+    foreach ($token in $tokens) {
+        if (-not $endOptions -and $token -eq '--') { $endOptions = $true; continue }
+        if (-not $endOptions -and $token.StartsWith('-')) { return @() }
+        if ($token -in @('.', '..') -or $token -match '[*?\[]' -or $token.StartsWith(':(')) { return @() }
+        $value = $token
+        if (-not [IO.Path]::IsPathRooted($value)) { $value = Join-Path $Cwd $value }
+        if (Test-Path -LiteralPath $value -PathType Container) { return @() }
+        $files += [IO.Path]::GetFullPath($value)
+    }
+    @($files | Select-Object -Unique)
+}
+
+function Test-HasShellCommandChaining {
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $Command -match '[\r\n;`]|&&|\|\||(?<!\|)\|(?!\|)'
 }
 
 function Get-PathStringComparison {
@@ -580,6 +684,23 @@ function Get-DirtyFiles {
             if ($relative -match ' -> ') { $relative = ($relative -split ' -> ')[-1] }
             $relative = $relative.Trim('"')
             $items += [IO.Path]::GetFullPath((Join-Path $root $relative))
+        }
+        @($items | Select-Object -Unique)
+    } catch { @() }
+}
+
+function Get-StagedFiles {
+    param([Parameter(Mandatory)][string]$Cwd)
+    if ($env:FIRST_PASS_QUALITY_TEST_DATA -and $env:FIRST_PASS_QUALITY_TEST_STAGED_FILES) {
+        return @(Split-Values $env:FIRST_PASS_QUALITY_TEST_STAGED_FILES | ForEach-Object { [IO.Path]::GetFullPath($_) })
+    }
+    try {
+        $root = Get-GitRoot -Cwd $Cwd
+        if (-not $root) { return @() }
+        $items = @()
+        foreach ($relative in @(& git -C $root diff --cached --name-only --no-renames --diff-filter=ACDMRTUXB 2>$null)) {
+            if (-not $relative) { continue }
+            $items += [IO.Path]::GetFullPath((Join-Path $root ([string]$relative).Trim('"')))
         }
         @($items | Select-Object -Unique)
     } catch { @() }
@@ -730,7 +851,8 @@ function Invoke-UserPromptSubmit {
             ''
         )
         $stop = $stopCandidate -match '(?i)(^|\s)(стоп|оставь|не туда|pause|stop)(\s|$)'
-        $confirm = $prompt -match '(?is)((подтверждаю|да,?\s*(выполняй|делай|запускай)|confirm(ed)?).{0,60}(production|продакш|боев)|(production|продакш|боев).{0,60}(подтверждаю|выполняй|делай|confirm|execute))'
+        $negatedConfirm = $prompt -match "(?is)(\b(?:do\s+not|don['’]?t|never)\s+(?:confirm|execute|deploy|run)\b.{0,80}(?:production|продакш|боев)|(?:production|продакш|боев).{0,80}\b(?:not\s+confirmed|do\s+not|don['’]?t|never)\b|(?:^|\s)не\s+(?:подтверждаю|подтверждать|выполняй|делай|запускай)\b.{0,80}(?:production|продакш|боев)|(?:production|продакш|боев).{0,80}(?:^|\s)не\s+(?:подтверждаю|подтверждать|выполняй|делай|запускай)\b)"
+        $confirm = -not $negatedConfirm -and $prompt -match '(?is)((подтверждаю|да,?\s*(выполняй|делай|запускай)|confirm(ed)?).{0,60}(production|продакш|боев)|(production|продакш|боев).{0,60}(подтверждаю|выполняй|делай|confirm|execute))'
         $delegationRequested = $prompt -match '(?is)(субагент|подагент|делегир|параллельн.*агент|subagent|delegate|spawn\s+agent)'
         $autoReview = $prompt -match '(?is)(monster|монстр).*(PR\s*#?\d+).*(base|head).*(checklist|чек)'
         if ($stop) {
@@ -794,6 +916,9 @@ function Invoke-PreToolUse {
         if ($requiredAction -and $requiredAction -notin @($state.task.allowedActions)) {
             $decisionBox.value = New-PreToolDeny "Task Lock does not allow action '$requiredAction'."; return
         }
+        if ($toolName -eq 'Bash' -and (Test-HasShellCommandChaining ([string]$classification.command))) {
+            $decisionBox.value = New-PreToolDeny 'Run one shell command per tool call; chained, piped, multiline, and backtick-composed commands cannot be classified safely.'; return
+        }
         if ($classification.kind -in @('read', 'validate')) { return }
         if ([string]$HookData.permission_mode -eq 'plan' -and $classification.kind -notin @('coordination', 'read', 'validate')) {
             $decisionBox.value = New-PreToolDeny 'Plan permission mode does not allow implementation or side effects.'; return
@@ -829,8 +954,9 @@ function Invoke-PreToolUse {
         if (-not (Test-PathWithinScope -Candidate $workdir -Roots @($state.task.scopePaths))) {
             $decisionBox.value = New-PreToolDeny "Tool workdir is outside the locked scope: $workdir"; return
         }
+        $command = [string]$classification.command
         if ($classification.kind -eq 'production-shell') {
-            $decisionBox.value = New-PreToolDeny 'Direct production/merge/deploy shell mutation is forbidden. Use the exact registered MCP/API wrapper after Entity Lock and explicit confirmation.'; return
+            $decisionBox.value = New-PreToolDeny 'Direct destructive/production/merge/deploy shell mutation is forbidden. Use scoped file tools or the exact registered MCP/API wrapper after Entity Lock and explicit confirmation.'; return
         }
         if ($classification.kind -eq 'external-write' -and $state.task.mode -ne 'production') {
             $decisionBox.value = New-PreToolDeny 'External writes require a production Task Lock, exact Entity Lock, and fresh confirmation.'; return
@@ -858,6 +984,40 @@ function Invoke-PreToolUse {
         if ($classification.kind -eq 'external-write' -and $toolName -eq 'Bash') {
             $decisionBox.value = New-PreToolDeny 'Direct external mutation through shell is blocked. Use a dedicated typed tool/wrapper.'; return
         }
+        if ($classification.kind -eq 'push' -and $command -match '(?i)^\s*git(?:\.exe)?\s+push\b' -and -not (Test-IsSafeGitPushCommand -Command $command -Cwd $workdir)) {
+            $decisionBox.value = New-PreToolDeny 'Normal PR push must explicitly target the current branch with no cross-branch refspec or unsupported option.'; return
+        }
+        if ($classification.kind -eq 'vcs-stage') {
+            $files = @(Get-GitAddFiles -Command $command -Cwd $workdir)
+            if ($files.Count -eq 0) { $decisionBox.value = New-PreToolDeny 'git add requires explicit, non-glob pathspecs; broad flags, dot pathspecs, and unparsed forms are denied.'; return }
+            foreach ($file in $files) {
+                if (-not (Test-PathWithinScope -Candidate $file -Roots @($state.task.writeScopePaths))) {
+                    $decisionBox.value = New-PreToolDeny "git add target is outside the Task Lock write scope: $file"; return
+                }
+            }
+            if (-not $state.task.allowDirty) {
+                if (-not (Get-GitRoot -Cwd $workdir)) { $decisionBox.value = New-PreToolDeny 'git add scope cannot be verified outside Git.'; return }
+                $pathComparison = Get-PathStringComparison
+                foreach ($file in $files) {
+                    $owned = @($state.agentChangedFiles | Where-Object { ([string]$_).Equals($file, $pathComparison) }).Count -gt 0
+                    if (-not $owned) { $decisionBox.value = New-PreToolDeny "git add target is not an explicit file changed by this task: $file"; return }
+                }
+            }
+        }
+        if ($classification.kind -eq 'commit') {
+            $stagedFiles = @(Get-StagedFiles -Cwd $workdir)
+            if ($stagedFiles.Count -eq 0) { $decisionBox.value = New-PreToolDeny 'Commit requires a non-empty staged file set that can be scope-checked.'; return }
+            $pathComparison = Get-PathStringComparison
+            foreach ($file in $stagedFiles) {
+                if (-not (Test-PathWithinScope -Candidate $file -Roots @($state.task.writeScopePaths))) {
+                    $decisionBox.value = New-PreToolDeny "Staged commit target is outside the Task Lock write scope: $file"; return
+                }
+                if (-not $state.task.allowDirty) {
+                    $owned = @($state.agentChangedFiles | Where-Object { ([string]$_).Equals($file, $pathComparison) }).Count -gt 0
+                    if (-not $owned) { $decisionBox.value = New-PreToolDeny "Staged commit target is not owned by this task: $file"; return }
+                }
+            }
+        }
         if ($toolName -match '^(apply_patch|Edit|Write)$') {
             $files = Get-ApplyPatchFiles -ToolInput $HookData.tool_input -Cwd $workdir
             if (@($files).Count -eq 0) { $decisionBox.value = New-PreToolDeny 'No patch target could be parsed; scope cannot be enforced.'; return }
@@ -877,7 +1037,6 @@ function Invoke-PreToolUse {
                 }
             }
         }
-        $command = [string]$classification.command
         if ($toolName -eq 'Bash' -and $classification.kind -eq 'write' -and (Test-IsRawFileMutationCommand $command)) {
             $decisionBox.value = New-PreToolDeny 'Raw shell filesystem mutation cannot be scoped reliably. Use apply_patch/Edit/Write for local files.'; return
         }

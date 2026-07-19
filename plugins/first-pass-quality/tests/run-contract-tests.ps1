@@ -110,6 +110,7 @@ function Initialize-ClarifiedSession {
 try {
     New-Item -ItemType Directory -Path $workspace -Force | Out-Null
     $env:FIRST_PASS_QUALITY_TEST_DATA = $testRoot
+    Assert-True ((Get-Content -LiteralPath $control -Raw) -match '--diff-filter=ACDMRTUXB') 'Staged-index discovery must include deleted files.'
 
     $management = 'contract-management-bootstrap'
     Initialize-ClarifiedSession $management
@@ -121,6 +122,10 @@ try {
     }
     $managementCall.tool_use_id = 'management-start-task'
     Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'The documented one-line StartTask command must bypass the missing-lock gate as management.'
+    $managementCall.tool_input.command = 'pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
+    $managementCall.tool_use_id = 'management-posix-start-task'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'The documented POSIX pwsh StartTask command must bypass the missing-lock gate as management.'
+    $managementCall.tool_input.command = '& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
     $managementCall.tool_input.command += '; Remove-Item outside.txt'
     $managementCall.tool_use_id = 'management-chained-command'
     Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A chained command must not inherit management bypass.'
@@ -131,6 +136,12 @@ try {
     $managementCall.tool_input.command = "& `"$managementLookalike`" -Action StartTask -Outcome test"
     $managementCall.tool_use_id = 'management-absolute-lookalike'
     Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'An absolute look-alike controller path outside the plugin root must not receive management bypass.'
+    $managementCall.tool_input.command = '& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1.evil" -Action StartTask -Outcome test'
+    $managementCall.tool_use_id = 'management-powershell-suffix-lookalike'
+    Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A suffixed PowerShell controller look-alike must not receive management bypass.'
+    $managementCall.tool_input.command = 'pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1.evil" -Action StartTask -Outcome test'
+    $managementCall.tool_use_id = 'management-posix-suffix-lookalike'
+    Assert-True ((Invoke-HookCase $managementCall).hookSpecificOutput.permissionDecision -eq 'deny') 'A suffixed POSIX controller look-alike must not receive management bypass.'
 
     $session = 'contract-local'
     Initialize-ClarifiedSession $session
@@ -322,6 +333,10 @@ try {
     )
     $wrongTyped = $typedProd.Clone(); $wrongTyped.tool_use_id = 'prod-wrong'; $wrongTyped.tool_input = @{ entity = '43'; project = '7'; value = 'new' }
     Assert-True ((Invoke-HookCase $wrongTyped).hookSpecificOutput.permissionDecision -eq 'deny') 'Entity Lock must reject a different stable id or input.'
+    $negativeConfirm = New-BaseEvent $production 't3-negative' 'UserPromptSubmit'; $negativeConfirm.prompt = 'Не подтверждаю выполнение в production.'
+    $null = Invoke-HookCase $negativeConfirm
+    $negativeConfirmState = Invoke-StateCase $production @('-Action', 'ShowStatus')
+    Assert-True (-not [bool]$negativeConfirmState.confirmationCandidate) 'A negated production confirmation must not create an authorization candidate.'
     $confirm = New-BaseEvent $production 't3' 'UserPromptSubmit'
     $confirm.prompt = 'Подтверждаю выполнение в production.'
     $null = Invoke-HookCase $confirm
@@ -424,6 +439,25 @@ try {
     Assert-True ((Invoke-HookCase $ghFieldWrite).hookSpecificOutput.permissionDecision -eq 'deny') 'gh api fields without explicit GET must be classified as an external write.'
     $ghFieldRead = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $ghFieldRead.tool_name = 'Bash'; $ghFieldRead.tool_input = @{ command = 'gh api repos/o/r/issues/1 --method GET -f per_page=1'; workdir = $workspace }; $ghFieldRead.tool_use_id = 'gh-field-get'
     Assert-True ($null -eq (Invoke-HookCase $ghFieldRead)) 'gh api fields with explicit GET must remain readable.'
+    foreach ($case in @(
+        @{ id = 'reset-hard'; command = 'git reset --hard HEAD' },
+        @{ id = 'clean-force'; command = 'git clean -fd' }
+    )) {
+        $event = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Destructive Git command '$($case.command)' must be denied."
+    }
+    foreach ($case in @(
+        @{ id = 'gh-release-create'; command = 'gh release create v1.2.3' },
+        @{ id = 'gh-workflow-run'; command = 'gh workflow run deploy.yml' },
+        @{ id = 'gh-secret-set'; command = 'gh secret set TOKEN' }
+    )) {
+        $event = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Non-PR GitHub mutation '$($case.command)' must require production authorization."
+    }
+    $updateBranchOutsidePr = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $updateBranchOutsidePr.tool_name = 'Bash'; $updateBranchOutsidePr.tool_input = @{ command = 'gh pr update-branch 23'; workdir = $workspace }; $updateBranchOutsidePr.tool_use_id = 'gh-pr-update-branch-outside-pr'
+    Assert-True ((Invoke-HookCase $updateBranchOutsidePr).hookSpecificOutput.permissionDecision -eq 'deny') 'gh pr update-branch must not run outside a PR Task Lock.'
+    $readThenWrite = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $readThenWrite.tool_name = 'Bash'; $readThenWrite.tool_input = @{ command = 'Get-Content result.txt; gh release create v1.2.3'; workdir = $workspace }; $readThenWrite.tool_use_id = 'read-then-write-chain'
+    Assert-True ((Invoke-HookCase $readThenWrite).hookSpecificOutput.permissionDecision -eq 'deny') 'A command starting as a read must not hide a chained mutation.'
 
     $freshness = 'contract-freshness'
     Initialize-ClarifiedSession $freshness
@@ -489,14 +523,52 @@ try {
 
     $gitAdd = New-BaseEvent $prFlow 't2' 'PreToolUse'; $gitAdd.tool_name = 'Bash'; $gitAdd.tool_input = @{ command = 'git add docs/plan-feature.md'; workdir = $workspace }; $gitAdd.tool_use_id = 'git-add'
     Assert-True ($null -eq (Invoke-HookCase $gitAdd)) 'git add must be allowed after pre-publish gates.'
+    foreach ($case in @(
+        @{ id = 'git-add-dot'; command = 'git add .' },
+        @{ id = 'git-add-directory'; command = 'git add docs' },
+        @{ id = 'git-add-outside'; command = 'git add ../outside.txt' },
+        @{ id = 'git-add-chain'; command = 'git add docs/plan-feature.md; git add ../outside.txt' }
+    )) {
+        $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Unscoped staging command '$($case.command)' must be denied."
+    }
+    $directoryStage = New-BaseEvent $prFlow 't2' 'PreToolUse'; $directoryStage.tool_name = 'Bash'; $directoryStage.tool_input = @{ command = 'git add docs'; workdir = $workspace }; $directoryStage.tool_use_id = 'git-add-directory-reason'
+    Assert-True ((Invoke-HookCase $directoryStage).hookSpecificOutput.permissionDecisionReason -match 'explicit, non-glob') 'An existing directory pathspec must fail parsing instead of being accepted under a broad write scope.'
     $gitAddPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $gitAddPost.tool_name = 'Bash'; $gitAddPost.tool_input = $gitAdd.tool_input; $gitAddPost.tool_response = @{ exit_code = 0 }; $gitAddPost.tool_use_id = 'git-add'
     $null = Invoke-HookCase $gitAddPost
     $commit = New-BaseEvent $prFlow 't2' 'PreToolUse'; $commit.tool_name = 'Bash'; $commit.tool_input = @{ command = 'git commit -m plan'; workdir = $workspace }; $commit.tool_use_id = 'git-commit'
-    Assert-True ($null -eq (Invoke-HookCase $commit)) 'A successful git add must not invalidate publish evidence before commit.'
+    foreach ($case in @(
+        @{ id = 'commit-all'; command = 'git commit -a -m plan' },
+        @{ id = 'commit-amend'; command = 'git commit --amend -m plan' },
+        @{ id = 'commit-pathspec'; command = 'git commit -m plan ../outside.txt' }
+    )) {
+        $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Unscoped commit form '$($case.command)' must be denied."
+    }
+    $env:FIRST_PASS_QUALITY_TEST_STAGED_FILES = Join-Path $workspace 'unrelated.txt'
+    Assert-True ((Invoke-HookCase $commit).hookSpecificOutput.permissionDecision -eq 'deny') 'Commit must reject a staged file outside WriteScope.'
+    $env:FIRST_PASS_QUALITY_TEST_STAGED_FILES = $planFile
+    try {
+        Assert-True ($null -eq (Invoke-HookCase $commit)) 'A successful scoped git add must not invalidate publish evidence before commit.'
+    } finally {
+        Remove-Item Env:FIRST_PASS_QUALITY_TEST_STAGED_FILES -ErrorAction SilentlyContinue
+    }
     $commitPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $commitPost.tool_name = 'Bash'; $commitPost.tool_input = $commit.tool_input; $commitPost.tool_response = @{ exit_code = 0 }; $commitPost.tool_use_id = 'git-commit'
     $null = Invoke-HookCase $commitPost
     $push = New-BaseEvent $prFlow 't2' 'PreToolUse'; $push.tool_name = 'Bash'; $push.tool_input = @{ command = 'git push -u origin feature/example'; workdir = $workspace }; $push.tool_use_id = 'git-push'
-    Assert-True ($null -eq (Invoke-HookCase $push)) 'A successful commit must not invalidate publish evidence before push.'
+    $env:FIRST_PASS_QUALITY_TEST_BRANCH = 'feature/example'
+    try {
+        Assert-True ($null -eq (Invoke-HookCase $push)) 'A successful commit must not invalidate publish evidence before a same-branch push.'
+        foreach ($case in @(
+            @{ id = 'cross-branch-push'; command = 'git push origin HEAD:main' },
+            @{ id = 'other-branch-push'; command = 'git push origin other-branch' }
+        )) {
+            $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+            Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Cross-branch push '$($case.command)' must be denied."
+        }
+    } finally {
+        Remove-Item Env:FIRST_PASS_QUALITY_TEST_BRANCH -ErrorAction SilentlyContinue
+    }
     $pushPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $pushPost.tool_name = 'Bash'; $pushPost.tool_input = $push.tool_input; $pushPost.tool_response = @{ exit_code = 0 }; $pushPost.tool_use_id = 'git-push'
     $null = Invoke-HookCase $pushPost
     $afterPush = Invoke-StateCase $prFlow @('-Action', 'ShowStatus')
@@ -513,6 +585,17 @@ try {
     Assert-True ((Invoke-HookCase $forcePush).hookSpecificOutput.permissionDecision -eq 'deny') 'PR mode must not authorize force-push.'
     $plusForcePush = New-BaseEvent $prFlow 't2' 'PreToolUse'; $plusForcePush.tool_name = 'Bash'; $plusForcePush.tool_input = @{ command = 'git push origin +HEAD:main'; workdir = $workspace }; $plusForcePush.tool_use_id = 'plus-force-push'
     Assert-True ((Invoke-HookCase $plusForcePush).hookSpecificOutput.permissionDecision -eq 'deny') 'PR mode must not authorize a plus-prefixed force-push refspec.'
+    foreach ($case in @(
+        @{ id = 'delete-push'; command = 'git push --delete origin main' },
+        @{ id = 'mirror-push'; command = 'git push --mirror origin' },
+        @{ id = 'prune-push'; command = 'git push --prune origin' },
+        @{ id = 'empty-source-push'; command = 'git push origin :main' }
+    )) {
+        $event = New-BaseEvent $prFlow 't2' 'PreToolUse'; $event.tool_name = 'Bash'; $event.tool_input = @{ command = $case.command; workdir = $workspace }; $event.tool_use_id = $case.id
+        Assert-True ((Invoke-HookCase $event).hookSpecificOutput.permissionDecision -eq 'deny') "Destructive push '$($case.command)' must not be authorized by PR mode."
+    }
+    $updateBranch = New-BaseEvent $prFlow 't2' 'PreToolUse'; $updateBranch.tool_name = 'Bash'; $updateBranch.tool_input = @{ command = 'gh pr update-branch 23'; workdir = $workspace }; $updateBranch.tool_use_id = 'gh-pr-update-branch'
+    Assert-True ($null -eq (Invoke-HookCase $updateBranch)) 'gh pr update-branch must require and honor PR publish gates as a push-equivalent action.'
     $createPrPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $createPrPost.tool_name = 'Bash'; $createPrPost.tool_input = $createPr.tool_input; $createPrPost.tool_response = @{ exit_code = 0 }; $createPrPost.tool_use_id = 'gh-pr-create'
     $null = Invoke-HookCase $createPrPost
     $null = Invoke-StateCase $prFlow @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'pr-created', '-EvidenceStatus', 'passed', '-Subject', 'https://github.test/o/r/pull/1', '-ExpectedToolName', 'Bash')
@@ -531,6 +614,42 @@ try {
     $afterPushRecovery = Invoke-StateCase $prFlow @('-Action', 'ShowStatus')
     Assert-True (-not [bool]$afterPushRecovery.failedWritePending) 'Verified recovery must clear the failed-write mutation pause.'
     $null = Invoke-StateCase $prFlow @('-Action', 'SetStatus', '-FinalStatus', 'ready')
+
+    $stagedDeletion = 'contract-staged-deletion'
+    $gitWorkspace = Join-Path $testRoot 'git-workspace'
+    New-Item -ItemType Directory -Path $gitWorkspace -Force | Out-Null
+    & git -C $gitWorkspace init --quiet
+    & git -C $gitWorkspace config user.name 'Contract Test'
+    & git -C $gitWorkspace config user.email 'contract@example.invalid'
+    [IO.File]::WriteAllText((Join-Path $gitWorkspace 'allowed.txt'), "baseline`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $gitWorkspace 'outside.txt'), "baseline`n", [Text.UTF8Encoding]::new($false))
+    & git -C $gitWorkspace add allowed.txt outside.txt
+    & git -C $gitWorkspace commit --quiet -m baseline
+    [IO.File]::AppendAllText((Join-Path $gitWorkspace 'allowed.txt'), "changed`n", [Text.UTF8Encoding]::new($false))
+    Remove-Item -LiteralPath (Join-Path $gitWorkspace 'outside.txt') -Force
+    & git -C $gitWorkspace add -- allowed.txt outside.txt
+    $actualStaged = @(& git -C $gitWorkspace diff --cached --name-only --no-renames --diff-filter=ACDMRTUXB)
+    if ($actualStaged.Count -ne 2 -or 'outside.txt' -notin $actualStaged) { throw 'Temporary Git index did not contain the expected modified file and staged deletion.' }
+    Initialize-ClarifiedSession $stagedDeletion
+    $null = Invoke-StateCase $stagedDeletion @(
+        '-Action', 'StartTask', '-Outcome', 'Reject an out-of-scope staged deletion', '-Scope', $gitWorkspace,
+        '-WriteScope', (Join-Path $gitWorkspace 'allowed.txt'), '-Mode', 'pr', '-Risk', 'medium',
+        '-CompletionPolicy', 'wait-for-required-gates', '-Workflow', 'none', '-PrePublishWhen', 'staged index reviewed',
+        '-DoneWhen', 'unsafe commit rejected', '-AllowDirty'
+    )
+    $stagedValidation = New-BaseEvent $stagedDeletion 't2' 'PostToolUse'; $stagedValidation.cwd = $gitWorkspace; $stagedValidation.tool_name = 'Bash'; $stagedValidation.tool_input = @{ command = 'git diff --cached --check'; workdir = $gitWorkspace }; $stagedValidation.tool_response = @{ exit_code = 0 }; $stagedValidation.tool_use_id = 'staged-deletion-validation'
+    $null = Invoke-HookCase $stagedValidation
+    $null = Invoke-StateCase $stagedDeletion @('-Action', 'AddEvidence', '-CriterionId', 'P1', '-Validator', 'staged diff', '-EvidenceStatus', 'passed', '-Subject', $gitWorkspace, '-ExpectedToolName', 'Bash')
+    $null = Invoke-StateCase $stagedDeletion @('-Action', 'SetGate', '-Gate', 'publish', '-GateStatus', 'passed')
+    $null = Invoke-StateCase $stagedDeletion @('-Action', 'SetGate', '-Gate', 'selfReview', '-GateStatus', 'passed')
+    $unsafeCommit = New-BaseEvent $stagedDeletion 't2' 'PreToolUse'; $unsafeCommit.cwd = $gitWorkspace; $unsafeCommit.tool_name = 'Bash'; $unsafeCommit.tool_input = @{ command = 'git commit -m unsafe'; workdir = $gitWorkspace }; $unsafeCommit.tool_use_id = 'staged-deletion-commit'
+    $env:FIRST_PASS_QUALITY_TEST_STAGED_FILES = @($actualStaged | ForEach-Object { Join-Path $gitWorkspace $_ }) -join '~~'
+    try {
+        $unsafeCommitDecision = Invoke-HookCase $unsafeCommit
+        Assert-True ($unsafeCommitDecision.hookSpecificOutput.permissionDecisionReason -match 'outside the Task Lock write scope') ('Commit scope-checking must include staged deletions alongside allowed staged files. Decision: ' + ($unsafeCommitDecision | ConvertTo-Json -Depth 8 -Compress))
+    } finally {
+        Remove-Item Env:FIRST_PASS_QUALITY_TEST_STAGED_FILES -ErrorAction SilentlyContinue
+    }
 
     $stopSession = 'contract-stop'
     Initialize-ClarifiedSession $stopSession
