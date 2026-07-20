@@ -725,17 +725,17 @@ class ImageUtils:
         """
         result = image.convert("RGBA")
 
+        if not 0.0 <= opacity <= 1.0:
+            raise ValueError("opacity must be between 0 and 1")
+
         # Scale watermark
         wm_width = int(result.width * scale)
-        wm = ImageUtils.resize(watermark, width=wm_width)
+        wm = ImageUtils.resize(watermark, width=wm_width).convert("RGBA")
 
         # Apply opacity
-        if wm.mode == "RGBA":
-            r, g, b, a = wm.split()
-            a = a.point(lambda x: int(x * opacity))
-            wm = Image.merge("RGBA", (r, g, b, a))
-        else:
-            wm = wm.convert("RGBA")
+        r, g, b, a = wm.split()
+        a = a.point(lambda x: round(x * opacity))
+        wm = Image.merge("RGBA", (r, g, b, a))
 
         # Calculate position
         img_width, img_height = result.size

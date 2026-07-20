@@ -13,7 +13,7 @@ Required fields:
 - `workflowId`: `none` or the required workflow/skill chain.
 - `workflowStage`: current phase such as `planning`, `implementation`, or `none`.
 - `writeScopePaths`: writable subset of `scopePaths`; use it to keep a planning phase plan-only.
-- `allowedActions`: an enforced allowlist of `read`, `write`, `execute`, `validate`, `commit`, `push`, `pr`, `production`, and `delegate`.
+- `allowedActions`: an enforced allowlist of `read`, `write`, `execute`, `unscoped-shell`, `validate`, `commit`, `push`, `pr`, `production`, and `delegate`. `unscoped-shell` is never a default, requires `risk: high`, records that command side effects cannot be contained by `writeScopePaths`, and is conservatively tracked as a content write.
 - `prePublishWhen`: `P1`, `P2`, etc.; evidence required before PR publication operations.
 - `doneWhen`: acceptance criteria; each becomes `C1`, `C2`, etc.
 

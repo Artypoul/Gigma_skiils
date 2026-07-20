@@ -11,6 +11,8 @@ Use this skill before the first tool call for any non-trivial task: file inspect
 
 Skip only for a direct answer that needs no tools, no current state, and no persistent artifact.
 
+The hook recognizes conservative stable trivial prompts (for example, `2 + 2`, a greeting, or a timeless definition) and lets the agent answer them without a Task Lock only while no tool has run. Paths, current/latest facts, task verbs, and any tool call keep the normal clarification/Task Lock boundary.
+
 Hook execution requires PowerShell 7 (`pwsh`) on `PATH`. If the runtime does not provide it, report mechanical enforcement as unavailable and do not claim that Task Lock hooks are active.
 
 Run every controller action as its own one-line shell tool call. The hook recognizes the canonical root expression shown below without allowing chained commands.
@@ -41,6 +43,8 @@ The absolute path above resolves the mirror controller when compatible hooks hav
 ```powershell
 & "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
 ```
+
+`execute` covers commands the classifier understands as scoped execution. An unknown shell command fails closed by default. Add `unscoped-shell` only when the user explicitly authorized a necessary known CLI, set `Risk high`, and state that its side effects cannot be mechanically contained by `WriteScope`; the controller conservatively records every such call as a content write and invalidates stale gates. Never use it for production, merge, deploy, force-push, money, or account/data mutation.
 
 For an already complete new request, add the audited shortcut to that same command:
 

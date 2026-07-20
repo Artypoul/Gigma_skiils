@@ -142,6 +142,18 @@ function Test-IsConciseClarification {
     $text -match '\?\s*$'
 }
 
+function Test-IsDirectAnswerPrompt {
+    param([AllowNull()][string]$Prompt)
+    if ([string]::IsNullOrWhiteSpace($Prompt)) { return $false }
+    $text = $Prompt.Trim()
+    if ($text.Length -gt 240 -or $text -match '[\r\n]' -or $text -match '(?i)https?://|[A-Z]:\\|(?:^|\s)[./~][\w.-]+|\.(?:ps1|py|js|ts|json|ya?ml|md)\b') { return $false }
+    if ($text -match '(?i)\b(today|current|latest|recent|price|weather|news|schedule|version|сегодня|сейчас|текущ|последн|новост|погод|цен|расписан|верси)\w*\b') { return $false }
+    if ($text -match '(?i)\b(create|write|edit|change|delete|remove|run|execute|open|search|browse|check|verify|review|analy[sz]e|fix|implement|send|commit|push|создай|напиши|измени|удали|запусти|выполни|открой|найди|проверь|ревью|проанализ|исправ|реализ|отправ|закоммит|запуш)\w*\b') { return $false }
+    if ($text -match '(?i)^\s*(?:what\s+is\s+|сколько\s+будет\s+)?[-+*/().\d\s]+\??\s*$') { return $true }
+    if ($text -match '(?i)^\s*(hello|hi|hey|привет|здравствуй(?:те)?)[!?.\s]*$') { return $true }
+    $text -match '(?i)^\s*(?:what\s+(?:does\s+.{1,120}\s+mean|is\s+(?:a|an)\s+.{1,120})|что\s+(?:такое|означает)\s+.{1,120})[?]?\s*$'
+}
+
 function Get-GitRoot {
     param([Parameter(Mandatory)][string]$Cwd)
     try {
@@ -220,6 +232,7 @@ function Read-State {
         if ($state -and -not $state.ContainsKey('delegationCandidateTurnId')) { $state.delegationCandidateTurnId = $null }
         if ($state -and -not $state.ContainsKey('clarificationSatisfiedBy')) { $state.clarificationSatisfiedBy = $null }
         if ($state -and -not $state.ContainsKey('specificationBasisHash')) { $state.specificationBasisHash = $null }
+        if ($state -and -not $state.ContainsKey('directAnswerEligible')) { $state.directAnswerEligible = $false }
         $state
     } catch { $null }
 }
@@ -268,6 +281,7 @@ function New-State {
         clarificationSatisfiedBy = $null
         specificationBasisHash = $null
         autoReview = $false
+        directAnswerEligible = $false
         stopOverride = $false
         contextConfirmed = $false
         confirmationCandidate = $false
@@ -505,11 +519,11 @@ function Test-IsSafeGhPrUpdateBranchCommand {
     $true
 }
 
-function Test-IsKubectlProductionCommand {
+function Get-KubectlCommandKind {
     param([AllowNull()][string]$Command)
-    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $null }
     $match = [regex]::Match($Command, '(?is)^\s*kubectl(?:\.exe)?\s+(?<tail>.+?)\s*$')
-    if (-not $match.Success) { return $false }
+    if (-not $match.Success) { return $null }
     $tokens = @(Get-ShellCommandTokens $match.Groups['tail'].Value)
     $valueOptions = @(
         '--as', '--as-group', '--cache-dir', '--certificate-authority', '--client-certificate', '--client-key',
@@ -524,15 +538,16 @@ function Test-IsKubectlProductionCommand {
         $verbIndex = $index
         break
     }
-    if ($verbIndex -lt 0) { return $true }
+    if ($verbIndex -lt 0) { return 'production-shell' }
     $verb = ([string]$tokens[$verbIndex]).ToLowerInvariant()
     $subcommand = if ($verbIndex + 1 -lt $tokens.Count) { ([string]$tokens[$verbIndex + 1]).ToLowerInvariant() } else { '' }
-    if ($verb -eq 'config') { return $subcommand -notin @('current-context', 'get-contexts', 'view') }
-    if ($verb -eq 'auth') { return $subcommand -notin @('can-i', 'whoami') }
-    $verb -notin @(
+    if ($verb -eq 'config') { return $(if ($subcommand -in @('current-context', 'get-contexts', 'view')) { 'read' } else { 'production-shell' }) }
+    if ($verb -eq 'auth') { return $(if ($subcommand -in @('can-i', 'whoami')) { 'read' } else { 'production-shell' }) }
+    if ($verb -in @(
         'api-resources', 'api-versions', 'cluster-info', 'completion', 'describe', 'diff', 'explain',
         'get', 'help', 'logs', 'options', 'top', 'version', 'wait'
-    )
+    )) { return 'read' }
+    'production-shell'
 }
 
 function Test-IsRawFileMutationCommand {
@@ -556,7 +571,8 @@ function Get-ToolClassification {
         $productionPattern = '(?i)\b(terraform\s+apply|ansible-playbook|gh\s+pr\s+merge|deploy|release\s+promote)\b'
         $externalWritePattern = '(?i)\b(Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\b.*\b(POST|PUT|PATCH|DELETE)\b|\b(ssh|scp|rsync)\b'
         $writePattern = '(?i)\b(git\s+(merge|rebase|reset|clean)|npm\s+(install|uninstall)|pnpm\s+(add|remove|install)|yarn\s+(add|remove|install)|pip\s+install)\b'
-        if ((Test-IsDangerousGitPush $command) -or (Test-IsKubectlProductionCommand $command) -or $command -match '(?i)^\s*git\s+(reset|clean|checkout|restore|switch)\b' -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
+        $kubectlKind = Get-KubectlCommandKind $command
+        if ((Test-IsDangerousGitPush $command) -or $kubectlKind -eq 'production-shell' -or $command -match '(?i)^\s*git\s+(reset|clean|checkout|restore|switch)\b' -or $command -match $productionPattern) { return @{ kind = 'production-shell'; command = $command } }
         if ($command -match '(?i)\bgit\s+commit\b') {
             if (-not (Test-IsSafeGitCommitCommand $command)) { return @{ kind = 'production-shell'; command = $command } }
             return @{ kind = 'commit'; command = $command }
@@ -568,11 +584,13 @@ function Get-ToolClassification {
         if ((Test-IsCurlExternalWrite $command) -or (Test-IsGhApiExternalWrite $command) -or $command -match $externalWritePattern) { return @{ kind = 'external-write'; command = $command } }
         if ($command -match $validatePattern) { return @{ kind = 'validate'; command = $command } }
         if ((Test-IsRawFileMutationCommand $command) -or $command -match $writePattern) { return @{ kind = 'write'; command = $command } }
+        if ($kubectlKind -eq 'read') { return @{ kind = 'read'; command = $command } }
+        if ($command -match '(?i)^\s*curl(?:\.exe)?\b' -and $command -notmatch '(?i)(?:^|\s)(?:-o|--output|-O|--remote-name|-T|--upload-file)(?:\s|=|$)') { return @{ kind = 'read'; command = $command } }
         if ($command -match $readPattern) { return @{ kind = 'read'; command = $command } }
         if ($command -match '(?i)^\s*gh\s+api\b') { return @{ kind = 'read'; command = $command } }
         if ($command -match '(?i)^\s*gh\b') { return @{ kind = 'external-write'; command = $command } }
         if ($command -match '(?i)^\s*git\b') { return @{ kind = 'production-shell'; command = $command } }
-        return @{ kind = 'execute'; command = $command }
+        return @{ kind = 'unclassified-shell'; command = $command }
     }
     if ($ToolName -match '^(view_image|get_goal|list_mcp_resources|list_mcp_resource_templates|read_mcp_resource|codex_app__read_thread_terminal)$') {
         return @{ kind = 'read'; command = $command }
@@ -770,6 +788,7 @@ function Get-RequiredAction {
         'pr-write' { 'pr' }
         'validate' { 'validate' }
         'execute' { 'execute' }
+        'unclassified-shell' { 'unscoped-shell' }
         'delegation' { 'delegate' }
         'external-write' { 'production' }
         'production-shell' { 'production' }
@@ -864,7 +883,7 @@ function Invoke-SessionStart {
     @{
         hookSpecificOutput = @{
             hookEventName = 'SessionStart'
-            additionalContext = 'First-Pass Quality enforcement is active. For a fully specified new task, create an audited Task Lock with -FullySpecified and -SpecificationBasis; otherwise ask one clarification question. Create the Task Lock before any non-management tool use.'
+            additionalContext = 'First-Pass Quality enforcement is active. Stable trivial no-tool prompts may be answered directly when project rules allow it. Otherwise, create an audited Task Lock for a fully specified task or ask one clarification question, and create the Task Lock before non-management tools.'
         }
     }
 }
@@ -898,6 +917,7 @@ function Invoke-UserPromptSubmit {
         }
         $state.lastPromptHash = Get-Hash $prompt
         $state.lastPromptAt = Get-UtcNow
+        $state.directAnswerEligible = Test-IsDirectAnswerPrompt $prompt
         $correction = $prompt -match '(?i)(опять|ошиб|не так|не туда|накосяч|ты не сделал|wrong|incorrect)'
         $stopCandidate = [regex]::Replace(
             $prompt,
@@ -920,6 +940,8 @@ function Invoke-UserPromptSubmit {
             $state.phase = 'clarified'
             $state.gates.clarification = 'passed'
             $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'Fully specified automated review detected. Create the review Task Lock now; do not ask the standard clarification question.' } }
+        } elseif ($state.phase -eq 'awaiting_clarification' -and $state.directAnswerEligible -and -not $state.task -and [int]$state.tools.count -eq 0) {
+            $outputBox.value = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = 'Stable trivial no-tool prompt detected. Answer directly without a Task Lock; do not call tools or mutate state.' } }
         } elseif ($state.phase -eq 'awaiting_clarification' -and $state.clarificationAsked) {
             $state.clarified = $true
             $state.clarificationSatisfiedBy = 'user-answer'
@@ -1143,12 +1165,12 @@ function Invoke-PostToolUse {
             observedAt = Get-UtcNow
             responseHash = $responseHash
         }
-        $mutationKinds = @('write', 'vcs-stage', 'commit', 'push', 'pr-write', 'external-write', 'production-shell')
+        $mutationKinds = @('write', 'unclassified-shell', 'vcs-stage', 'commit', 'push', 'pr-write', 'external-write', 'production-shell')
         if ($classification.kind -in $mutationKinds) {
             $state.tools.writes = [int]$state.tools.writes + 1
             if (-not $success) { $state.failedWritePending = $true }
         }
-        if ($classification.kind -in @('write', 'external-write', 'production-shell')) {
+        if ($classification.kind -in @('write', 'unclassified-shell', 'external-write', 'production-shell')) {
             $state.lastWriteToolUseId = [string]$HookData.tool_use_id
             $state.lastWriteAt = Get-UtcNow
             $state.gates.publish = if ($state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
@@ -1283,6 +1305,9 @@ function Invoke-Stop {
                 Write-State -Path $path -State $state
                 return
             }
+            if ($state.directAnswerEligible -and [int]$state.tools.count -eq 0 -and -not [string]::IsNullOrWhiteSpace($last)) {
+                return
+            }
             $outputBox.value = New-StopBlock 'Before tools or a substantive answer, ask Art one concise clarification question about the expected result.'
             return
         }
@@ -1412,11 +1437,12 @@ function Invoke-StateAction {
                         'production' { @('read', 'write', 'execute', 'validate', 'production') }
                     }
                 }
-                $validActions = @('read', 'write', 'execute', 'validate', 'commit', 'push', 'pr', 'production', 'delegate')
+                $validActions = @('read', 'write', 'execute', 'unscoped-shell', 'validate', 'commit', 'push', 'pr', 'production', 'delegate')
                 $invalidActions = @($actions | Where-Object { $_ -notin $validActions })
                 if ($invalidActions.Count -gt 0) { throw ('Invalid allowed action(s): ' + ($invalidActions -join ', ')) }
                 if ($Mode -ne 'production' -and 'production' -in $actions) { throw 'The production action requires production mode.' }
                 if ($Mode -ne 'pr' -and @($actions | Where-Object { $_ -in @('commit', 'push', 'pr') }).Count -gt 0) { throw 'Commit, push, and pr actions require pr mode.' }
+                if ('unscoped-shell' -in $actions -and $Risk -ne 'high') { throw 'The unscoped-shell action requires high risk because command side effects cannot be contained by WriteScope.' }
                 $reviewRequired = $Mode -eq 'pr' -or $workflowId -match '(?i)feature|deploy'
                 $state.task = @{
                     outcome = Get-NormalizedText $Outcome 700
@@ -1558,7 +1584,7 @@ function Invoke-StateAction {
                 if ($EvidenceStatus -eq 'passed') {
                     if (-not $state.lastTool -or -not $state.lastTool.success) { throw 'Passed evidence must bind to a successful observed tool call.' }
                     if ([string]::IsNullOrWhiteSpace($ExpectedToolName) -or $ExpectedToolName -ne [string]$state.lastTool.toolName) { throw 'ExpectedToolName must exactly match the latest successful tool.' }
-                    if ([string]$state.lastTool.kind -notin @('read', 'write', 'execute', 'validate', 'vcs-stage', 'commit', 'push', 'pr-write', 'external-write')) { throw 'Management, coordination, and delegation calls cannot serve as acceptance evidence.' }
+                    if ([string]$state.lastTool.kind -notin @('read', 'write', 'execute', 'unclassified-shell', 'validate', 'vcs-stage', 'commit', 'push', 'pr-write', 'external-write')) { throw 'Management, coordination, and delegation calls cannot serve as acceptance evidence.' }
                     if ([string]$state.lastTool.observedAt -lt [string]$state.task.createdAt) { throw 'Evidence tool result predates the current Task Lock.' }
                 }
                 $entry = @{

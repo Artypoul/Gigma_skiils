@@ -135,6 +135,24 @@ try {
     Assert-True ($skillText.Contains('standalone `.codex/skills` mirror')) 'Skill instructions must document standalone Codex mirror mode.'
     Assert-True ($skillText.Contains('<absolute loaded skill directory>/scripts/quality-control.ps1')) 'Mirror mode must invoke the controller through the loaded skill absolute path.'
 
+    $directAnswer = 'contract-direct-answer'
+    $directStart = New-BaseEvent $directAnswer 't0' 'SessionStart'
+    $directStart.Remove('turn_id')
+    $directStart.source = 'startup'
+    $null = Invoke-HookCase $directStart
+    $directPrompt = New-BaseEvent $directAnswer 't1' 'UserPromptSubmit'
+    $directPrompt.prompt = 'Сколько будет 2 + 2?'
+    $directContext = Invoke-HookCase $directPrompt
+    Assert-True ($directContext.hookSpecificOutput.additionalContext -match 'Answer directly') 'A stable trivial prompt must receive the no-tool direct-answer context.'
+    $directStop = New-BaseEvent $directAnswer 't1' 'Stop'
+    $directStop.stop_hook_active = $false
+    $directStop.last_assistant_message = '4'
+    Assert-True ($null -eq (Invoke-HookCase $directStop)) 'A substantive direct answer to a trivial no-tool prompt must not require clarification or a Task Lock.'
+    $unstablePrompt = New-BaseEvent $directAnswer 't2' 'UserPromptSubmit'
+    $unstablePrompt.prompt = 'Кто президент этой страны?'
+    $unstableContext = Invoke-HookCase $unstablePrompt
+    Assert-True ($unstableContext.hookSpecificOutput.additionalContext -notmatch 'Answer directly') 'A potentially time-sensitive role question must not use the trivial direct-answer exemption.'
+
     $management = 'contract-management-bootstrap'
     Initialize-ClarifiedSession $management
     $managementCall = New-BaseEvent $management 't2' 'PreToolUse'
@@ -472,6 +490,24 @@ try {
         '-Mode', 'local-change', '-Risk', 'medium', '-CompletionPolicy', 'deliver-current-state',
         '-Workflow', 'none', '-DoneWhen', 'classification enforced', '-AllowedActions', 'read~~write~~execute~~validate', '-AllowDirty'
     )
+    $unknownShell = New-BaseEvent $shellGuard 't2' 'PreToolUse'; $unknownShell.tool_name = 'Bash'; $unknownShell.tool_input = @{ command = 'python3 -c ''open("/tmp/out", "w").write("escaped")'''; workdir = $workspace }; $unknownShell.tool_use_id = 'unknown-python-write'
+    $unknownDecision = Invoke-HookCase $unknownShell
+    Assert-True ($unknownDecision.hookSpecificOutput.permissionDecisionReason -match 'unscoped-shell') 'An unclassified shell command must fail closed instead of inheriting scoped execute authority.'
+    $unscopedGuard = 'contract-explicit-unscoped-shell'
+    Initialize-ClarifiedSession $unscopedGuard
+    $unscopedArgs = @(
+        '-Action', 'StartTask', '-Outcome', 'Run one explicitly authorized specialist CLI', '-Scope', $workspace,
+        '-Mode', 'local-change', '-Risk', 'medium', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'CLI inspected', '-AllowedActions', 'read~~unscoped-shell', '-AllowDirty'
+    )
+    $null = Invoke-StateCase $unscopedGuard $unscopedArgs -ExpectFailure
+    $null = Invoke-StateCase $unscopedGuard @($unscopedArgs | ForEach-Object { if ($_ -eq 'medium') { 'high' } else { $_ } })
+    $explicitUnscoped = New-BaseEvent $unscopedGuard 't2' 'PreToolUse'; $explicitUnscoped.tool_name = 'Bash'; $explicitUnscoped.tool_input = @{ command = 'specialist-cli --version'; workdir = $workspace }; $explicitUnscoped.tool_use_id = 'explicit-unscoped-shell'
+    Assert-True ($null -eq (Invoke-HookCase $explicitUnscoped)) 'A high-risk Task Lock may explicitly authorize a necessary unclassified specialist CLI.'
+    $explicitUnscopedPost = New-BaseEvent $unscopedGuard 't2' 'PostToolUse'; $explicitUnscopedPost.tool_name = 'Bash'; $explicitUnscopedPost.tool_input = $explicitUnscoped.tool_input; $explicitUnscopedPost.tool_response = @{ exit_code = 0 }; $explicitUnscopedPost.tool_use_id = 'explicit-unscoped-shell'
+    $null = Invoke-HookCase $explicitUnscopedPost
+    $unscopedState = Invoke-StateCase $unscopedGuard @('-Action', 'ShowStatus')
+    Assert-True ([int]$unscopedState.tools.writes -eq 1 -and $unscopedState.lastWriteToolUseId -eq 'explicit-unscoped-shell') 'Every unscoped shell execution must conservatively invalidate content gates as a potential write.'
     foreach ($case in @(
         @{ id = 'rm'; command = 'rm result.txt' },
         @{ id = 'mv'; command = 'mv old.txt new.txt' },
@@ -740,6 +776,19 @@ try {
     } finally {
         Remove-Item Env:FIRST_PASS_QUALITY_TEST_STAGED_FILES -ErrorAction SilentlyContinue
     }
+
+    $truncatedPngPath = Join-Path $workspace 'truncated.png'
+    [byte[]]$truncatedPng = 137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1
+    [IO.File]::WriteAllBytes($truncatedPngPath, $truncatedPng)
+    $truncatedPngResult = Invoke-ArtifactCase -Path $truncatedPngPath
+    Assert-True ($truncatedPngResult.exitCode -ne 0 -and $truncatedPngResult.result.status -eq 'failed') 'A PNG truncated after its dimensions must fail validation.'
+    Assert-True (@($truncatedPngResult.result.checks | Where-Object { $_.name -eq 'image-signature' -and $_.status -eq 'failed' }).Count -eq 1) 'A PNG without complete CRC-checked chunks and terminal IEND must fail its container check.'
+
+    $validPngPath = Join-Path $workspace 'valid.png'
+    [IO.File]::WriteAllBytes($validPngPath, [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='))
+    $validPngResult = Invoke-ArtifactCase -Path $validPngPath
+    Assert-True ($validPngResult.exitCode -eq 0 -and $validPngResult.result.status -eq 'passed') 'A complete CRC-valid PNG with IDAT and terminal IEND must pass validation.'
+    Assert-True (@($validPngResult.result.checks | Where-Object { $_.name -eq 'image-dimensions' -and $_.status -eq 'passed' -and $_.detail -eq '1x1' }).Count -eq 1) 'PNG dimensions must come from the validated IHDR chunk.'
 
     $truncatedWebpPath = Join-Path $workspace 'truncated.webp'
     [byte[]]$truncatedWebp = 82,73,70,70,4,0,0,0,87,69,66,80

@@ -18,22 +18,23 @@
 - дублирующие feature watch/turnstile hooks запрещены для одной сессии;
 - восемь user-specific feature-hook тестов заменены прямыми тестами controller;
 - test runner сам находит `pwsh` и использует системный temp path;
-- Windows и Ubuntu CI запускают полный 203-case contract suite;
+- Windows и Ubuntu CI запускают полный contract suite; локально текущая версия проходит 218/218 assertions;
 - изолированный smoke-test запускает реальные Codex/Claude hook commands через доступный `pwsh`, проверяет их plugin data и восемью assertions доказывает, что пользовательские pointer-файлы не меняются;
 - Windows smoke-test разрешает Git Bash относительно фактического `git.exe`, чтобы не запустить несовместимый одноимённый системный `bash.exe` на CI runner;
 - каталоговый validator проверяет hook discovery и запрещает user-specific пути в hooks/tests.
 
-Семь remote review проходов этого PR выявили 42 threads: четыре повторяли уже найденные проблемы, итого 38 уникальных дефектов, из них 12 P1. Последние проходы дополнительно нашли POSIX bootstrap deadlock, destructive/scoped Git формы, неизвестные `gh` mutations, ложное production-подтверждение при отрицании, stale delegation authorization, Playwright session/mode ошибки, nested review-comment pagination, пропуск повреждённого WebP, отсутствующий SAM ONNX exporter, лишнюю обязательность `networkx`, deadlock полностью заданной задачи, нерабочий bootstrap standalone mirror, блокировку safe HEAD push, unbound `gh pr update-branch`, пропуски mutating `kubectl` verbs и PowerShell REST aliases. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
+Восемь remote review проходов этого PR выявили 49 threads: четыре повторяли уже найденные проблемы, итого 45 уникальных дефектов, из них 12 P1. Последние проходы дополнительно нашли POSIX bootstrap deadlock, destructive/scoped Git формы, неизвестные `gh` mutations, ложное production-подтверждение при отрицании, stale delegation authorization, Playwright session/mode ошибки, nested review-comment pagination, пропуск повреждённых WebP и PNG, отсутствующий SAM ONNX exporter, лишнюю обязательность `networkx`, deadlock полностью заданной и тривиальной no-tool задачи, нерабочий bootstrap standalone mirror, блокировку safe HEAD push, unbound `gh pr update-branch`, пропуски mutating `kubectl` verbs и PowerShell REST aliases, обход `WriteScope` неизвестной shell-командой, неправильные пути background skill, тихую смену метода удаления фона, игнорирование opacity у RGB watermark и повреждённый YAML metadata. Все подтверждённые замечания перенесены в controller/toolkit fixes и regression-тесты; зелёный CI без обработки review больше не считается достаточным.
 
 ## Проверочная таблица реализации
 
 | Требование | Инструмент реализации | Проверка | Статус |
 | --- | --- | --- | --- |
 | Не спрашивать лишнее и не обходить строгие project rules | clarification state + audited `StartTask -FullySpecified -SpecificationBasis` | Неполная задача требует вопрос; полностью заданная получает Task Lock с hash основания; более строгий `AGENTS.md` сохраняет приоритет | Реализовано |
+| Не заставлять тривиальный ответ проходить workflow | консервативный `directAnswerEligible` для стабильных no-tool вопросов | `2 + 2` получает прямой ответ без Task Lock; пути, current/latest факты, task verbs и tool use сохраняют обычный gate | Реализовано |
 | Не повторять вопрос для продолжения | `ConfirmContext`, `StartTask -Continuation` | Continuation сохраняет границы или создаёт новый Task Lock | Реализовано |
 | Зафиксировать первую проходку | `StartTask`: outcome, scope, write scope, mode, risk, actions, workflow/stage, criteria | Неполный Task Lock отклоняется | Реализовано |
 | Не выйти за область | OS-aware scope/write scope, source + `Move to:` target parser, reparse-component guard, dirty guard | Destination move, неверный case, symlink/junction escape и запись вне write scope блокируются | Реализовано для hooked local tools |
-| Реально применять allowed actions | safe Git/GitHub allowlists + tool-kind classification до вызова | Неавторизованный write/commit/push/PR/delegate блокируется; POSIX writes, curl/`gh api`/`irm`/`iwr`, releases/workflows/secrets не проходят как execute/read | Реализовано |
+| Реально применять allowed actions | safe Git/GitHub/kubectl/curl allowlists + fail-closed tool-kind classification до вызова | Неавторизованный write/commit/push/PR/delegate блокируется; неизвестный shell требует отдельный high-risk `unscoped-shell` и всегда учитывается как потенциальная content write; POSIX writes, curl/`gh api`/`irm`/`iwr`, releases/workflows/secrets не проходят как scoped execute/read | Реализовано |
 | Не заблокировать создание Task Lock | canonical plugin-root invocation для PowerShell и POSIX `pwsh`, management classifier без command chaining | Оба documented `StartTask` проходят до lock; look-alike, `;`, pipeline, redirection, extra subexpression и chained call отклоняются | Реализовано |
 | Разрешать controller path в standalone mirror | абсолютный путь каталога к загруженному `SKILL.md`, без plugin env и без алиасов/копий | Skill содержит отдельные PowerShell/POSIX пути и не обещает Task Lock state без предварительной hook-инициализации | Реализовано |
 | Не включить чужие изменения в commit | explicit non-glob `git add` path parser + staged-index WriteScope/ownership check | `git add .`, broad/directory/outside staging, `commit -a`/`--amend`/pathspec и чужой staged file отклоняются | Реализовано |
@@ -54,18 +55,20 @@
 | Подтверждение production одноразовое и положительное | latest-prompt confirmation, negation guard, consumed authorization | отрицание, повтор и auto-retry не дают разрешение | Реализовано |
 | Failed write не каскадирует | mutation pause + read/validator + `AcknowledgeWriteRecovery` | следующая mutation блокируется до проверки состояния | Реализовано |
 | Делегация не расширяет полномочия | latest-prompt turn-bound delegate action, bounded handoff, parent verification | stale/unbounded spawn и mutation до parent check отклоняются | Реализовано для normal spawn path |
-| Артефакт проверяется структурно | `artifact-validator.ps1` | Markdown/JSON/PNG/JPEG/WebP/PDF/DOCX container checks; WebP chunk/dimensions parse | Реализовано; visual QA отдельно |
+| Артефакт проверяется структурно | `artifact-validator.ps1` | Markdown/JSON/PNG/JPEG/WebP/PDF/DOCX container checks; PNG полностью сканирует chunk boundaries, CRC, IDAT и terminal IEND; WebP проверяет RIFF chunks/dimensions | Реализовано; visual QA отдельно |
+| Image skills не меняют метод и параметры молча | explicit background method, loaded-skill absolute path, RGBA-before-opacity watermark | `rembg` dependency failure не вызывает threshold fallback; команды резолвятся от текущего skill; RGB watermark применяет opacity и проверяет диапазон | Реализовано |
+| Agent metadata остаётся парсируемой | сбалансированный quoted YAML `short_description` | Static regression проверяет точную строку metadata | Реализовано |
 | Browser skill запускается переносимо | executable `playwright_cli.sh`, upstream `-s=name`, env-session injection | canonical/mirror mode `100755`, docs/source regression и официальный Playwright CLI contract | Реализовано |
 | Документированная SAM-команда существует | dependency-lazy `scripts/export_onnx_model.py` | `--help` работает без torch/SAM; CLI принимает checkpoint/model/output и экспортирует официальный decoder contract | Реализовано |
 | Ownership map не требует лишнюю зависимость | условная загрузка `networkx` только для communities/GraphML | `--no-communities --no-cochange` запускается без `networkx`; default community mode по-прежнему fail-closed | Реализовано |
 | Hooks действительно поставляются | `hooks/hooks.json`, `$PLUGIN_ROOT`, manifests | catalog validator проверяет структуру и переносимые пути | Реализовано |
-| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 203 positive/negative contract assertions, включая dual-shell/mirror bootstrap, audited fully-specified Task Lock, move/reparse/case scope, scoped staging/HEAD push, locked update-branch, Kubernetes/REST aliases, stale delegation, full WebP validation, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
-| Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 14 stdlib tests для fork/base repo, top-level/nested pagination, failed-check JSON, job log, half-life, docs paths, optional `networkx`, SAM exporter, pixel clipping и Playwright wrapper | Реализовано |
+| Регрессии controller ловит CI | `tests/run-contract-tests.ps1` + Windows/Ubuntu GitHub Actions matrix | 218 positive/negative contract assertions, включая dual-shell/mirror bootstrap, audited fully-specified и conservative trivial direct paths, move/reparse/case scope, fail-closed unknown shell и write-invalidating high-risk specialist CLI, scoped staging/HEAD push, locked update-branch, Kubernetes/REST aliases, stale delegation, full PNG/WebP validation, destructive Git/GitHub forms, production negation и Claude `Edit`/`Write` | Реализовано |
+| Review-замечания становятся тестами | `plugins/codex-toolkit/tests/test_review_regressions.py` | 18 stdlib tests для fork/base repo, pagination, failed-check JSON/logs, half-life, docs paths, optional `networkx`, SAM exporter, pixel clipping, Playwright wrapper, background no-fallback/path, RGB opacity и YAML metadata | Реализовано |
 | Codex и Claude используют свои plugin roots/data | `PLUGIN_ROOT`/`PLUGIN_DATA` и `CLAUDE_PLUGIN_ROOT`/`CLAUDE_PLUGIN_DATA` | 8 isolated real-command assertions через bash + `pwsh`, включая неизменность `.codex`/`.claude` pointer-файлов | Реализовано при наличии `pwsh 7` |
 
 ## Правила первой проходки
 
-1. Сначала применить ближайший `AGENTS.md`: если он требует вопрос для каждой новой задачи, задать его. Когда более строгого правила нет, спрашивать только при недостающем outcome/scope/DoneWhen или продуктовом выборе; полностью заданный prompt фиксировать через audited `-FullySpecified -SpecificationBasis`. Для продолжения вопрос не повторять.
+1. Сначала применить ближайший `AGENTS.md`: если он требует вопрос для каждой новой задачи, задать его. Стабильный тривиальный вопрос без tools/current state/artifact можно ответить напрямую. В остальных случаях, когда более строгого правила нет, спрашивать только при недостающем outcome/scope/DoneWhen или продуктовом выборе; полностью заданный prompt фиксировать через audited `-FullySpecified -SpecificationBasis`. Для продолжения вопрос не повторять.
 2. До первой мутации создать Task Lock: outcome, абсолютный scope, более узкий write scope при необходимости, out-of-scope, mode, risk, workflow/stage, allowed actions, pre-publish criteria и DoneWhen.
 3. До действия загрузить ближайшие project rules и нужные skills. Generic first-pass не подменяет локальный workflow и не ослабляет более строгий gate.
 4. После нового сообщения, resume или compaction выполнить context reconciliation. Расширение/замена задачи требует нового Task Lock с `-Continuation`.
@@ -83,6 +86,7 @@
 6. После failed/unknown write сначала проверить фактическое состояние и только затем снять recovery pause.
 7. Ответ субагента не является доказательством: parent обязан независимо прочитать или протестировать результат.
 8. Структурная проверка документа/изображения не заменяет render/screenshot и визуальный просмотр.
+9. Неизвестная shell-команда не наследует `execute`: по умолчанию она блокируется. `unscoped-shell` допустим только при явной необходимости, `risk: high` и честной фиксации, что `WriteScope` не может механически удержать её side effects; после вызова все content gates считаются устаревшими до новых доказательств.
 
 ## Совместимость и приоритет
 
@@ -108,7 +112,7 @@ git diff --check
 
 ## Остаточные ограничения
 
-- Local hooks не являются sandbox: hosted tools и неизвестные wrapper paths могут не попасть в классификацию.
+- Local hooks не являются sandbox: hosted paths могут обходить local hooks, а явно разрешённый `unscoped-shell` не может механически удержать side effects внутри `WriteScope`.
 - Агент всё ещё принимает смысловое решение, считать ли новый prompt продолжением; `ContextDisposition` делает решение аудируемым, но не гарантирует его истинность.
 - Вне Git dirty overlap нельзя доказать автоматически; запись требует явного `-AllowDirty`.
 - Structural artifact validation не доказывает визуальное качество.

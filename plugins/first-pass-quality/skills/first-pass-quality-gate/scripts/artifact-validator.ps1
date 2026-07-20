@@ -43,6 +43,65 @@ function Get-BigEndianUInt32 {
     ([uint32]$Bytes[$Offset] -shl 24) -bor ([uint32]$Bytes[$Offset + 1] -shl 16) -bor ([uint32]$Bytes[$Offset + 2] -shl 8) -bor [uint32]$Bytes[$Offset + 3]
 }
 
+function Get-Crc32 {
+    param([byte[]]$Bytes)
+    [uint32]$crc = [uint32]::MaxValue
+    [uint32]$polynomial = [Convert]::ToUInt32('EDB88320', 16)
+    foreach ($byte in $Bytes) {
+        $crc = [uint32]($crc -bxor [uint32]$byte)
+        for ($bit = 0; $bit -lt 8; $bit++) {
+            if (($crc -band 1) -ne 0) {
+                $crc = [uint32](($crc -shr 1) -bxor $polynomial)
+            } else {
+                $crc = [uint32]($crc -shr 1)
+            }
+        }
+    }
+    [uint32]($crc -bxor [uint32]::MaxValue)
+}
+
+function Get-PngDimensions {
+    param([byte[]]$Bytes)
+    if ($Bytes.Length -lt 57 -or @($Bytes[0..7]) -join ',' -ne '137,80,78,71,13,10,26,10') { return $null }
+    $offset = 8
+    $firstChunk = $true
+    $dimensions = $null
+    $sawIdat = $false
+    $sawIend = $false
+    while ($offset + 12 -le $Bytes.Length) {
+        $chunkLength = [int64](Get-BigEndianUInt32 $Bytes $offset)
+        $typeOffset = $offset + 4
+        $dataOffset = $offset + 8
+        $crcOffset = $dataOffset + $chunkLength
+        $nextOffset = $crcOffset + 4
+        if ($nextOffset -gt $Bytes.Length) { return $null }
+        $chunkType = [Text.Encoding]::ASCII.GetString($Bytes, $typeOffset, 4)
+        $crcBytes = [byte[]]::new([int](4 + $chunkLength))
+        [Array]::Copy($Bytes, $typeOffset, $crcBytes, 0, $crcBytes.Length)
+        if ((Get-Crc32 $crcBytes) -ne (Get-BigEndianUInt32 $Bytes ([int]$crcOffset))) { return $null }
+        if ($firstChunk) {
+            if ($chunkType -ne 'IHDR' -or $chunkLength -ne 13) { return $null }
+            $width = Get-BigEndianUInt32 $Bytes $dataOffset
+            $height = Get-BigEndianUInt32 $Bytes ($dataOffset + 4)
+            if ($width -eq 0 -or $height -eq 0) { return $null }
+            $dimensions = @{ width = $width; height = $height }
+            $firstChunk = $false
+        } elseif ($chunkType -eq 'IHDR') {
+            return $null
+        }
+        if ($chunkType -eq 'IDAT') { $sawIdat = $true }
+        if ($chunkType -eq 'IEND') {
+            if ($chunkLength -ne 0 -or -not $sawIdat -or $nextOffset -ne $Bytes.Length) { return $null }
+            $sawIend = $true
+            $offset = [int]$nextOffset
+            break
+        }
+        $offset = [int]$nextOffset
+    }
+    if (-not $sawIend -or $offset -ne $Bytes.Length) { return $null }
+    $dimensions
+}
+
 function Get-JpegDimensions {
     param([byte[]]$Bytes)
     $i = 2
@@ -146,15 +205,15 @@ switch ($result.kind) {
     }
     'image' {
         $bytes = [IO.File]::ReadAllBytes($resolved)
-        $isPng = $bytes.Length -ge 24 -and @($bytes[0..7]) -join ',' -eq '137,80,78,71,13,10,26,10' -and [Text.Encoding]::ASCII.GetString($bytes, 12, 4) -eq 'IHDR'
+        $pngDimensions = Get-PngDimensions $bytes
+        $isPng = $null -ne $pngDimensions
         $isJpeg = $bytes.Length -ge 4 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xD8 -and $bytes[-2] -eq 0xFF -and $bytes[-1] -eq 0xD9
         $webpDimensions = Get-WebpDimensions $bytes
         $isWebp = $null -ne $webpDimensions -and $webpDimensions.width -gt 0 -and $webpDimensions.height -gt 0
         $known = $isPng -or $isJpeg -or $isWebp
         $result.checks += @{ name = 'image-signature'; status = $(if ($known) { 'passed' } else { 'failed' }); detail = 'full PNG/JPEG/WEBP container signature' }
         if ($isPng) {
-            $width = Get-BigEndianUInt32 $bytes 16; $height = Get-BigEndianUInt32 $bytes 20
-            $result.checks += @{ name = 'image-dimensions'; status = $(if ($width -gt 0 -and $height -gt 0) { 'passed' } else { 'failed' }); detail = "${width}x${height}" }
+            $result.checks += @{ name = 'image-dimensions'; status = 'passed'; detail = "$($pngDimensions.width)x$($pngDimensions.height)" }
         } elseif ($isJpeg) {
             $dimensions = Get-JpegDimensions $bytes
             $result.checks += @{ name = 'image-dimensions'; status = $(if ($dimensions -and $dimensions.width -gt 0 -and $dimensions.height -gt 0) { 'passed' } else { 'unknown' }); detail = $(if ($dimensions) { "$($dimensions.width)x$($dimensions.height)" } else { 'SOF dimensions not found' }) }

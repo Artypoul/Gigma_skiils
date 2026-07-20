@@ -5,7 +5,7 @@ Removes backgrounds from images using the U2-Net model.
 
 Features:
 - AI-based background removal (U2-Net model)
-- Built-in white-to-transparent conversion (fast fallback)
+- Built-in white-to-transparent conversion (explicit opt-in)
 - Batch processing support
 - Multiple output formats (PNG, WebP)
 """
@@ -60,7 +60,7 @@ load_env()
 # Background removal methods
 BG_REMOVAL_METHODS = {
     "rembg": "AI-based removal using rembg/U2-Net (high quality, runs locally)",
-    "builtin": "Built-in white-to-transparent conversion (fast, may have artifacts)",
+    "builtin": "Built-in white-to-transparent conversion (explicit opt-in, may have artifacts)",
 }
 
 
@@ -123,7 +123,7 @@ def remove_background_rembg(image_path: str, output_path: str = None) -> dict:
 def remove_background_builtin(image_path: str, output_path: str = None) -> dict:
     """Remove background using built-in white-to-transparent conversion.
 
-    This is a fast fallback that works well for images with clean white backgrounds.
+    This explicit method works only for images with clean white backgrounds.
 
     Args:
         image_path: Path to input image
@@ -225,12 +225,7 @@ def remove_background(image_path: str, output_path: str = None, method: str = "r
         dict with success status and output path, or error message
     """
     if method == "rembg":
-        result = remove_background_rembg(image_path, output_path)
-        # Fall back to builtin if rembg fails (e.g., not installed)
-        if "error" in result and "not installed" in result.get("error", ""):
-            print(f"rembg not available, falling back to builtin method...")
-            return remove_background_builtin(image_path, output_path)
-        return result
+        return remove_background_rembg(image_path, output_path)
     elif method == "builtin":
         return remove_background_builtin(image_path, output_path)
     else:

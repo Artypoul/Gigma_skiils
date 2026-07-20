@@ -44,6 +44,10 @@ translation_bounds = load_module(
     "codex_toolkit_translation_bounds",
     "skills/pixel-mask-move/scripts/translation_bounds.py",
 )
+background_remove = load_module(
+    "codex_toolkit_background_remove",
+    "skills/background-remove/scripts/background_remove.py",
+)
 
 
 class FetchCommentsRegressionTests(unittest.TestCase):
@@ -167,6 +171,38 @@ class PlaywrightWrapperRegressionTests(unittest.TestCase):
                 text=True,
             )
             self.assertTrue(output.startswith("100755 "), f"{target}: {output}")
+
+
+class ImageWorkflowRegressionTests(unittest.TestCase):
+    def test_rembg_failure_does_not_silently_change_method(self) -> None:
+        unavailable = {"error": "rembg not installed"}
+        with (
+            patch.object(background_remove, "remove_background_rembg", return_value=unavailable),
+            patch.object(background_remove, "remove_background_builtin") as builtin,
+        ):
+            self.assertEqual(background_remove.remove_background("photo.png"), unavailable)
+        builtin.assert_not_called()
+
+    def test_background_remove_docs_resolve_from_loaded_skill_directory(self) -> None:
+        text = (PLUGIN_ROOT / "skills/background-remove/SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("${SKILL_PATH}/skills/background-remove", text)
+        self.assertIn("<absolute loaded background-remove skill directory>/scripts/background_remove.py", text)
+        self.assertNotIn("automatically fall back", text)
+
+    def test_rgb_watermarks_apply_requested_opacity(self) -> None:
+        source = (PLUGIN_ROOT / "skills/image-utils/references/code-examples/image_utils.py").read_text(encoding="utf-8")
+        start = source.index("    def add_image_watermark(")
+        end = source.index("    # ==================== Adjustments", start)
+        function = source[start:end]
+        self.assertNotIn('if wm.mode == "RGBA"', function)
+        conversion = 'wm = ImageUtils.resize(watermark, width=wm_width).convert("RGBA")'
+        self.assertIn(conversion, function)
+        self.assertLess(function.index(conversion), function.index("wm.split()"))
+        self.assertIn("opacity must be between 0 and 1", function)
+
+    def test_github_skill_agent_metadata_has_balanced_description_quotes(self) -> None:
+        text = (PLUGIN_ROOT / "skills/gh-address-comments/agents/openai.yaml").read_text(encoding="utf-8")
+        self.assertIn('short_description: "Address comments in a GitHub PR review"', text)
 
 
 class CheckInspectionRegressionTests(unittest.TestCase):

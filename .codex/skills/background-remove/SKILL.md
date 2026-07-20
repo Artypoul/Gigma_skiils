@@ -87,21 +87,21 @@ Use the `AskUserQuestion` tool for each question. Ask ONE question at a time.
 
 **Single image:**
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "/path/to/image.jpg" \
   -o "/path/to/output.png"
 ```
 
 **Batch processing:**
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "/path/to/img1.jpg" "/path/to/img2.png" "/path/to/img3.webp" \
   -o "/path/to/output_folder"
 ```
 
 **Using built-in method (faster for white backgrounds):**
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "/path/to/icon.png" \
   -m builtin
 ```
@@ -139,7 +139,10 @@ This skill can be called by other skills that need background removal:
 ### From Python (import)
 ```python
 import sys
-sys.path.insert(0, "${SKILL_PATH}/skills/background-remove/scripts")
+from pathlib import Path
+
+skill_path = Path("<absolute loaded background-remove skill directory>")
+sys.path.insert(0, str(skill_path / "scripts"))
 from background_remove import remove_background
 
 result = remove_background("/path/to/image.png", "/path/to/output.png", method="rembg")
@@ -151,7 +154,7 @@ else:
 
 ### From Command Line
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "/path/to/image.png" \
   -o "/path/to/output.png" \
   -m rembg
@@ -163,7 +166,7 @@ python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
 ```
 rembg not installed. Install with: pip install rembg[gpu] (or pip install rembg for CPU-only)
 ```
-The script will automatically fall back to the built-in method.
+The script fails without changing methods. Install `rembg`, or choose `--method builtin` explicitly only when the user selected it and the source has a clean light background suitable for threshold conversion.
 
 **Image not found:**
 ```
@@ -187,28 +190,28 @@ Image not found: /path/to/image.png
 
 ### Remove background from a photo
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "product_photo.jpg" \
   -o "product_transparent.png"
 ```
 
 ### Batch process a folder
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i photos/*.jpg \
   -o "transparent_photos/"
 ```
 
 ### Fast removal for icons (white background)
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "icon.png" \
   -m builtin
 ```
 
 ### Output as WebP (smaller file size)
 ```bash
-python3 ${SKILL_PATH}/skills/background-remove/scripts/background_remove.py \
+python3 "<absolute loaded background-remove skill directory>/scripts/background_remove.py" \
   -i "photo.jpg" \
   -o "result.webp"
 ```
