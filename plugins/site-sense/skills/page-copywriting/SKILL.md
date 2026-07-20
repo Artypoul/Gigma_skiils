@@ -1,6 +1,6 @@
 ---
 name: page-copywriting
-description: "Write website page copy for homepages, landing pages, service pages, product pages, pricing pages, comparison pages, and SEO landing pages using the product context, meaning map, page brief, proof, objections, and CTA. Use this skill whenever the user asks to write site copy, landing page copy, homepage copy, hero section, service page, product page, page sections, FAQ, CTA, or website text. Triggers on текст сайта, лендинг, написать страницу, homepage copy, hero, landing copy, CTA, блоки сайта, FAQ, продающий текст, текст услуги, продуктовая страница. Also triggers after meaning-positioning or seo-content-brief when the user needs finished page copy."
+description: "Write website page copy for homepages, landing pages, service pages, product pages, pricing pages, comparison pages, and SEO landing pages using the product context, meaning map, page brief, proof, objections, and CTA. Use this skill whenever the user asks to write site copy, landing page copy, homepage copy, hero section, service page, product page, page sections, FAQ, CTA, sales page, or website text. Triggers on текст сайта, лендинг, написать страницу, homepage copy, hero, landing copy, CTA, блоки сайта, FAQ, продающий текст, коммерческий текст, sales page, текст услуги, продуктовая страница. Also triggers after meaning-positioning or seo-content-brief when the user needs finished page copy."
 category: content
 catalog_summary: "Writes website pages: hero, sections, proof, FAQ, CTA"
 display_order: 7
@@ -11,7 +11,7 @@ metadata:
 ---
 # Page Copywriting
 
-Напиши страницу сайта так, чтобы пользователь быстро понял, что это, зачем ему, почему верить и что делать дальше.
+Напиши страницу сайта так, чтобы пользователь быстро понял, что это, зачем ему, почему верить и что делать дальше, а бизнес получил внятный коммерческий шаг вперёд.
 
 ---
 
@@ -37,6 +37,7 @@ metadata:
 - page type;
 - аудитория;
 - цель страницы;
+- стадия воронки и желаемое коммерческое действие;
 - основной CTA;
 - смысл/оффер;
 - proof points;
@@ -85,7 +86,8 @@ metadata:
 
 1. Определи тип страницы и её роль в воронке.
 2. Выбери главный message из `meaning-positioning` или сформулируй его.
-3. Напиши 3 варианта hero: clear, sharp, proof-led.
+3. Проверь, что главный claim можно безопасно обещать по текущему proof.
+4. Напиши 3 варианта hero: clear, sharp, proof-led.
 4. Выбери рекомендуемый hero.
 5. Собери структуру блоков в логическом порядке.
 6. Напиши текст каждого блока: headline, body, bullets, CTA.
@@ -103,6 +105,7 @@ metadata:
 - Benefits написаны как features.
 - Нет proof рядом с сильными claims.
 - CTA одинаково расплывчатый везде: «узнать больше».
+- Текст пытается продавать за счёт нажима, а не за счёт ясности и доказуемости.
 - Страница не ведёт по логике, блоки можно перемешать без потери смысла.
 - FAQ отвечает на вопросы компании, а не сомнения пользователя.
 - Русский текст звучит как переведённый SaaS-сайт.

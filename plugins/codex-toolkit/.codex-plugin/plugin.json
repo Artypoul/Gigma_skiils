@@ -1,0 +1,41 @@
+{
+  "name": "codex-toolkit",
+  "version": "0.1.0+codex.20260720234000",
+  "description": "General-purpose Codex skills for browser automation, image processing, security reviews, GitHub maintenance, provisioning, screenshots, admin UX, and full feature delivery.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "browser",
+    "playwright",
+    "images",
+    "security",
+    "github",
+    "workflow",
+    "provisioning"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex toolkit",
+    "shortDescription": "Browser, image, security, workflow",
+    "longDescription": "Adds reusable Codex workflows for browser and Electron automation, deterministic image operations, screenshots, GitHub review and CI fixes, security review and threat modeling, provisioning safety, admin UX refinement, and doc-first feature delivery.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use $feature to run a meaningful feature through plan, review, implementation, and ready-for-merge gates.",
+      "Use $playwright for terminal-driven browser automation or $playwright-interactive for a persistent interactive session.",
+      "Use $background-remove, $image-utils, $pixel-mask-move, or $segment-anything-model for the matching image workflow.",
+      "Use $security-best-practices, $security-ownership-map, or $security-threat-model only for an explicitly requested security task.",
+      "Use $gh-address-comments or $gh-fix-ci for GitHub review feedback and failing GitHub Actions checks.",
+      "Use $provisioning-flows for safe get-or-create, upsert, entitlement, and reconciliation design.",
+      "Use $cabinet-screen-ux-pass to refine an existing cabinet or admin screen without breaking its flow.",
+      "Use $screenshot when the user explicitly requests an OS-level desktop or application capture."
+    ]
+  }
+}

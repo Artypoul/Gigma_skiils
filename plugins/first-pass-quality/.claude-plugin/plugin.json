@@ -1,0 +1,5 @@
+{
+  "name": "first-pass-quality",
+  "description": "Phase-aware Task Locks, fresh evidence gates, project-workflow compatibility, bounded delegation, one-shot production authorization, and honest completion. Hooks require pwsh 7 on PATH.",
+  "version": "0.3.0"
+}

@@ -1,7 +1,7 @@
 {
   "name": "glaim",
-  "version": "0.1.2+codex.20260708173000",
-  "description": "Скилы GLAIM: прямое подключение miniapp, сайта или frontend-чата к GLAIM source-chat API и работа с Support Assets API: templates, generated assets, publish flow и bindings.",
+  "version": "0.1.2+codex.20260713082225",
+  "description": "\u0421\u043a\u0438\u043b\u044b GLAIM: runtime agent/courier contract, \u043f\u0440\u044f\u043c\u043e\u0435 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 miniapp, \u0441\u0430\u0439\u0442\u0430 \u0438\u043b\u0438 frontend-\u0447\u0430\u0442\u0430 \u043a GLAIM source-chat API \u0438 \u0440\u0430\u0431\u043e\u0442\u0430 \u0441 Support Assets API.",
   "author": {
     "name": "Artypoul"
   },
@@ -12,6 +12,9 @@
     "bridge",
     "chat",
     "frontend",
+    "runtime",
+    "courier",
+    "materials",
     "miniapp",
     "source",
     "api",
@@ -21,8 +24,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "GLAIM: agent bridge",
-    "shortDescription": "Frontend-чат и support assets",
-    "longDescription": "Помогает подключать miniapp, сайт, витрину или web chat напрямую к GLAIM source-chat API, а также работать с Support Assets API: templates, generated assets, versions, approve/publish flow, bindings и безопасные storage_uri.",
+    "shortDescription": "Runtime agent, frontend-\u0447\u0430\u0442 \u0438 assets",
+    "longDescription": "\u041f\u043e\u043c\u043e\u0433\u0430\u0435\u0442 \u0440\u0435\u0430\u043b\u0438\u0437\u043e\u0432\u0430\u0442\u044c runtime agent/courier contract GLAIM: /jobs/claim, managed material fetch, progress/complete; \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0430\u0442\u044c miniapp, \u0441\u0430\u0439\u0442, \u0432\u0438\u0442\u0440\u0438\u043d\u0443 \u0438\u043b\u0438 web chat \u043d\u0430\u043f\u0440\u044f\u043c\u0443\u044e \u043a GLAIM source-chat API; \u0430 \u0442\u0430\u043a\u0436\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u0441 Support Assets API.",
     "developerName": "Artypoul",
     "category": "Productivity",
     "capabilities": [
@@ -30,10 +33,11 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Подключи frontend-чат к GLAIM",
-      "Проверь интеграцию чата с GLAIM API",
-      "Настрой source-token доступ к GLAIM chat API",
-      "Собери flow для GLAIM Support Assets API"
+      "\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438 frontend-\u0447\u0430\u0442 \u043a GLAIM",
+      "\u041f\u0440\u043e\u0432\u0435\u0440\u044c \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u044e \u0447\u0430\u0442\u0430 \u0441 GLAIM API",
+      "\u041f\u0440\u043e\u0432\u0435\u0440\u044c runtime agent material fetch protocol \u0432 GLAIM",
+      "\u041d\u0430\u0441\u0442\u0440\u043e\u0439 source-token \u0434\u043e\u0441\u0442\u0443\u043f \u043a GLAIM chat API",
+      "\u0421\u043e\u0431\u0435\u0440\u0438 flow \u0434\u043b\u044f GLAIM Support Assets API"
     ]
   }
 }

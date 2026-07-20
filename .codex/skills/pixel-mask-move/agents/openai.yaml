@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pixel Mask Move"
+  short_description: "Move verified cutouts without face changes"
+  default_prompt: "Use $pixel-mask-move to shift a verified masked person without changing any face pixels."

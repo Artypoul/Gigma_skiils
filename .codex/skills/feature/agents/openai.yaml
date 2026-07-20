@@ -1,0 +1,6 @@
+interface:
+  display_name: "Feature"
+  short_description: "Doc-first план + код до review-ready PR"
+  default_prompt: "Use $feature to drive this feature doc-first: write the plan, implement the code, and prepare a review-ready PR."
+policy:
+  allow_implicit_invocation: true

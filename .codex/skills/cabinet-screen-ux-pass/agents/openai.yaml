@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cabinet Screen UX Pass"
+  short_description: "Plan-first cabinet screen UX refinement."
+  default_prompt: "Use $cabinet-screen-ux-pass to improve an existing cabinet screen without breaking its structure or business logic."

@@ -1,0 +1,143 @@
+{
+  "description": "Enforcing first-pass quality gates for task scope, evidence, production identity, compaction, delegation, and completion. Runtime requires pwsh 7 on PATH.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: initialize task state"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: classify task context"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: enforce pre-tool policy"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: verify approval context"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: record tool evidence"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: snapshot task state"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: restore task state"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: bind subagent scope"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: validate subagent handoff"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -Command '& { $root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw \"plugin root is unavailable\" }; & (Join-Path $root \"skills/first-pass-quality-gate/scripts/quality-control.ps1\") -Action Hook }'",
+            "commandWindows": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"$root = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { throw 'plugin root is unavailable' }; & (Join-Path $root 'skills/first-pass-quality-gate/scripts/quality-control.ps1') -Action Hook\"",
+            "timeout": 20,
+            "statusMessage": "quality: enforce completion gate"
+          }
+        ]
+      }
+    ]
+  }
+}

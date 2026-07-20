@@ -4,7 +4,7 @@
 
 - **Claude Code** — через маркетплейс `.claude-plugin/marketplace.json` → плагины в `plugins/`.
 - **Codex** — двумя путями:
-  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`, `frontend-workflow`, `h2d-transfer`, `site-sense`). Манифесты проходят `validate_plugin.py`.
+  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`, `frontend-workflow`, `h2d-transfer`, `site-sense`, `codex-toolkit`, `first-pass-quality`). Манифесты проходят `validate_plugin.py`.
   2. **Зеркало** `.codex/skills/` — копии скилов, видны когда Codex запущен в этом репо (фолбэк без установки).
 
 Скилы (`SKILL.md`) общие для Claude и Codex. ⚠ Frontmatter `description`/`when_to_use` со значением, содержащим `: ` (двоеточие-пробел), **обязательно в кавычках** — иначе строгий YAML-парсер Codex отвергает скил.
@@ -63,6 +63,17 @@ Generic frontend engineering skills for reusable project work, not tied to Gigma
 - Review: **`rtk-query-review`** — проверяет RTK Query cache tags, invalidation, transforms, races, auth/reauth и type safety.
 - Review: **`affordance-review`** — ловит скрытые UI-регрессии в keyboard/pointer affordance, cleanup, async hydration, conditional forms и form-save orchestration.
 - Финализация: **`pr-finalize`** — собирает repo-aware PR finalization flow: checks, required docs/history, Summary/Test plan и guardrails перед публикацией.
+
+### First-pass quality
+
+Механический guardrail для первой проходки и честного завершения задач Codex.
+
+- Вход: **`first-pass-quality-gate`** — создаёт Task Lock до мутации, фиксирует scope/write scope, workflow stage, разрешённые действия, критерии до публикации и финальные DoneWhen.
+- Evidence: acceptance разрешена только по свежему успешному результату точного инструмента после последней содержательной записи.
+- PR: обычные commit/push/PR-операции отделены от production; каждый успешный push заново открывает обязательный review-gate.
+- `$feature`: first-pass оборачивает, но не заменяет project/feature workflow; planning и implementation используют разные Task Locks. Дублирующий watch/turnstile для той же сессии не регистрировать.
+- Production: merge/deploy/force-push и внешние сущности требуют typed wrapper, точного entity lock и одноразового свежего подтверждения пользователя.
+- Runtime: после установки или обновления hooks становятся проверяемо активны только в новой Codex-задаче после reload/trust.
 
 ### H2D pixel-perfect transfer
 Скил для переноса страниц и блоков из `.h2d` в Tailwind HTML/React по исполняемому контракту, а не "на глаз".
