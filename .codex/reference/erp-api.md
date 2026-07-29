@@ -72,7 +72,7 @@ GET  /api/counterparty/blocks/{code}        динамические блоки 
 POST /api/counterparty/orders/precalculate  сумма корзины без заказа (throttle 30/мин)
 POST /api/counterparty/contact_form         ЗАЯВКА-лид (аноним по ФИО+телефону)
 POST /api/counterparty/send_password|login  вход клиента
-POST /api/counterparty/callback_auth/init|status  вход по звонку
+POST /api/counterparty/callback_auth/init|status|exchange  вход по звонку (токен выдаёт exchange)
 ```
 
 ## Клиент (Bearer counterpartyToken, `auth:counterparty`)

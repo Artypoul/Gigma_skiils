@@ -1,0 +1,6 @@
+interface:
+  display_name: "Продуктовая логика"
+  short_description: "Продуктовая логика было/стало"
+  default_prompt: "Используй $product-logic: разложи задачу на конкретные действия с понятным было/стало."
+policy:
+  allow_implicit_invocation: true
