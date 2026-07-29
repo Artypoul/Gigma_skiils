@@ -116,6 +116,14 @@ One global clarification answer satisfies `$feature` too; do not ask the same qu
 
 The quality controller is the canonical `$feature` enforcement path when this plugin is active: a successful push reopens the required review gate, and `ready` remains blocked until the current review passes. Do not register a second watch/turnstile pair for the same session; legacy global feature hooks are optional compatibility helpers, not a prerequisite for this plugin.
 
+## Session Resolution
+
+The controller resolves which task state to use in this order: an explicit `-SessionId`, the `CODEX_THREAD_ID` environment variable, then a lookup by the hash of the **current working directory**. The third path is the usual one, and it is also the usual failure mode: the session hook records state from the directory the task runs in, so a later call made from a parent wrapper folder — or from any other directory — hashes to a different key and reports `Quality state is missing` while fresh state exists on disk.
+
+- Run every controller action from the same directory the task works in, normally the repository root that contains `.git`. Do not call it from a parent folder that merely contains the repository.
+- When the working directory genuinely has to differ, pass `-SessionId <thread id>` explicitly instead of relying on the directory hash.
+- Before declaring the hooks broken, run `ShowStatus` from the repository root. Report mechanical enforcement as unavailable only when state is missing there too; repeated re-initialization attempts from the wrong directory only waste the first minutes of a task.
+
 ## Status Commands
 
 ```powershell

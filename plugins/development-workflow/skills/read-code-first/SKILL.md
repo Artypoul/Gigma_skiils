@@ -45,6 +45,15 @@ Inspect source truth before answering.
 - Cite file paths and line references when they materially help the user.
 - If the request is not about code, normal behavior is fine.
 
+## Primary Sources Beyond Code
+
+Reading the repository is not enough when the claim is about something the repository does not own.
+
+- A provider requirement, external API contract, env variable name, database column, or CLI flag reaches a plan, an answer, or code only after you confirmed it in a primary source: provider documentation, the real `.env` or config file, the migration or schema, or actual `--help` output. "It is usually required" is not a source.
+- Model the domain from the schema. Read migrations, foreign keys, and casts before stating what an entity is for or how it relates to another one. A relation inferred from service code, a sibling project, or project memory is a hypothesis, and must be labeled as one.
+- When you reconstruct what happened from logs, separate observed events from inferred ones. Never present a reconstructed sequence of user actions as an established fact.
+- If the user pushes back on a claim, produce the source or drop the claim. Do not defend a guess with confidence.
+
 ## Minimum Evidence
 
 Before giving a code-dependent answer, inspect at least one of:
