@@ -199,7 +199,7 @@ Content-Type: application/json
 
 - Не класть `session_token` и `client_nonce` в URL, query string, analytics, client logs, `localStorage` или `sessionStorage`, если есть server-wrapper.
 - В server-wrapper режиме хранить их только в `httpOnly` cookie или server-side session storage.
-- В direct-storefront режиме держать их только в runtime state текущей вкладки и очищать после `exchange`, `expired`, `409`, `410`, `404` или ручного retry.
+- В direct-storefront режиме держать их только в runtime state текущей вкладки и очищать после успешного `exchange`, `expired`, `410`, `404`, терминальных `409` (`callback_auth_session_already_started`, `callback_auth_challenge_already_active`) или ручного retry. `409 callback_auth_not_verified` секреты не сбрасывает: сессия ещё жива, и клиент возвращается в polling с теми же `session_token` и `client_nonce`.
 - Новая попытка входа = новый `client_nonce` и новая callback-session; старую очищать на своей стороне.
 
 ## Rate limits и анти-спам

@@ -157,7 +157,7 @@ token=<counterparty access token>&audience=<audience клиента>
 - Повторный `exchange` безопасен только 60 секунд от первой выдачи токена. Это retry при потерянном ответе, а не способ "взять токен ещё раз".
 - В server-wrapper режиме polling должен идти через ваш local endpoint без передачи raw `session_token` и `client_nonce` из браузера.
 - В direct-storefront режиме `session_token` и `client_nonce` допустимы только в оперативной памяти вкладки; после reload их не восстанавливать из browser storage.
-- На `409` и `410` не крутить polling: это терминальные состояния попытки входа.
+- `409 callback_auth_not_verified` — состояние восстановимое: вернуться в polling `status`, сохранив `session_token` и `client_nonce`. Polling не крутить на `410`, `404` и терминальных `409` (`callback_auth_session_already_started`, `callback_auth_challenge_already_active`) — там начинать заново с новым `client_nonce`.
 - После `exchange` отдельно подтянуть профиль клиента; не ждать его в том же ответе.
 - Обрабатывать `429 callback_auth_rate_limited` и уважать заголовок `Retry-After`.
 
