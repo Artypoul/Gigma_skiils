@@ -115,6 +115,16 @@ try {
     Assert-True ([string]$codexPointer.dataRoot -eq (Join-Path $env:PLUGIN_DATA 'first-pass-quality')) 'Codex commandWindows must bind state to PLUGIN_DATA.'
     Assert-True (Test-Path -LiteralPath (Join-Path $codexPointer.dataRoot 'sessions/codex-hook-smoke.json')) 'Codex commandWindows must persist the session in isolated plugin data.'
 
+    # Codex >= 0.146 executes hooks through the user's shell; on this machine that is
+    # PowerShell, so commandWindows must be valid under BOTH cmd.exe and a PowerShell host.
+    Remove-Item -LiteralPath $pointer -Force
+    $env:PLUGIN_DATA = Join-Path $testRoot 'codex-plugin-data-ps'
+    $psShell = Invoke-ProcessJson -FileName 'powershell.exe' -Arguments @('-NoProfile', '-Command', $windowsCommand) -InputJson (New-SessionStartJson 'codex-hook-smoke-ps')
+    $psPointer = Get-Content -LiteralPath $pointer -Raw | ConvertFrom-Json -AsHashtable
+    Assert-True ($psShell.hookSpecificOutput.hookEventName -eq 'SessionStart') 'Codex commandWindows must also run under a PowerShell shell runner.'
+    Assert-True ([string]$psPointer.dataRoot -eq (Join-Path $env:PLUGIN_DATA 'first-pass-quality')) 'PowerShell-shell run must bind state to PLUGIN_DATA.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $psPointer.dataRoot 'sessions/codex-hook-smoke-ps.json')) 'PowerShell-shell run must persist the session.'
+
     Remove-Item -LiteralPath $pointer -Force
     Remove-Item Env:PLUGIN_ROOT, Env:PLUGIN_DATA -ErrorAction SilentlyContinue
     $env:CLAUDE_PLUGIN_ROOT = $pluginRoot
@@ -132,7 +142,7 @@ try {
     [pscustomobject]@{
         status = 'passed'
         assertions = $script:Assertions
-        runtimes = @('codex-windows', "claude-bash-with-pwsh:$bashRuntime")
+        runtimes = @('codex-windows-cmd', 'codex-windows-powershell-shell', "claude-bash-with-pwsh:$bashRuntime")
     } | ConvertTo-Json
 } finally {
     foreach ($name in $saved.Keys) {
