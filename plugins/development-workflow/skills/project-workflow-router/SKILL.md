@@ -9,9 +9,9 @@ Use this skill to decide which workflow chain to run. It is a router, not a repl
 
 ## Always Start
 
-1. Before starting a new task whose expected result is not already explicit, ask Art one concise clarifying question and wait for his answer. Do not edit, commit, push, create a PR, merge, deploy, or call external APIs until he answers. Skip the question when the request is already fully specified (outcome, scope and completion criteria are explicit with no open product choice), when the message is an answer or continuation of an already clarified task, when a single unambiguous fact is requested, or for automated one-shot invocations that carry their own full specification (for example a review run with PR number and checklist). Reading project context to ask a better question is allowed.
-2. Use `project-context-bootstrap` first when it is available.
-3. Read the project-local `AGENTS.md` and memory files before choosing a workflow.
+1. Load project context first: run `project-context-bootstrap` when available and read the project-local `AGENTS.md` and memory files. Recorded decisions, blockers and current Git/PR state must inform the question instead of being asked about.
+2. Then, if the expected result is still not explicit, ask Art one concise clarifying question about what remains unresolved and wait for his answer. Do not edit, commit, push, create a PR, merge, deploy, or call external APIs until he answers. Skip the question when the request is already fully specified (outcome, scope and completion criteria are explicit with no open product choice), when the message is an answer or continuation of an already clarified task, when a single unambiguous fact is requested, when project memory already answers it, or for automated one-shot invocations that carry their own full specification (for example a review run with PR number and checklist).
+3. Do not reopen a decision already captured in project memory; if it must change, say so explicitly and ask only about that change.
 4. Prefer local project skills over generic global skills.
 5. If a named skill is available, read its `SKILL.md` before acting.
 6. If the user asked for review, audit, check-up, консилиум, plan-only, or read-only work, end with a report. Do not edit, commit, push, create PRs, merge, or deploy.
