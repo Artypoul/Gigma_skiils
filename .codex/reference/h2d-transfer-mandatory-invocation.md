@@ -20,6 +20,7 @@ Operational meaning:
 4. Owner decisions require a verified signature or trusted owner-controlled event receipt. A local `approved: true`, reason or hash is not authorization.
 5. `run_current_gates.py` quarantines every old expected report, regenerates and hashes the final source/decode copies, proves every `viewport×profile` key from the individual gate artifacts, and re-hashes the candidate after report generation. Managed URL mode must own a previously unused loopback origin and serve a build identity bound to the current source/candidate closure.
 6. Direct `run_all_gates.py --output ...` verifies `current_evidence.json`; it cannot turn stale/manual reports into a pass. `--check-package` remains valid.
+7. Required behavior/liveness inventories and mappings must be complete `pass` artifacts. `partial` and `manual-review` are non-final diagnostics, never accepted coverage.
 7. Final artifact readiness requires font, geometry/text-style, asset paint/provenance, frozen visual, behavior and liveness (when classified), `current_evidence`, and `validation_run` passes.
 8. After feedback, rerun the full specialist matrix. The generic minimum «complained width plus adjacent breakpoint» is insufficient here.
 

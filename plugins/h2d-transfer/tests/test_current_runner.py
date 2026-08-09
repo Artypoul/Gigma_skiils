@@ -12,11 +12,35 @@ from pathlib import Path
 SKILL = Path(__file__).resolve().parents[1] / "skills" / "h2d-pixel-perfect-transfer"
 sys.path.insert(0, str(SKILL / "scripts"))
 from evidence_integrity import EvidenceError, candidate_closure, canonical_json_sha256, command_executable_records, sha256_file, verify_current_evidence  # noqa: E402
-from run_all_gates import add_font_approval_check  # noqa: E402
+from run_all_gates import add_font_approval_check, check_output  # noqa: E402
 from run_current_gates import verify_matrix_artifacts, verify_output_source  # noqa: E402
 
 
 class CurrentRunnerTests(unittest.TestCase):
+    def test_required_dynamic_inventories_reject_partial_or_manual_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            reports = output / "reports"
+            reports.mkdir()
+            behavior_files = [
+                "behavior_inventory", "interaction_matrix", "event_listener_inventory",
+                "behavior_state_targets", "behavior_implementation_map",
+            ]
+            for name in behavior_files:
+                data = json.loads((SKILL / "templates" / f"{name}_template.json").read_text(encoding="utf-8"))
+                data["result"] = "partial"
+                (reports / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+            liveness = json.loads((SKILL / "templates" / "liveness_inventory_template.json").read_text(encoding="utf-8"))
+            liveness["result"] = "partial"
+            (reports / "liveness_inventory.json").write_text(json.dumps(liveness), encoding="utf-8")
+            webgl = json.loads((SKILL / "templates" / "webgl_capture_report_template.json").read_text(encoding="utf-8"))
+            webgl["result"] = "manual-review"
+            (reports / "webgl_capture_report.json").write_text(json.dumps(webgl), encoding="utf-8")
+            result = check_output(output, "true", "true")
+            checks = {row["name"]: row["result"] for row in result["checks"]}
+            for name in behavior_files + ["liveness_inventory", "webgl_capture_report"]:
+                self.assertEqual(checks[f"{name}.json"], "fail")
+
     def test_output_source_must_match_contract_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)

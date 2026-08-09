@@ -272,18 +272,18 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
     ]
     if behavior_required:
         required += [
-            ('behavior_inventory.json','behavior_inventory.schema.json',{'pass','partial'}),
-            ('interaction_matrix.json','interaction_matrix.schema.json',{'pass','partial'}),
-            ('event_listener_inventory.json','event_listener_inventory.schema.json',{'pass','partial'}),
-            ('behavior_state_targets.json','behavior_state_targets.schema.json',{'pass','partial'}),
-            ('behavior_implementation_map.json','behavior_implementation_map.schema.json',{'pass','partial'}),
+            ('behavior_inventory.json','behavior_inventory.schema.json',{'pass'}),
+            ('interaction_matrix.json','interaction_matrix.schema.json',{'pass'}),
+            ('event_listener_inventory.json','event_listener_inventory.schema.json',{'pass'}),
+            ('behavior_state_targets.json','behavior_state_targets.schema.json',{'pass'}),
+            ('behavior_implementation_map.json','behavior_implementation_map.schema.json',{'pass'}),
         ]
         for fn in ['original_behavior_traces.jsonl','candidate_behavior_traces.jsonl']:
             p=reports/fn; ok=p.exists() and p.stat().st_size>0; checks.append({'name':fn,'result':'pass' if ok else 'fail','message':'exists' if ok else 'missing or empty'})
     if liveness_required:
         required += [
-            ('liveness_inventory.json','liveness_inventory.schema.json',{'pass','partial'}),
-            ('webgl_capture_report.json','webgl_capture_report.schema.json',{'pass','partial','not-present','manual-review'}),
+            ('liveness_inventory.json','liveness_inventory.schema.json',{'pass'}),
+            ('webgl_capture_report.json','webgl_capture_report.schema.json',{'pass','not-present'}),
         ]
         for fn in ['original_animation_trace.jsonl','candidate_animation_trace.jsonl']:
             p=reports/fn; ok=p.exists() and p.stat().st_size>0; checks.append({'name':fn,'result':'pass' if ok else 'fail','message':'exists' if ok else 'missing or empty'})

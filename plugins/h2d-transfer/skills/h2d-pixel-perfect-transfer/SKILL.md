@@ -68,6 +68,7 @@ Before implementation, freeze the runnable donor and finalize one contract. Do n
 3. Every approved deviation/fallback/substitution needs a verified owner-signed or trusted owner-event receipt. A locally authored `approved: true` is invalid.
 4. `run_current_gates.py` pins executable binaries and file inputs, quarantines earlier reports, runs the commands, binds the final `source/` copies to the immutable `.h2d`/decode artifacts, and derives matrix completion from the current visual/geometry/typography/behavior/liveness artifacts. Managed URL mode requires an unused loopback origin, a live child process and JSON build identity bound to the current candidate/source closure. The candidate closure is re-hashed after generation; the evidence directory is the only allowed self-exclusion.
 5. Missing behavior/liveness classification, truncated discovery, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Never infer static scope from a missing report.
+6. When behavior or liveness is required, every discovery/inventory/mapping artifact must be a complete `pass`. `partial` or `manual-review` is diagnostic only and cannot reach final pass without a separately authenticated, exact-scope fallback contract.
 
 The same matrix is mandatory after feedback. A generic Playwright screenshot, one desktop width, one mobile width, or "viewport plus neighbor" is diagnostic only.
 
