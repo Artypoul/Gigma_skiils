@@ -154,6 +154,38 @@ def add_liveness_strict_check(checks: list[dict[str, str]], liveness_data: Any|N
     else:
         checks.append({'name':'liveness_validation_static_or_pass','result':'pass' if result in {'static-scope','not-tested','pass'} else 'fail','message':f'liveness_validation.result={result!r}'})
 
+def add_font_consistency_check(checks: list[dict[str, str]], node_data: Any|None, font_data: Any|None) -> None:
+    """The two font gates must tell the same story.
+
+    `node_validation` reports a family mismatch as a warning because a
+    substitution can be legitimate, while `font_manifest` declares whether one
+    happened. Read separately, a stale or wrongly generated `font-exact`
+    manifest would pass next to a measured mismatch — a green run built on the
+    exact failure the font gate exists to prevent.
+    """
+    if not isinstance(node_data, dict) or not isinstance(font_data, dict):
+        checks.append({'name': 'font_manifest_matches_measurement', 'result': 'fail', 'message': 'cannot cross-check: node_validation or font_manifest data missing'})
+        return
+    warnings = [w for w in (node_data.get('warnings') or []) if isinstance(w, dict) and w.get('type') == 'font-family']
+    declared = font_data.get('result')
+    if warnings and declared == 'font-exact':
+        sample = warnings[0]
+        checks.append({
+            'name': 'font_manifest_matches_measurement',
+            'result': 'fail',
+            'message': f"font_manifest says font-exact but node_validation measured {len(warnings)} family mismatch(es), e.g. {sample.get('path')}: expected {sample.get('expected')!r}, got {sample.get('actual')!r}. Regenerate the manifest or fix the fonts.",
+        })
+        return
+    if not warnings and declared == 'font-substituted':
+        checks.append({
+            'name': 'font_manifest_matches_measurement',
+            'result': 'pass',
+            'message': 'font_manifest declares a substitution that the measured scope does not contradict',
+        })
+        return
+    checks.append({'name': 'font_manifest_matches_measurement', 'result': 'pass', 'message': f'font_manifest.result={declared!r} consistent with {len(warnings)} measured family warning(s)'})
+
+
 def infer_behavior_required(out: Path, explicit: str) -> bool:
     if explicit in ('true','yes','1'): return True
     if explicit in ('false','no','0'): return False
@@ -228,11 +260,16 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
     unpack_data = None
     diff_data = None
     liveness_data = None
+    node_data = None
+    font_data = None
     for fn, schema, allowed in required:
         c,d=check_report(reports/fn,schema,allowed); checks.append(c)
         if fn == 'h2d_unpack_report.json': unpack_data = d
         if fn == 'diff_summary.json': diff_data = d
         if fn == 'liveness_validation.json': liveness_data = d
+        if fn == 'node_validation.json': node_data = d
+        if fn == 'font_manifest.json': font_data = d
+    add_font_consistency_check(checks, node_data, font_data)
     add_h2d_unpack_strict_checks(checks, unpack_data)
     add_live_comparison_strict_check(checks, diff_data, accept_changed_source)
     add_liveness_strict_check(checks, liveness_data, liveness_required)

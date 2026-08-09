@@ -101,7 +101,22 @@ async function main(){
     issues.push(`original page was normalized before capture via --hide-original-selector='${hideOriginalSelector}'; the live-diff gate requires manual confirmation that the hidden element is an approved deviation`);
     if(result === 'pass'){ result='manual-review'; }
   }
-  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio,defaultHeight:Number(arg('height','1600')),heightMap:heightMapRaw ? heightMap : null,hideOriginalSelector:hideOriginalSelector||null,originalNormalized:Boolean(hideOriginalSelector)}, viewports: rows, issues};
+  // The live original can drift away from the snapshot (donor redesign, rotated
+  // content). That verdict has to be produced here, with the captured evidence
+  // attached: reports are generated, never hand-authored, so without this mode
+  // the documented drift-recovery path would be unreachable.
+  const changedSourceReason=arg('changed-source');
+  if(changedSourceReason){
+    if(!original){
+      throw new Error('--changed-source requires --original: the drift verdict must carry captured evidence of the live donor');
+    }
+    if(result === 'fail' || result === 'manual-review' || result === 'pass'){
+      issues.push(`live original drifted from the .h2d snapshot: ${changedSourceReason}`);
+      issues.push('owner must confirm the snapshot stays the reference; the final runner then needs --accept-changed-source');
+      result='changed-source';
+    }
+  }
+  const report={result, changed_source_reason:changedSourceReason||null, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio,defaultHeight:Number(arg('height','1600')),heightMap:heightMapRaw ? heightMap : null,hideOriginalSelector:hideOriginalSelector||null,originalNormalized:Boolean(hideOriginalSelector)}, viewports: rows, issues};
   fs.mkdirSync(path.join(outDir,'reports'),{recursive:true}); fs.writeFileSync(path.join(outDir,'reports','diff_summary.json'),JSON.stringify(report,null,2));
   console.log(`screenshots=${rows.length} report=reports/diff_summary.json`);
 }

@@ -34,21 +34,31 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def collect_files(entries: list[str]) -> list[Path]:
+def collect_files(entries: list[str]) -> tuple[list[Path], list[str]]:
+    """Resolve assets and report arguments that matched nothing.
+
+    A typo in a path or glob must never silently produce an empty asset list:
+    the runner treats this report as the mandatory provenance proof, so an
+    unmatched argument would turn a skipped check into a green gate.
+    """
     files: list[Path] = []
+    unmatched: list[str] = []
     for entry in entries:
         path = Path(entry)
         if path.is_dir():
-            files.extend(sorted(p for p in path.rglob('*') if p.is_file()))
+            found = sorted(p for p in path.rglob('*') if p.is_file())
         elif path.is_file():
-            files.append(path)
+            found = [path]
         else:
             # Allow globs like public/hero-*.png
-            files.extend(sorted(p for p in Path().glob(entry) if p.is_file()))
+            found = sorted(p for p in Path().glob(entry) if p.is_file())
+        if not found:
+            unmatched.append(entry)
+        files.extend(found)
     unique: dict[Path, None] = {}
     for f in files:
         unique.setdefault(f.resolve(), None)
-    return list(unique)
+    return list(unique), unmatched
 
 
 def load_inventory(path: Path | None) -> dict[str, dict[str, Any]]:
@@ -69,6 +79,7 @@ def main() -> int:
     ap.add_argument('--raw-asset-inventory', type=Path)
     ap.add_argument('--decisions', type=Path, help='JSON map: {"<path>": {"third_party_brand": bool, "owner_decision": "...", ...}}')
     ap.add_argument('--threshold-bytes', type=int, default=DEFAULT_THRESHOLD)
+    ap.add_argument('--allow-empty', action='store_true', help='The candidate genuinely ships no assets; without this an empty result is a failure, not a pass.')
     ap.add_argument('--out', type=Path, required=True)
     args = ap.parse_args()
 
@@ -81,7 +92,13 @@ def main() -> int:
     issues: list[dict[str, str]] = []
     cwd = Path.cwd()
 
-    for path in collect_files(args.assets):
+    files, unmatched = collect_files(args.assets)
+    for entry in unmatched:
+        issues.append({'path': entry, 'issue': 'asset argument matched no files: fix the path or glob instead of shipping an unchecked asset'})
+    if not files and not args.allow_empty:
+        issues.append({'path': '(none)', 'issue': 'no assets resolved; pass --allow-empty only when the candidate genuinely ships no assets'})
+
+    for path in files:
         try:
             rel = path.relative_to(cwd)
         except ValueError:
@@ -132,6 +149,10 @@ def main() -> int:
                 reason = 'third-party brand content' if entry['third_party_brand'] else f'{size} bytes exceeds the {args.threshold_bytes} byte threshold'
                 issues.append({'path': key, 'issue': f'owner decision required ({reason})'})
                 entry['owner_decision'] = chosen if chosen in DECISION_VALUES else 'pending'
+            elif chosen == 'removed':
+                # The file was just hashed from the shipped set, so "removed"
+                # describes an action nobody took.
+                issues.append({'path': key, 'issue': 'owner_decision is "removed" but the asset is still present in the shipped set'})
         if origin_kind == 'unknown':
             issues.append({'path': key, 'issue': 'origin unknown: not in the h2d inventory and not declared'})
 

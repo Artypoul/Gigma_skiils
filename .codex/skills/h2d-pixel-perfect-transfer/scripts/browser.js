@@ -47,10 +47,20 @@ function resolveChromium() {
   );
 }
 
+/** `--browser-executable <path>` works in every bundled gate, not just one. */
+function executableFromArgv(argv = process.argv) {
+  const i = argv.indexOf('--browser-executable');
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
+}
+
 /** Launch headless Chromium; `executablePath` only matters for playwright-core. */
 async function launchChromium(options = {}) {
   const { chromium, pkg } = resolveChromium();
   const launchOptions = { headless: true, ...options };
+  if (!launchOptions.executablePath) {
+    const fromCli = executableFromArgv();
+    if (fromCli) launchOptions.executablePath = fromCli;
+  }
   if (!launchOptions.executablePath && pkg === 'playwright-core') {
     const local = findLocalChrome();
     if (!local) {
@@ -64,4 +74,4 @@ async function launchChromium(options = {}) {
   return chromium.launch(launchOptions);
 }
 
-module.exports = { resolveChromium, launchChromium, findLocalChrome };
+module.exports = { resolveChromium, launchChromium, findLocalChrome, executableFromArgv };

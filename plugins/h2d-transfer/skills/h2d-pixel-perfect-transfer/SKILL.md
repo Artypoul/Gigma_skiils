@@ -176,10 +176,15 @@ node scripts/validate_active_viewport.js \
   --rect-targets h2d-transfer-output/reports/rect_targets.json \
   --viewports 390,768,1024,1440,1536,1920 \
   --out h2d-transfer-output/reports/node_validation.json
-# integration mode:
-#   --html http://127.0.0.1:5005/ --selector-map h2d-transfer-output/reports/selector_map.json
+# integration mode (a live project page):
+#   --candidate http://127.0.0.1:5005/ --selector-map h2d-transfer-output/reports/selector_map.json
+#   optional readiness: --ready-selector '.hero__media' --ready-timeout-ms 10000 --wait-ms 300
 # selector map format: {"<data_h2d_path>": "<css selector>"} or {"<viewport>": {"<path>": "<selector>"}}
 ```
+
+In integration mode the validator waits for every mapped selector and for the layout to stop changing before measuring, so a hydrating page is not judged mid-flight. Add `--ready-selector` when the meaningful content arrives after an initial request.
+
+`--accepted-deviations` entries must each name the exact node, viewport, field list and a real reason — a blanket approval is rejected, because an approval that covers everything records nothing.
 
 6. Validate asset paint proof:
 
@@ -228,7 +233,13 @@ The `.h2d` snapshot is the reference. The live original only corroborates it.
 
 If the live diff fails and investigation proves the production site drifted away from the snapshot (donor redesigned, content rotated):
 
-1. keep the diff evidence and mark `diff_summary.result = "changed-source"`;
+1. re-capture with the drift reason so the verdict carries its evidence — the report is still generated, never hand-edited:
+
+```bash
+node scripts/capture_visual_diff.js --original https://original.example --candidate ... \
+  --changed-source 'donor redesigned the hero after the snapshot: new headline and no orb'
+```
+
 2. tell the owner what drifted and ask whether the snapshot stays the reference;
 3. only after the owner confirms, rerun the final runner with the acknowledgment flag:
 

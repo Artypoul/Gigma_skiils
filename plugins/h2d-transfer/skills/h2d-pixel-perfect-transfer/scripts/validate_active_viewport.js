@@ -15,7 +15,10 @@ const fs = require('fs');
 const path = require('path');
 
 const TEXT_METRIC_PROPS = ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'color'];
-const BOX_PROPS = ['maxWidth', 'padding', 'gap'];
+// margin belongs here: a candidate can drop the donor's margin and push the
+// element with a parent offset instead, hit the same rect, and silently break
+// the structural contract the no-compensation rule exists to protect.
+const BOX_PROPS = ['maxWidth', 'padding', 'gap', 'margin'];
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -47,24 +50,43 @@ function selectorsFor(map, viewport) {
   return out;
 }
 
-/** Owner-approved deltas, e.g. a heading that is taller in another language. */
+/**
+ * Owner-approved deltas, e.g. a heading that is taller in another language.
+ *
+ * Every part is mandatory. A vague entry naming only a node would otherwise
+ * suppress unrelated position, typography and colour failures across all
+ * viewports under one invented reason — which is precisely the silent
+ * self-approval this mechanism is meant to replace.
+ */
 function buildAcceptedIndex(entries) {
   const index = new Map();
-  for (const entry of entries || []) {
+  if (entries && !Array.isArray(entries)) {
+    throw new Error('--accepted-deviations must be a JSON array of entries');
+  }
+  (entries || []).forEach((entry, i) => {
+    const at = `accepted-deviations[${i}]`;
     const paths = entry.data_h2d_path ? [entry.data_h2d_path] : (entry.paths || []);
-    const viewports = entry.viewport ? [entry.viewport] : (entry.viewports || ['*']);
+    const viewports = entry.viewport ? [entry.viewport] : (entry.viewports || []);
+    const fields = entry.fields || [];
+    if (!paths.length) throw new Error(`${at}: "data_h2d_path" (or "paths") is required`);
+    if (!viewports.length) throw new Error(`${at}: "viewport" (or "viewports") is required — approve a concrete viewport, not every one`);
+    if (!Array.isArray(fields) || !fields.length) throw new Error(`${at}: "fields" is required and must be a non-empty list, e.g. ["height"]`);
+    if (fields.includes('*')) throw new Error(`${at}: "*" is not an approval — list the exact fields the owner accepted`);
+    if (typeof entry.reason !== 'string' || entry.reason.trim().length < 10) {
+      throw new Error(`${at}: "reason" is required and must state what the owner approved and why`);
+    }
     for (const p of paths) {
       for (const v of viewports) {
-        index.set(`${v}::${p}`, {fields: entry.fields || ['*'], reason: entry.reason || 'accepted deviation'});
+        index.set(`${v}::${p}`, { fields, reason: entry.reason.trim() });
       }
     }
-  }
+  });
   return index;
 }
 function acceptedFor(index, viewport, h2dPath, field) {
-  const hit = index.get(`${viewport}::${h2dPath}`) || index.get(`*::${h2dPath}`);
+  const hit = index.get(`${viewport}::${h2dPath}`);
   if (!hit) return null;
-  return hit.fields.includes('*') || hit.fields.includes(field) ? hit : null;
+  return hit.fields.includes(field) ? hit : null;
 }
 
 const PX = /^-?\d+(\.\d+)?px$/;
@@ -97,11 +119,12 @@ async function main() {
   const threshold = Number(arg('threshold', '0.5'));
   const styleThreshold = Number(arg('style-threshold', arg('threshold', '0.5')));
   const waitMs = Number(arg('wait-ms', '0'));
+  const readyTimeout = Number(arg('ready-timeout-ms', '10000'));
   const strictFontFamily = flag('strict-font-family');
   const strictBoxStyle = flag('strict-box-style');
   const viewports = String(arg('viewports') || arg('viewport') || '').split(',').filter(Boolean).map((v) => Number(v));
   if (!candidate || !rectTargetsPath || !viewports.length) {
-    throw new Error('Usage: --candidate <file|url> --rect-targets <file> --viewports 390,768 --out <file> [--selector-map <file>] [--accepted-deviations <file>] [--strict-font-family] [--strict-box-style]');
+    throw new Error('Usage: --candidate <file|url> --rect-targets <file> --viewports 390,768 --out <file> [--selector-map <file>] [--accepted-deviations <file>] [--ready-selector <css>] [--ready-timeout-ms 10000] [--wait-ms 0] [--strict-font-family] [--strict-box-style] [--browser-executable <path>]');
   }
 
   const { launchChromium } = require('./browser');
@@ -120,9 +143,28 @@ async function main() {
     await page.goto(toTargetUrl(candidate), { waitUntil: 'load' });
     // Fonts must be settled before any typography or rect measurement.
     await page.evaluate(() => document.fonts && document.fonts.ready);
-    if (waitMs) await page.waitForTimeout(waitMs);
 
     const selectors = selectorsFor(selectorMap, viewport);
+    // A live project page may still be hydrating or waiting on its first
+    // request, so measuring right after 'load' can catch missing nodes or
+    // transient geometry. Wait for the mapped nodes, then for layout to stop
+    // moving, before believing any number this page reports.
+    if (selectors) {
+      const readySelector = arg('ready-selector');
+      if (readySelector) await page.waitForSelector(readySelector, { timeout: readyTimeout }).catch(() => {});
+      for (const selector of new Set(Object.values(selectors))) {
+        await page.waitForSelector(selector, { timeout: readyTimeout }).catch(() => {});
+      }
+      await page.evaluate(async (limit) => {
+        const measure = () => [...document.querySelectorAll('*')].length + Math.round(document.body.scrollHeight);
+        let previous = -1;
+        for (let i = 0; i < limit && previous !== measure(); i += 1) {
+          previous = measure();
+          await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 100)));
+        }
+      }, 10);
+    }
+    if (waitMs) await page.waitForTimeout(waitMs);
     const probe = await page.evaluate(({ viewport, selectors, styleProps }) => {
       const read = (el, h2dPath) => {
         const r = el.getBoundingClientRect();
