@@ -7,8 +7,8 @@ function sha(buf){return 'sha256:'+crypto.createHash('sha256').update(buf).diges
 async function main(){
   const url=arg('url'), inventoryPath=arg('inventory'), out=arg('out'), side=arg('side','original');
   if(!url||!inventoryPath||!out) throw new Error('Usage: --url url --inventory liveness_inventory.json --side original|candidate --out trace.jsonl');
-  const {chromium}=require('playwright'); const inventory=JSON.parse(fs.readFileSync(inventoryPath,'utf8'));
-  const browser=await chromium.launch({headless:true}); const page=await browser.newPage({viewport:{width:Number(arg('viewport','390')),height:Number(arg('height','1400'))}, deviceScaleFactor:Number(arg('dpr','1'))});
+  const {launchChromium}=require('./browser'); const inventory=JSON.parse(fs.readFileSync(inventoryPath,'utf8'));
+  const browser=await launchChromium(); const page=await browser.newPage({viewport:{width:Number(arg('viewport','390')),height:Number(arg('height','1400'))}, deviceScaleFactor:Number(arg('dpr','1'))});
   await page.goto(toUrl(url),{waitUntil:'networkidle'});
   const screenshotDir=path.join(path.dirname(path.dirname(out)),'screenshots','liveness'); fs.mkdirSync(screenshotDir,{recursive:true});
   const traces=[]; const sampleMs=(arg('sample-ms','0,250,500,1000')).split(',').map(Number).filter(n=>!Number.isNaN(n));

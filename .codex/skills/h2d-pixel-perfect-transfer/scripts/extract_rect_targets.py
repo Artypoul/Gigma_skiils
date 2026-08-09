@@ -39,7 +39,7 @@ def main() -> int:
                 continue
             if not rect or not path_matches(path, root):
                 continue
-            targets.append({
+            target = {
                 'key': f'{viewport}::{path}',
                 'data_h2d_path': path,
                 'json_path': row.get('json_path'),
@@ -47,7 +47,14 @@ def main() -> int:
                 'tag': row.get('tag'),
                 'rect': {k: float(rect[k]) for k in ('x','y','width','height')},
                 'text_preview': row.get('text_preview') or ''
-            })
+            }
+            # Typography and container constraints are part of the target, not
+            # decoration: matching a rect with the wrong font or a compensating
+            # spacer is exactly the failure these fields make visible.
+            for key in ('text_style', 'rendered_font', 'box_style'):
+                if row.get(key):
+                    target[key] = row[key]
+            targets.append(target)
         total += len(targets)
         viewports.append({'viewport': viewport, 'root_path': root, 'targets': targets, 'target_count': len(targets)})
     out = {'scope': args.scope, 'coordinate_space': args.coordinate_space, 'viewport_key_format': '<viewport>::<data-h2d-path>', 'viewports': viewports, 'total_targets': total}

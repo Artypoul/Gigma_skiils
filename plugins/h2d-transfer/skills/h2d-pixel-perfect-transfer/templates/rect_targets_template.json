@@ -4,23 +4,54 @@
   "viewport_key_format": "<viewport>::<data-h2d-path>",
   "viewports": [
     {
-      "viewport": 390,
+      "viewport": 1440,
       "root_path": "0.0.0.2.0",
       "targets": [
         {
-          "key": "390::0.0.0.2.0",
+          "key": "1440::0.0.0.2.0",
           "data_h2d_path": "0.0.0.2.0",
           "type": "FRAME",
           "tag": "section",
           "rect": {
             "x": 0,
-            "y": 66,
-            "width": 390,
-            "height": 352.43
+            "y": 0,
+            "width": 1440,
+            "height": 1588.43
+          }
+        },
+        {
+          "key": "1440::0.0.0.2.0.0.0.1",
+          "data_h2d_path": "0.0.0.2.0.0.0.1",
+          "type": "FRAME",
+          "tag": "h1",
+          "rect": {
+            "x": 72,
+            "y": 260,
+            "width": 839,
+            "height": 162.8
+          },
+          "text_style": {
+            "fontFamily": "BrandSans-740-Headlines, Arial, sans-serif",
+            "fontSize": "74px",
+            "fontWeight": "740",
+            "lineHeight": "81.4px",
+            "letterSpacing": "-2.96px",
+            "color": "rgb(6, 7, 10)"
+          },
+          "rendered_font": {
+            "family": "Arial",
+            "post_script_name": "Arial-BoldMT",
+            "declared": "Arial"
+          },
+          "box_style": {
+            "display": "block",
+            "maxWidth": "839px",
+            "margin": "0px 0px 0px -3px"
           }
         }
-      ]
+      ],
+      "target_count": 2
     }
   ],
-  "total_targets": 1
+  "total_targets": 2
 }

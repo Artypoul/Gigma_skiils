@@ -7,7 +7,7 @@ function slug(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').r
 async function main(){
   const url=arg('url'); const out=arg('out','reports/behavior_inventory.json'); const viewport=Number(arg('viewport','390'));
   if(!url) throw new Error('Usage: --url original --out reports/behavior_inventory.json');
-  const {chromium}=require('playwright'); const browser=await chromium.launch({headless:true}); const page=await browser.newPage({viewport:{width:viewport,height:Number(arg('height','1400'))}});
+  const {launchChromium}=require('./browser'); const browser=await launchChromium(); const page=await browser.newPage({viewport:{width:viewport,height:Number(arg('height','1400'))}});
   await page.goto(toUrl(url),{waitUntil:'networkidle'});
   const data=await page.evaluate((viewport)=>{
     const qs='a[href],button,input,select,textarea,[role="button"],[role="menuitem"],[aria-expanded],[tabindex]:not([tabindex="-1"]),summary';

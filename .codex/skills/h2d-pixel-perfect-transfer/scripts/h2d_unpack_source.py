@@ -244,13 +244,78 @@ def text_preview(node: dict[str, Any]) -> str:
     return ""
 
 
+# Typography and container geometry travel with every indexed node so the
+# transfer can reproduce the donor's design system instead of fitting boxes.
+# Keys stay in CSS camelCase: the viewport validator compares them straight
+# against getComputedStyle() on the candidate.
+TEXT_STYLE_KEYS = ("fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textAlign", "textTransform", "color")
+BOX_STYLE_KEYS = ("display", "boxSizing", "maxWidth", "width", "padding", "margin", "gap", "position")
+TEXT_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span", "li", "button", "label", "strong", "em", "blockquote", "figcaption", "td", "th", "summary"}
+# A node only carries box_style when it actually constrains its children,
+# otherwise the index would double in size for no diagnostic value.
+_TRIVIAL_BOX_VALUES = {"", "none", "auto", "0px", "normal", "0px 0px 0px 0px", "static"}
+
+
+def node_styles(node: dict[str, Any]) -> dict[str, Any]:
+    styles = node.get("styles")
+    return styles if isinstance(styles, dict) else {}
+
+
+def text_style(node: dict[str, Any], has_text: bool) -> dict[str, Any] | None:
+    styles = node_styles(node)
+    if not styles.get("fontFamily"):
+        return None
+    if not has_text and node.get("tag") not in TEXT_TAGS:
+        return None
+    return {k: styles[k] for k in TEXT_STYLE_KEYS if k in styles}
+
+
+def rendered_font(node: dict[str, Any]) -> dict[str, str] | None:
+    """Font the donor's browser actually rendered with.
+
+    Text runs expose `platformFont`, which is the only place a fallback shows
+    up: a heading declaring a brand face but rendering Arial-BoldMT means the
+    brand font lacks that script. That fact decides `font-exact` versus
+    `font-substituted` in the font manifest.
+    """
+    platform_font = node.get("platformFont")
+    if not isinstance(platform_font, dict):
+        return None
+    out = {}
+    for src, dst in (("familyName", "family"), ("postScriptName", "post_script_name")):
+        value = platform_font.get(src)
+        if isinstance(value, str) and value.strip():
+            out[dst] = value
+    declared = node.get("font")
+    if isinstance(declared, str) and declared.strip():
+        out["declared"] = declared
+    return out or None
+
+
+def box_style(node: dict[str, Any]) -> dict[str, Any] | None:
+    styles = node_styles(node)
+    if not styles:
+        return None
+    picked = {k: styles[k] for k in BOX_STYLE_KEYS if k in styles}
+    meaningful = any(
+        k in ("maxWidth", "padding", "gap", "margin") and str(v).strip() not in _TRIVIAL_BOX_VALUES
+        for k, v in picked.items()
+    )
+    return picked if meaningful else None
+
+
 def build_tree_index(obj: Any, max_nodes: int = 300_000) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     def visit(node: Any, json_path: str, h2d_path: str, viewport: int | None) -> None:
         if len(rows) >= max_nodes or not isinstance(node, dict):
             return
         children = node.get("children") if isinstance(node.get("children"), list) else []
-        rows.append({"viewport": viewport, "h2d_path_guess": h2d_path, "json_path": json_path, "type": node.get("type"), "tag": node.get("tag"), "rect": node_rect(node), "text_preview": text_preview(node), "children_count": len(children)})
+        preview = text_preview(node)
+        row = {"viewport": viewport, "h2d_path_guess": h2d_path, "json_path": json_path, "type": node.get("type"), "tag": node.get("tag"), "rect": node_rect(node), "text_preview": preview, "children_count": len(children)}
+        for key, value in (("text_style", text_style(node, bool(preview))), ("rendered_font", rendered_font(node)), ("box_style", box_style(node))):
+            if value:
+                row[key] = value
+        rows.append(row)
         for i, child in enumerate(children):
             visit(child, f"{json_path}.children[{i}]", f"{h2d_path}.{i}", viewport)
     if isinstance(obj, dict):

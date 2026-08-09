@@ -63,20 +63,24 @@ def main() -> int:
             }
         )
 
-    for package_name in ("playwright", "pngjs"):
-        ok, message = run(["node", "-e", f"console.log(require.resolve('{package_name}'))"])
-        checks.append(
-            {
-                "name": f"node-package:{package_name}",
-                "result": "pass" if ok else "fail",
-                "message": message,
-            }
-        )
+    # Either driver is fine: the gates run through scripts/browser.js, which
+    # falls back to playwright-core plus an installed Chrome/Edge.
+    driver_probe = (
+        "const names=['playwright','playwright-core'];"
+        "const found=names.filter(n=>{try{require.resolve(n);return true}catch{return false}});"
+        "if(!found.length){console.error('neither playwright nor playwright-core resolves');process.exit(1)}"
+        "console.log(found.join(', '));"
+    )
+    ok, message = run(["node", "-e", driver_probe])
+    checks.append({"name": "node-package:playwright", "result": "pass" if ok else "fail", "message": message})
+
+    ok, message = run(["node", "-e", "console.log(require.resolve('pngjs'))"])
+    checks.append({"name": "node-package:pngjs", "result": "pass" if ok else "fail", "message": message})
 
     launch_script = (
-        "const { chromium } = require('playwright');"
-        "(async()=>{const browser=await chromium.launch({headless:true});"
-        "await browser.close(); console.log('playwright chromium launch ok');})()"
+        f"const {{ launchChromium }} = require({str(ROOT / 'scripts' / 'browser.js').replace(chr(92), '/')!r});"
+        "(async()=>{const browser=await launchChromium();"
+        "await browser.close(); console.log('chromium launch ok');})()"
         ".catch(err=>{console.error(err && err.message ? err.message : String(err)); process.exit(1);});"
     )
     ok, message = run(["node", "-e", launch_script])

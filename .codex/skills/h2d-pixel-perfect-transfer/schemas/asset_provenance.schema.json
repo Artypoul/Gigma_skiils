@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "asset_provenance",
+  "description": "Where every transferred asset came from, what it weighs, and whether shipping it is the owner's decision. A donor snapshot carries the donor's own brand material: logos, showreels, portfolio imagery. Copying geometry is the job; republishing someone else's brand or a multi-megabyte video is a decision, not a side effect.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "needs-decision",
+        "fail",
+        "not-tested"
+      ]
+    },
+    "size_threshold_bytes": {
+      "description": "Assets at or above this size need an explicit owner decision. Default 1048576 (1 MB).",
+      "type": "integer"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "bytes",
+          "origin",
+          "third_party_brand"
+        ],
+        "properties": {
+          "path": {
+            "description": "Path as shipped in the candidate, e.g. public/hero-showreel.mp4",
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "origin": {
+            "description": "Where the bytes came from: an extracted h2d asset id, a donor CDN URL, or the candidate's own material.",
+            "type": "string"
+          },
+          "origin_kind": {
+            "type": "string",
+            "enum": [
+              "h2d-extracted",
+              "donor-cdn",
+              "candidate-owned",
+              "generated",
+              "unknown"
+            ]
+          },
+          "third_party_brand": {
+            "description": "True when the asset depicts or belongs to the donor's brand rather than the candidate's.",
+            "type": "boolean"
+          },
+          "owner_decision": {
+            "description": "Required when third_party_brand is true or bytes exceed the threshold.",
+            "type": "string",
+            "enum": [
+              "approved-as-is",
+              "approved-as-placeholder",
+              "replace-before-publish",
+              "removed",
+              "pending"
+            ]
+          },
+          "decision_note": {
+            "type": "string"
+          },
+          "license_note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "result",
+    "assets"
+  ]
+}

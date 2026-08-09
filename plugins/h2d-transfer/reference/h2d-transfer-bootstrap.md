@@ -48,6 +48,8 @@ This installs:
 - `pngjs`
 - the Playwright Chromium browser used by the capture and validation scripts
 
+Inside an existing project, `playwright-core` plus an installed Chrome or Edge is enough: the gates launch through `scripts/browser.js`. Point it at a browser with `CHROME_PATH` or `--browser-executable <path>` when it lives in a non-standard location.
+
 ## 4. Run preflight
 
 ```bash
@@ -69,13 +71,17 @@ After bootstrap passes, use this order:
 1. `python scripts/preflight_env.py`
 2. `python scripts/h2d_unpack_source.py ...`
 3. `python scripts/extract_rect_targets.py ...`
-4. Implement candidate HTML/React
-5. `node scripts/validate_active_viewport.js ...`
-6. `node scripts/asset_paint_audit.js ...`
-7. `node scripts/capture_visual_diff.js ...`
-8. behavior pipeline when interactive
-9. liveness pipeline when dynamic
-10. `python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required auto --liveness-required auto`
+4. Wire fonts and the container chain, then implement the candidate HTML/React
+5. `node scripts/font_manifest.js ...` — typography is proved before the blocks
+6. `node scripts/validate_active_viewport.js ...`
+7. `node scripts/asset_paint_audit.js ...`
+8. `python scripts/asset_provenance.py ...`
+9. `node scripts/capture_visual_diff.js ...`
+10. behavior pipeline when interactive
+11. liveness pipeline when dynamic
+12. `python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required auto --liveness-required auto`
+
+Steps 5 and 8 are mandatory reports: the final runner requires `font_manifest.json` and `asset_provenance.json`, and every report must come from a script rather than by hand.
 
 ## 6. Honest failure modes
 

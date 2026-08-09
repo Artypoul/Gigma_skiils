@@ -1,17 +1,44 @@
 {
   "result": "pass",
   "threshold_px": 0.5,
+  "style_threshold_px": 0.5,
+  "strict_font_family": false,
+  "strict_box_style": false,
   "global_max_delta": 0.03,
   "viewports": [
     {
-      "viewport": 390,
+      "viewport": 1440,
       "result": "pass",
-      "checked": 1,
+      "mode": "markers",
+      "checked": 2,
+      "style_checked": 1,
       "missing": [],
       "extra": [],
       "max_delta": 0.03,
-      "issues": []
+      "issues": [],
+      "warnings": [
+        {
+          "type": "font-family",
+          "path": "0.0.0.2.0.0.0.1",
+          "expected": "BrandSans-740-Headlines, Arial, sans-serif",
+          "actual": "Arial, sans-serif",
+          "note": "must be documented in font_manifest.json as font-substituted"
+        }
+      ],
+      "accepted_deviations": [
+        {
+          "type": "rect",
+          "path": "0.0.0.2.0.0.0.1",
+          "field": "height",
+          "expected": 162.8,
+          "actual": 244.2,
+          "delta": 81.4,
+          "reason": "Russian headline wraps to three lines; owner approved the taller heading on 2026-08-09"
+        }
+      ]
     }
   ],
-  "issues": []
+  "issues": [],
+  "warnings": [],
+  "accepted_deviations": []
 }

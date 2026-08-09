@@ -1,0 +1,87 @@
+/**
+ * Shared Chromium launcher for the bundled gates.
+ *
+ * The gates must be runnable from inside a real project, not only from a fully
+ * provisioned skill checkout. So the driver is resolved in order:
+ *   1. `playwright` (ships its own browsers);
+ *   2. `playwright-core` (very common in projects, ships no browser) plus an
+ *      installed Chrome/Edge — override with CHROME_PATH or --browser-executable.
+ *
+ * Failing to find either is an environment blocker, never a gate verdict:
+ * the message says what to install instead of letting a script die on a bare
+ * MODULE_NOT_FOUND stack.
+ */
+const fs = require('fs');
+
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH,
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser'
+].filter(Boolean);
+
+function findLocalChrome() {
+  return CHROME_CANDIDATES.find((p) => {
+    try { return fs.existsSync(p); } catch { return false; }
+  }) || null;
+}
+
+function resolveChromium() {
+  // An installed skill usually lives outside the project it is transferring
+  // into, so resolving only relative to this file would miss the project's own
+  // playwright — the very fallback the docs promise. Try the project first.
+  const { createRequire } = require('module');
+  const path = require('path');
+  const projectRequire = createRequire(path.join(process.cwd(), 'noop.js'));
+  for (const name of ['playwright', 'playwright-core']) {
+    for (const load of [(n) => projectRequire(n), (n) => require(n)]) {
+      try {
+        return { chromium: load(name).chromium, pkg: name };
+      } catch (err) {
+        if (err.code !== 'MODULE_NOT_FOUND') throw err;
+      }
+    }
+  }
+  throw new Error(
+    'Neither "playwright" nor "playwright-core" can be resolved from this skill or from ' + process.cwd() + '.\n' +
+    'Install one of them, e.g.:  npm install playwright && npx playwright install chromium\n' +
+    'Then re-run scripts/preflight_env.py before claiming any gate result.'
+  );
+}
+
+/** `--browser-executable <path>` works in every bundled gate, not just one. */
+function executableFromArgv(argv = process.argv) {
+  const i = argv.indexOf('--browser-executable');
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
+}
+
+/** Launch headless Chromium; `executablePath` only matters for playwright-core. */
+async function launchChromium(options = {}) {
+  const { chromium, pkg } = resolveChromium();
+  const launchOptions = { headless: true, ...options };
+  // An explicit override wins whichever package resolved: the full playwright
+  // can also be present without its downloaded Chromium, and ignoring
+  // CHROME_PATH there would fail with a browser sitting right on disk.
+  if (!launchOptions.executablePath) {
+    launchOptions.executablePath = executableFromArgv() || process.env.CHROME_PATH || undefined;
+  }
+  if (!launchOptions.executablePath && pkg === 'playwright-core') {
+    const local = findLocalChrome();
+    if (!local) {
+      throw new Error(
+        '"playwright-core" ships no browser and no local Chrome/Edge was found.\n' +
+        'Install Chrome/Edge, set CHROME_PATH, or install the full "playwright" package.'
+      );
+    }
+    launchOptions.executablePath = local;
+  }
+  return chromium.launch(launchOptions);
+}
+
+module.exports = { resolveChromium, launchChromium, findLocalChrome, executableFromArgv };
