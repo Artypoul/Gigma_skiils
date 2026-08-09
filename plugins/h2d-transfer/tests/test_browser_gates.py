@@ -46,7 +46,7 @@ class BrowserGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); donor = root / "donor.html"; h2d = root / "source.h2d"
             (root / "lazy.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><rect width='20' height='20'/></svg>", encoding="utf-8")
-            donor.write_text("""<!doctype html><style>@media (min-width: 48em){body{padding:1px}}@media (max-width: 1024px){body{margin:0}}</style><div role='navigation'>Structural navigation</div><button id='load'>Load</button><img id='lazy' alt=''><script>setTimeout(()=>document.body.dataset.ready='1',10);document.getElementById('load').onclick=()=>document.getElementById('lazy').src='lazy.svg'</script>""", encoding="utf-8")
+            donor.write_text("""<!doctype html><style>@supports (width: 1dvw){body{border:0}}@supports (container-type: inline-size){main{container-type:inline-size}}@media (min-width: 48em){body{padding:1px}}@media (max-width: 1024px){body{margin:0}}</style><main><div role='navigation'>Structural navigation</div><button id='load'>Load</button><img id='lazy' alt=''></main><script>setTimeout(()=>document.body.dataset.ready='1',10);document.getElementById('load').onclick=()=>document.getElementById('lazy').src='lazy.svg'</script>""", encoding="utf-8")
             h2d.write_text("{}", encoding="utf-8")
             matrix = root / "matrix.json"; profiles = root / "profiles.json"; visual = root / "visual"; classification = root / "classification.json"
             matrix.write_text(json.dumps([{"width":390,"height":844,"kind":"decoded"}]), encoding="utf-8")

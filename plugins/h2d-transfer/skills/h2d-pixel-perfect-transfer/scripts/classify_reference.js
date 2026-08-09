@@ -87,7 +87,11 @@ async function scan(page, maxElements) {
       for (const match of value.matchAll(/(\d+(?:\.\d+)?)\s*(px|r?em)\s*(?:>=|>|<=|<)\s*(?:width|inline-size)\b/gi)) add(match[1], match[2]);
       if (/(?:width|inline-size)/i.test(value) && !matched) breakpointIssues.push(value.slice(0, 300));
     };
-    const walkRules = rules => { for (const rule of [...(rules || [])]) { collectQuery(rule.conditionText); try { if (rule.cssRules) walkRules(rule.cssRules); } catch {} } };
+    const walkRules = rules => { for (const rule of [...(rules || [])]) {
+      const responsive = rule instanceof CSSMediaRule || (typeof CSSContainerRule !== 'undefined' && rule instanceof CSSContainerRule);
+      if (responsive) collectQuery(rule.conditionText);
+      try { if (rule.cssRules) walkRules(rule.cssRules); } catch {}
+    } };
     for (const sheet of [...document.styleSheets]) { try { walkRules(sheet.cssRules); } catch {} }
     for (const query of runtime.media_queries || []) collectQuery(query);
     const actionable = controls.filter(row => ['button','summary'].includes(row.tag) || actionableRoles.has(row.role) || document.querySelector(row.selector)?.hasAttribute('aria-expanded') || document.querySelector(row.selector)?.matches('input[type="checkbox"],input[type="radio"]'));
