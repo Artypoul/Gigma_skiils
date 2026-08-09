@@ -19,6 +19,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -200,6 +201,7 @@ async function main() {
 
   const report = {
     result,
+    generator_sha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
     measured_nodes: measured,
     measured_viewports: viewports,
     recorded_viewports: recorded,
@@ -207,6 +209,8 @@ async function main() {
     fonts,
     licensing_notes: licensingNotes
   };
+  const expectedMatrix = JSON.parse(process.env.H2D_MATRIX_KEYS || '[]');
+  report.matrix_results = expectedMatrix.map((matrixKey) => ({ matrix_key: matrixKey, result: viewports.includes(Number(String(matrixKey).split('x')[0])) ? result : 'fail' }));
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(report, null, 2));
   console.log(`result=${result} measured=${measured} viewports=${viewports.join('/')} substituted=${substituted} unapproved=${unapproved} renders_fallback=${unavailable} out=${outPath}`);

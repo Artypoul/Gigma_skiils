@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -86,11 +87,13 @@ def main() -> int:
         failed = any(value == "fail" for value in checks.values())
         if failed:
             issues.append({"type": "behavior-state-mismatch", "interaction_id": interaction_id, "severity": "fail", "checks": checks})
-        comparisons.append({"interaction_id": interaction_id, "result": "fail" if failed else "pass", "checks": checks})
+        comparisons.append({"interaction_id": interaction_id, "matrix_key": expected.get("matrix_key"), "result": "fail" if failed else "pass", "checks": checks})
     for interaction_id in sorted(set(candidate) - set(original)):
         issues.append({"type": "extra-candidate-state", "interaction_id": interaction_id, "severity": "fail"})
     result = "fail" if issues else "pass"
-    report = {"result": result, "behavior_required": True, "comparisons": comparisons, "accepted_deviations": [], "issues": issues, "safe_boundaries": []}
+    matrix_keys = sorted({row.get("matrix_key") for row in comparisons if row.get("matrix_key")})
+    matrix_results = [{"matrix_key": key, "result": "pass" if all(row["result"] == "pass" for row in comparisons if row.get("matrix_key") == key) else "fail"} for key in matrix_keys]
+    report = {"result": result, "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "behavior_required": True, "matrix_results": matrix_results, "comparisons": comparisons, "accepted_deviations": [], "issues": issues, "safe_boundaries": []}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"behavior={result} comparisons={len(comparisons)} issues={len(issues)} out={args.out}")

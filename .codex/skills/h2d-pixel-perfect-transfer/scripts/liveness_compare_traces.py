@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,12 +73,14 @@ def main() -> int:
                 frame_results.append({"index": index, "t_ms": expected_sample.get("t_ms"), "result": "pass" if passed else "fail", "pixel_mismatch_ratio": ratio, "style_diff": style_diff, "rect_diff": rect_diff, "canvas_match": canvas_ok, "media_match": media_ok})
             if any(row["result"] == "fail" for row in frame_results): detail["frames"] = frame_results
         result = "fail" if detail else "pass"
-        checks.append({"surface_id": trace_id.split("@")[0], "trace_id": trace_id, "kind": (expected or actual or {}).get("kind"), "result": result, "message": "pinned runtime states match" if not detail else "runtime fidelity mismatch", "details": detail, "evidence": ["original_animation_trace.jsonl", "candidate_animation_trace.jsonl"]})
+        checks.append({"surface_id": trace_id.split("@")[0], "trace_id": trace_id, "matrix_key": (expected or actual or {}).get("matrix_key"), "kind": (expected or actual or {}).get("kind"), "result": result, "message": "pinned runtime states match" if not detail else "runtime fidelity mismatch", "details": detail, "evidence": ["original_animation_trace.jsonl", "candidate_animation_trace.jsonl"]})
         if detail: issues.append({"trace_id": trace_id, "result": "fail", "details": detail})
     for trace_id in sorted((set(original) | set(candidate)) - expected_ids):
         issues.append({"trace_id": trace_id, "result": "fail", "details": {"unexpected_trace": True}})
     result = "fail" if issues else ("pass" if expected_ids else "static-scope")
-    report = {"result": result, "liveness_required": bool(expected_ids), "checked_at": datetime.now(timezone.utc).isoformat(), "webgl_runtime_verdict": "fail" if issues and any("webgl" in str(item).lower() for item in issues) else ("pass" if any("webgl" in str(item).lower() for item in checks) else "not-present"), "checks": checks, "accepted_deviations": [], "issues": issues}
+    matrix_keys = sorted({row.get("matrix_key") for row in checks if row.get("matrix_key")})
+    matrix_results = [{"matrix_key": key, "result": "pass" if all(row["result"] == "pass" for row in checks if row.get("matrix_key") == key) else "fail"} for key in matrix_keys]
+    report = {"result": result, "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "liveness_required": bool(expected_ids), "checked_at": datetime.now(timezone.utc).isoformat(), "webgl_runtime_verdict": "fail" if issues and any("webgl" in str(item).lower() for item in issues) else ("pass" if any("webgl" in str(item).lower() for item in checks) else "not-present"), "matrix_results": matrix_results, "checks": checks, "accepted_deviations": [], "issues": issues}
     args.out.parent.mkdir(parents=True, exist_ok=True); args.out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"result={result} checks={len(checks)} out={args.out}")
     return 0 if result in {"pass", "static-scope"} else 2

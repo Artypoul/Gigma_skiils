@@ -23,7 +23,7 @@ async function main(){
       if(state.canvas&&state.canvas.data_url_sha_source){state.canvas.frame_sha256=sha(state.canvas.data_url_sha_source);delete state.canvas.data_url_sha_source;}
       samples.push({t_ms:t,screenshot:path.join('screenshots','liveness',shotName).replace(/\\/g,'/'),frame_hash:sha(buffer),computed:state.computed||{},rect:state.rect||{},canvas:state.canvas||null,media:state.media||null});}
     if(trigger==='playback'&&!(samples.length>=2&&Number(samples.at(-1).media?.current_time)>Number(samples[0].media?.current_time)))errors.push({type:'playback-not-advancing',message:'required media playback did not advance across samples'});
-    traces.push({generator_sha256:sha(fs.readFileSync(__filename)),trace_id:`${surface.surface_id}@${trigger}`,side,surface_id:surface.surface_id,selector:surface.selector,kind:surface.kind,trigger,viewport:viewport.width,profile_id:profile.id,timing:{sample_ms:sampleMs},samples,errors});await context.close();
+    traces.push({generator_sha256:sha(fs.readFileSync(__filename)),matrix_key:`${viewport.width}x${viewport.height}@${profile.id}`,trace_id:`${surface.surface_id}@${trigger}`,side,surface_id:surface.surface_id,selector:surface.selector,kind:surface.kind,trigger,viewport:viewport.width,profile_id:profile.id,timing:{sample_ms:sampleMs},samples,errors});await context.close();
   }}
   await browser.close();fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,traces.map(row=>JSON.stringify(row)).join('\n')+'\n');const invalid=side==='original'&&traces.some(row=>row.errors.length);console.log(`traces=${traces.length} invalid_reference=${invalid} out=${out}`);if(invalid)process.exitCode=2;
 }

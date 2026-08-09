@@ -11,7 +11,7 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1] / "skills" / "h2d-pixel-perfect-transfer"
 sys.path.insert(0, str(SKILL / "scripts"))
-from evidence_integrity import EvidenceError, candidate_closure, canonical_json_sha256, command_executable_records, sha256_file, verify_current_evidence  # noqa: E402
+from evidence_integrity import EvidenceError, candidate_closure, canonical_json_sha256, command_executable_records, sha256_file  # noqa: E402
 from run_all_gates import add_font_approval_check, check_output  # noqa: E402
 from run_current_gates import verify_matrix_artifacts, verify_output_source  # noqa: E402
 
@@ -80,12 +80,25 @@ class CurrentRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp); reports = output / "reports"; reports.mkdir()
             matrix_key = "390x844@headless"; artifacts = []
+            scripts = {"visual":"compare_frozen_visual.js","geometry":"validate_active_viewport.js","typography":"font_manifest.js"}; commands = []
             for role, name, result in (("visual","diff_summary.json","not-tested"),("geometry","node_validation.json","pass"),("typography","font_manifest.json","font-exact")):
                 path = reports / name
-                path.write_text(json.dumps({"result":"pass","matrix_results":[{"matrix_key":matrix_key,"result":result}]}), encoding="utf-8")
+                generator = SKILL / "scripts" / scripts[role]; commands.append(["node", str(generator)])
+                path.write_text(json.dumps({"result":"pass","generator_sha256":sha256_file(generator),"matrix_results":[{"matrix_key":matrix_key,"result":result}]}), encoding="utf-8")
                 artifacts.append({"role":role,"path":f"reports/{name}","sha256":sha256_file(path),"matrix_completed":[matrix_key]})
             with self.assertRaisesRegex(EvidenceError, "does not contain the complete matrix"):
-                verify_matrix_artifacts(output, {"artifacts":artifacts}, {}, [matrix_key])
+                verify_matrix_artifacts(output, {"artifacts":artifacts}, {}, [matrix_key], commands, output)
+
+    def test_self_declared_rows_without_specialist_invocation_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp); reports = output / "reports"; reports.mkdir(); matrix_key = "390x844@headless"; artifacts = []
+            scripts = {"visual":"compare_frozen_visual.js","geometry":"validate_active_viewport.js","typography":"font_manifest.js"}
+            for role, name in (("visual","diff_summary.json"),("geometry","node_validation.json"),("typography","font_manifest.json")):
+                path = reports / name; generator = SKILL / "scripts" / scripts[role]
+                path.write_text(json.dumps({"result":"pass","generator_sha256":sha256_file(generator),"matrix_results":[{"matrix_key":matrix_key,"result":"pass"}]}), encoding="utf-8")
+                artifacts.append({"role":role,"path":f"reports/{name}","sha256":sha256_file(path),"matrix_completed":[matrix_key]})
+            with self.assertRaisesRegex(EvidenceError, "bundled specialist invocation"):
+                verify_matrix_artifacts(output, {"artifacts":artifacts}, {}, [matrix_key], [[sys.executable, "generate_reports.py"]], output)
 
     def test_webgl_inventory_rejects_not_present_capture(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -109,7 +122,7 @@ class CurrentRunnerTests(unittest.TestCase):
         add_font_approval_check(checks, {"result": "font-substituted"}, verified)
         self.assertEqual(checks[-1]["result"], "pass")
 
-    def test_static_current_runner_rebuilds_and_passes_final_gate(self) -> None:
+    def test_static_current_runner_rejects_synthetic_specialist_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); output = root / "output"; contract_dir = output / "contract"; reports = output / "reports"; candidate = root / "candidate"
             candidate.mkdir(parents=True); (candidate / "index.html").write_text("<h1>Meaning stays here</h1>", encoding="utf-8")
@@ -145,22 +158,8 @@ class CurrentRunnerTests(unittest.TestCase):
             contract = {"schema_version":"2.0","workspace_root":str(root),"source":{"path":"fresh_decode/source/input.h2d","sha256":source_sha},"decoder":{"path":"builtin:scripts/h2d_unpack_source.py","sha256":sha256_file(SKILL/'scripts'/'h2d_unpack_source.py')},"decoded_artifacts":[{"path":"fresh_decode/source/h2d_decoded.json","sha256":sha256_file(source/'h2d_decoded.json')},{"path":"fresh_decode/source/h2d_tree_index.json","sha256":sha256_file(source/'h2d_tree_index.json')}],"responsive_matrix":[{"width":390,"height":844,"kind":"decoded"}],"browser_profiles":[{"id":"headless","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}],"candidate":{"mode":"entry","project_root":"candidate","include":["index.html"],"closure_sha256":closure['digest']},"classification":bundle['classification'],"breakpoint_source":{"kind":"generated-reference-classification","donor_identity":donor_identity,"breakpoints":[]},"reference_bundle":{"path":"reference/reference_bundle.json","sha256":sha256_file(bundle_path)},"sidecars":[{"role":"report-generator","path":"generate_reports.py","sha256":sha256_file(helper)}],"approvals":[],"current_commands":current_commands,"command_executables":command_executable_records(current_commands,candidate),"expected_reports":[f"reports/{name}.json" for name in names] + ["reports/review.md"]}
             contract_path = contract_dir / "transfer_contract.json"; contract_path.write_text(json.dumps(contract), encoding="utf-8")
             completed = subprocess.run([sys.executable, str(SKILL / "scripts" / "run_current_gates.py"), "--contract", str(contract_path), "--output", str(output)], capture_output=True, text=True)
-            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-            self.assertEqual(json.loads((reports / "validation_run.json").read_text(encoding="utf-8"))["result"], "pass")
-            verify_current_evidence(reports / "current_evidence.json")
-            stale_only = reports / "stale_only.json"
-            stale_only.write_text(json.dumps({"result": "pass"}), encoding="utf-8")
-            contract["expected_reports"].append("reports/stale_only.json")
-            contract_path.write_text(json.dumps(contract), encoding="utf-8")
-            missing_regeneration = subprocess.run([sys.executable, str(SKILL / "scripts" / "run_current_gates.py"), "--contract", str(contract_path), "--output", str(output)], capture_output=True, text=True)
-            self.assertEqual(missing_regeneration.returncode, 2)
-            self.assertIn("expected current report is missing", missing_regeneration.stderr)
-            self.assertFalse(stale_only.exists())
-            (candidate / "index.html").write_text("mutated", encoding="utf-8")
-            direct = subprocess.run([sys.executable, str(SKILL / "scripts" / "run_all_gates.py"), "--output", str(output)], capture_output=True, text=True)
-            self.assertEqual(direct.returncode, 2)
-            stale = json.loads((reports / "validation_run.json").read_text(encoding="utf-8"))
-            self.assertTrue(any(row["name"] == "current_evidence.json" and row["result"] == "fail" for row in stale["checks"]))
+            self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+            self.assertIn("bundled specialist invocation", completed.stderr)
 
 
 if __name__ == "__main__":
