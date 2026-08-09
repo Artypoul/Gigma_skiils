@@ -53,7 +53,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
-$script:SchemaVersion = 3
+$script:SchemaVersion = 4
 $script:PolicyVersion = '0.4.1'
 $script:ListSeparator = '~~'
 
@@ -230,11 +230,25 @@ function Read-State {
             if (-not $state.task.ContainsKey('writeScopePaths')) { $state.task.writeScopePaths = @($state.task.scopePaths) }
             if (-not $state.task.ContainsKey('workflowStage')) { $state.task.workflowStage = 'none' }
             if (-not $state.task.ContainsKey('prePublishWhen')) { $state.task.prePublishWhen = @($state.task.doneWhen) }
+            if (-not $state.task.ContainsKey('createdToolSequence')) { $state.task.createdToolSequence = [int]$state.tools.count }
         }
         if ($state -and -not $state.ContainsKey('delegationCandidateTurnId')) { $state.delegationCandidateTurnId = $null }
         if ($state -and -not $state.ContainsKey('clarificationSatisfiedBy')) { $state.clarificationSatisfiedBy = $null }
         if ($state -and -not $state.ContainsKey('specificationBasisHash')) { $state.specificationBasisHash = $null }
         if ($state -and -not $state.ContainsKey('directAnswerEligible')) { $state.directAnswerEligible = $false }
+        if ($state -and $state.lastTool -and -not $state.lastTool.ContainsKey('toolSequence')) { $state.lastTool.toolSequence = [int]$state.tools.count }
+        if ($state -and -not $state.ContainsKey('lastWriteToolSequence')) {
+            $state.lastWriteToolSequence = if ($state.lastWriteToolUseId) { [int]$state.tools.count } else { $null }
+        }
+        if ($state -and $state.delegation -and $state.delegation.completed -and -not $state.delegation.ContainsKey('completedToolSequence')) {
+            $state.delegation.completedToolSequence = [int]$state.tools.count
+        }
+        if ($state) {
+            foreach ($entry in @($state.evidence)) {
+                if ($entry -and -not $entry.ContainsKey('toolSequence')) { $entry.toolSequence = 0 }
+            }
+            $state.schemaVersion = $script:SchemaVersion
+        }
         $state
     } catch { $null }
 }
@@ -311,6 +325,7 @@ function New-State {
         tools = @{ count = 0; writes = 0; failures = 0 }
         lastTool = $null
         lastWriteToolUseId = $null
+        lastWriteToolSequence = $null
         lastWriteAt = $null
         failedWritePending = $false
         pendingProduction = $null
@@ -928,8 +943,8 @@ function Get-ReadinessProblems {
             $latest = @($State.evidence | Where-Object {
                 $_.criterionId -eq $criterion.id -and
                 (-not $State.lastWriteToolUseId -or $_.toolUseId -ne $State.lastWriteToolUseId) -and
-                (-not $State.lastWriteAt -or [string]$_.observedAt -ge [string]$State.lastWriteAt)
-            } | Sort-Object observedAt -Descending | Select-Object -First 1)
+                (-not $State.lastWriteToolSequence -or [int]$_.toolSequence -gt [int]$State.lastWriteToolSequence)
+            } | Sort-Object toolSequence -Descending | Select-Object -First 1)
             if ($latest.Count -eq 0 -or [string]$latest[0].status -ne 'passed') { $problems.Add("Criterion '$($criterion.id)' has no passed evidence.") }
         }
         if ($State.lastWriteToolUseId) {
@@ -1279,6 +1294,7 @@ function Invoke-PostToolUse {
         $state = Read-State $path
         if (-not $state) { return }
         $state.tools.count = [int]$state.tools.count + 1
+        $toolSequence = [int]$state.tools.count
         if (-not $success) { $state.tools.failures = [int]$state.tools.failures + 1 }
         $responseHash = Get-Hash (($HookData.tool_response | ConvertTo-Json -Depth 12 -Compress))
         $observedAt = Get-UtcNow
@@ -1287,6 +1303,7 @@ function Invoke-PostToolUse {
             toolName = $toolName
             kind = $classification.kind
             success = $success
+            toolSequence = $toolSequence
             observedAt = $observedAt
             responseHash = $responseHash
         }
@@ -1298,6 +1315,7 @@ function Invoke-PostToolUse {
         }
         if ($classification.kind -in @('write', 'unclassified-shell', 'external-write', 'production-shell')) {
             $state.lastWriteToolUseId = [string]$HookData.tool_use_id
+            $state.lastWriteToolSequence = $toolSequence
             $state.lastWriteAt = $observedAt
             if ([string]$state.status -eq 'active') {
                 # Гейты пересбрасываются только у живого замка; advisory-активность после terminal его не трогает.
@@ -1319,6 +1337,7 @@ function Invoke-PostToolUse {
         if ($classification.kind -eq 'delegation' -and $state.delegation) {
             $state.delegation.completed = $true
             $state.delegation.completedAt = Get-UtcNow
+            $state.delegation.completedToolSequence = $toolSequence
             $state.delegation.verified = $false
         }
         if ($classification.kind -eq 'external-write' -and $state.pendingProduction -and $state.pendingProduction.toolUseId -eq [string]$HookData.tool_use_id) {
@@ -1600,6 +1619,7 @@ function Invoke-StateAction {
                     doneWhen = $criteria
                     prePublishWhen = $prePublishCriteria
                     createdAt = Get-UtcNow
+                    createdToolSequence = [int]$state.tools.count
                     reviewRequired = [bool]$reviewRequired
                     authorityTurnIdHash = (Get-Hash ([string]$state.turnId)).Substring(0, 24)
                     productionAuthorized = $false
@@ -1609,6 +1629,7 @@ function Invoke-StateAction {
                 $state.evidence = @()
                 $state.agentChangedFiles = @()
                 $state.lastWriteToolUseId = $null
+                $state.lastWriteToolSequence = $null
                 $state.lastWriteAt = $null
                 $state.failedWritePending = $false
                 $state.pendingProduction = $null
@@ -1655,8 +1676,8 @@ function Invoke-StateAction {
                         $latest = @($state.evidence | Where-Object {
                             $_.criterionId -eq $criterion.id -and
                             (-not $state.lastWriteToolUseId -or $_.toolUseId -ne $state.lastWriteToolUseId) -and
-                            (-not $state.lastWriteAt -or [string]$_.observedAt -ge [string]$state.lastWriteAt)
-                        } | Sort-Object observedAt -Descending | Select-Object -First 1)
+                            (-not $state.lastWriteToolSequence -or [int]$_.toolSequence -gt [int]$state.lastWriteToolSequence)
+                        } | Sort-Object toolSequence -Descending | Select-Object -First 1)
                         if ($latest.Count -eq 0 -or $latest[0].status -ne 'passed') { throw "$Gate cannot pass: criterion $($criterion.id) lacks passed evidence." }
                     }
                 }
@@ -1727,7 +1748,7 @@ function Invoke-StateAction {
                     if (-not $state.lastTool -or -not $state.lastTool.success) { throw 'Passed evidence must bind to a successful observed tool call.' }
                     if ([string]::IsNullOrWhiteSpace($ExpectedToolName) -or $ExpectedToolName -ne [string]$state.lastTool.toolName) { throw 'ExpectedToolName must exactly match the latest successful tool.' }
                     if ([string]$state.lastTool.kind -notin @('read', 'write', 'execute', 'unclassified-shell', 'validate', 'vcs-stage', 'commit', 'push', 'pr-write', 'external-write')) { throw 'Management, coordination, and delegation calls cannot serve as acceptance evidence.' }
-                    if ([string]$state.lastTool.observedAt -lt [string]$state.task.createdAt) { throw 'Evidence tool result predates the current Task Lock.' }
+                    if ([int]$state.lastTool.toolSequence -le [int]$state.task.createdToolSequence) { throw 'Evidence tool result predates the current Task Lock.' }
                 }
                 $entry = @{
                     criterionId = $CriterionId
@@ -1737,6 +1758,7 @@ function Invoke-StateAction {
                     toolUseId = if ($state.lastTool) { $state.lastTool.toolUseId } else { $null }
                     toolName = if ($state.lastTool) { $state.lastTool.toolName } else { $null }
                     responseHash = if ($state.lastTool) { $state.lastTool.responseHash } else { $null }
+                    toolSequence = if ($state.lastTool) { [int]$state.lastTool.toolSequence } else { 0 }
                     observedAt = if ($state.lastTool) { $state.lastTool.observedAt } else { Get-UtcNow }
                 }
                 $state.evidence += $entry
@@ -1778,6 +1800,7 @@ function Invoke-StateAction {
                     verified = $false
                     toolUseId = $null
                     completedAt = $null
+                    completedToolSequence = $null
                     verifiedAt = $null
                 }
                 $state.delegationCandidate = $false
@@ -1788,7 +1811,7 @@ function Invoke-StateAction {
                 if (-not $state.delegation -or -not $state.delegation.completed) { throw 'No completed delegated handoff is awaiting verification.' }
                 if ([string]::IsNullOrWhiteSpace($DelegationEvidence)) { throw 'DelegationEvidence is required.' }
                 if (-not $state.lastTool -or -not $state.lastTool.success -or [string]$state.lastTool.kind -notin @('read', 'execute', 'validate')) { throw 'Parent verification requires a successful non-delegated read, execution, or validator tool result.' }
-                if ([string]$state.lastTool.observedAt -lt [string]$state.delegation.completedAt) { throw 'Parent verification tool result predates the delegated handoff.' }
+                if ([int]$state.lastTool.toolSequence -le [int]$state.delegation.completedToolSequence) { throw 'Parent verification tool result predates the delegated handoff.' }
                 $state.delegation.verified = $true
                 $state.delegation.verifiedAt = Get-UtcNow
                 $state.delegation.verificationHash = Get-Hash $DelegationEvidence
@@ -1799,7 +1822,7 @@ function Invoke-StateAction {
                 if (-not $state.failedWritePending) { throw 'No failed write is awaiting recovery.' }
                 if ([string]::IsNullOrWhiteSpace($Reason)) { throw 'Reason is required for write recovery.' }
                 if (-not $state.lastTool -or -not $state.lastTool.success -or [string]$state.lastTool.kind -notin @('read', 'validate')) { throw 'Write recovery requires a successful read or validator result.' }
-                if ([string]$state.lastTool.observedAt -lt [string]$state.lastWriteAt) { throw 'Recovery evidence predates the failed write.' }
+                if ([int]$state.lastTool.toolSequence -le [int]$state.lastWriteToolSequence) { throw 'Recovery evidence predates the failed write.' }
                 $state.failedWritePending = $false
                 $state.writeRecovery = @{ reasonHash = Get-Hash $Reason; toolUseId = $state.lastTool.toolUseId; recoveredAt = Get-UtcNow }
                 $resultBox.value = @{ action = 'AcknowledgeWriteRecovery'; recovered = $true; toolUseId = $state.lastTool.toolUseId }
