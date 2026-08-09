@@ -358,6 +358,7 @@ try {
     $postTest = New-BaseEvent $session 't2' 'PostToolUse'
     $postTest.tool_name = 'Bash'; $postTest.tool_input = $preTest.tool_input; $postTest.tool_response = @{ exit_code = 0 }; $postTest.tool_use_id = 'test-1'
     $null = Invoke-HookCase $postTest
+    $null = Invoke-StateCase $session @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'post-write-inspection', '-EvidenceStatus', 'passed', '-Subject', 'result.txt', '-ExpectedToolName', 'Bash')
     $null = Invoke-StateCase $session @('-Action', 'AddEvidence', '-CriterionId', 'C2', '-Validator', 'contract-test', '-EvidenceStatus', 'passed', '-Subject', 'contract', '-ExpectedToolName', 'Bash')
     $null = Invoke-StateCase $session @('-Action', 'SetGate', '-Gate', 'acceptance', '-GateStatus', 'passed')
     $null = Invoke-StateCase $session @('-Action', 'SetGate', '-Gate', 'selfReview', '-GateStatus', 'passed')
@@ -613,8 +614,11 @@ try {
     $freshWriteState = Invoke-StateCase $freshness @('-Action', 'ShowStatus')
     Assert-True ($freshWriteState.lastTool.observedAt -eq $freshWriteState.lastWriteAt) 'One write event must use one timestamp for tool evidence and freshness.'
     $null = Invoke-StateCase $freshness @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'patch', '-EvidenceStatus', 'passed', '-Subject', 'file', '-ExpectedToolName', 'apply_patch')
+    $null = Invoke-StateCase $freshness @('-Action', 'AddEvidence', '-CriterionId', 'C2', '-Validator', 'write-is-not-validation', '-EvidenceStatus', 'passed', '-Subject', 'suite', '-ExpectedToolName', 'apply_patch')
+    $null = Invoke-StateCase $freshness @('-Action', 'SetGate', '-Gate', 'acceptance', '-GateStatus', 'passed') -ExpectFailure
     $freshTest = New-BaseEvent $freshness 't2' 'PostToolUse'; $freshTest.tool_name = 'Bash'; $freshTest.tool_input = @{ command = '.\tests\run-contract-tests.ps1'; workdir = $workspace }; $freshTest.tool_response = @{ exit_code = 0 }; $freshTest.tool_use_id = 'fresh-test-1'
     $null = Invoke-HookCase $freshTest
+    $null = Invoke-StateCase $freshness @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'post-write-inspection', '-EvidenceStatus', 'passed', '-Subject', 'file', '-ExpectedToolName', 'Bash')
     $null = Invoke-StateCase $freshness @('-Action', 'AddEvidence', '-CriterionId', 'C2', '-Validator', 'test', '-EvidenceStatus', 'passed', '-Subject', 'suite', '-ExpectedToolName', 'Bash')
     $null = Invoke-StateCase $freshness @('-Action', 'SetGate', '-Gate', 'acceptance', '-GateStatus', 'passed')
     $freshWrite.tool_use_id = 'fresh-write-2'; $null = Invoke-HookCase $freshWrite
@@ -662,6 +666,9 @@ try {
     $planPost = New-BaseEvent $prFlow 't2' 'PostToolUse'; $planPost.tool_name = 'apply_patch'; $planPost.tool_input = $planPatch.tool_input; $planPost.tool_response = @{ success = $true }; $planPost.tool_use_id = 'plan-write'
     $null = Invoke-HookCase $planPost
     $null = Invoke-StateCase $prFlow @('-Action', 'AddEvidence', '-CriterionId', 'P1', '-Validator', 'plan-review', '-EvidenceStatus', 'passed', '-Subject', $planFile, '-ExpectedToolName', 'apply_patch')
+    $planReview = New-BaseEvent $prFlow 't2' 'PostToolUse'; $planReview.tool_name = 'Bash'; $planReview.tool_input = @{ command = 'Get-Content docs/plan-feature.md'; workdir = $workspace }; $planReview.tool_response = @{ exit_code = 0 }; $planReview.tool_use_id = 'plan-review'
+    $null = Invoke-HookCase $planReview
+    $null = Invoke-StateCase $prFlow @('-Action', 'AddEvidence', '-CriterionId', 'P1', '-Validator', 'plan-review', '-EvidenceStatus', 'passed', '-Subject', $planFile, '-ExpectedToolName', 'Bash')
     $null = Invoke-StateCase $prFlow @('-Action', 'SetGate', '-Gate', 'publish', '-GateStatus', 'passed')
     $null = Invoke-StateCase $prFlow @('-Action', 'SetGate', '-Gate', 'selfReview', '-GateStatus', 'passed')
 

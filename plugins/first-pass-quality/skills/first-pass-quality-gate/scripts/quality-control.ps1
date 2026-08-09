@@ -927,6 +927,7 @@ function Get-ReadinessProblems {
         foreach ($criterion in @($State.task.doneWhen)) {
             $latest = @($State.evidence | Where-Object {
                 $_.criterionId -eq $criterion.id -and
+                (-not $State.lastWriteToolUseId -or $_.toolUseId -ne $State.lastWriteToolUseId) -and
                 (-not $State.lastWriteAt -or [string]$_.observedAt -ge [string]$State.lastWriteAt)
             } | Sort-Object observedAt -Descending | Select-Object -First 1)
             if ($latest.Count -eq 0 -or [string]$latest[0].status -ne 'passed') { $problems.Add("Criterion '$($criterion.id)' has no passed evidence.") }
@@ -1653,6 +1654,7 @@ function Invoke-StateAction {
                     foreach ($criterion in $gateCriteria) {
                         $latest = @($state.evidence | Where-Object {
                             $_.criterionId -eq $criterion.id -and
+                            (-not $state.lastWriteToolUseId -or $_.toolUseId -ne $state.lastWriteToolUseId) -and
                             (-not $state.lastWriteAt -or [string]$_.observedAt -ge [string]$state.lastWriteAt)
                         } | Sort-Object observedAt -Descending | Select-Object -First 1)
                         if ($latest.Count -eq 0 -or $latest[0].status -ne 'passed') { throw "$Gate cannot pass: criterion $($criterion.id) lacks passed evidence." }
