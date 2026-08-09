@@ -113,8 +113,8 @@ function Initialize-ClarifiedSession {
     $pre.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }
     $pre.tool_use_id = 'pre-clarification-read'
     $warned = Invoke-HookCase $pre
-    Assert-True ($warned.hookSpecificOutput.permissionDecision -eq 'allow') 'Advisory mode must allow safe tools before clarification.'
-    Assert-True ([string]$warned.hookSpecificOutput.permissionDecisionReason -match 'advisory') 'Pre-clarification allow must carry the advisory warning.'
+    Assert-True ($warned.hookSpecificOutput.PSObject.Properties.Name -notcontains 'permissionDecision') 'Advisory mode must not inject a permission decision.'
+    Assert-True ([string]$warned.hookSpecificOutput.additionalContext -match 'advisory') 'Pre-clarification advisory must warn via additional context.'
 
     $stop = New-BaseEvent $Session 't1' 'Stop'
     $stop.stop_hook_active = $false
@@ -860,14 +860,21 @@ try {
     $advisory = 'contract-advisory-nostate'
     $advisoryRead = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryRead.tool_name = 'Bash'; $advisoryRead.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $advisoryRead.tool_use_id = 'advisory-read-1'
     $advisoryFirst = Invoke-HookCase $advisoryRead
-    Assert-True ($advisoryFirst.hookSpecificOutput.permissionDecision -eq 'allow') 'Missing state must fall back to advisory allow.'
-    Assert-True ([string]$advisoryFirst.hookSpecificOutput.permissionDecisionReason -match 'advisory') 'Missing-state allow must warn about advisory mode.'
+    Assert-True ($advisoryFirst.hookSpecificOutput.PSObject.Properties.Name -notcontains 'permissionDecision') 'Missing state must not inject a permission decision.'
+    Assert-True ([string]$advisoryFirst.hookSpecificOutput.additionalContext -match 'advisory') 'Missing-state advisory must warn via additional context.'
     $advisoryRead.tool_use_id = 'advisory-read-2'
     Assert-True ($null -eq (Invoke-HookCase $advisoryRead)) 'Advisory warning must fire only once per session.'
     $advisoryProd = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryProd.tool_name = 'Bash'; $advisoryProd.tool_input = @{ command = 'terraform apply -auto-approve'; workdir = $workspace }; $advisoryProd.tool_use_id = 'advisory-prod'
     Assert-True ((Invoke-HookCase $advisoryProd).hookSpecificOutput.permissionDecision -eq 'deny') 'Production shell must stay denied without state.'
     $advisoryExternal = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryExternal.tool_name = 'Bash'; $advisoryExternal.tool_input = @{ command = 'ssh deploy@host systemctl restart app'; workdir = $workspace }; $advisoryExternal.tool_use_id = 'advisory-external'
     Assert-True ((Invoke-HookCase $advisoryExternal).hookSpecificOutput.permissionDecision -eq 'deny') 'External writes must stay denied without state.'
+    $advisoryUnknown = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryUnknown.tool_name = 'Bash'; $advisoryUnknown.tool_input = @{ command = 'python -c "import urllib.request"'; workdir = $workspace }; $advisoryUnknown.tool_use_id = 'advisory-unknown'
+    Assert-True ((Invoke-HookCase $advisoryUnknown).hookSpecificOutput.permissionDecision -eq 'ask') 'Unclassified shell must escalate to ask in advisory mode.'
+    $corruptDir = Join-Path $testRoot 'sessions'
+    New-Item -ItemType Directory -Force -Path $corruptDir | Out-Null
+    Set-Content -LiteralPath (Join-Path $corruptDir 'contract-corrupt-state.json') -Value '{ this is not json' -Encoding UTF8
+    $corruptPre = New-BaseEvent 'contract-corrupt-state' 't1' 'PreToolUse'; $corruptPre.tool_name = 'Bash'; $corruptPre.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $corruptPre.tool_use_id = 'corrupt-read'
+    Assert-True ((Invoke-HookCase $corruptPre).hookSpecificOutput.permissionDecision -eq 'deny') 'Corrupt state must fail closed, not fall back to advisory.'
     $advisoryStop = New-BaseEvent $advisory 't1' 'Stop'; $advisoryStop.stop_hook_active = $false; $advisoryStop.last_assistant_message = 'Готово.'
     Assert-True ($null -eq (Invoke-HookCase $advisoryStop)) 'Stop must not block when state is missing.'
 
