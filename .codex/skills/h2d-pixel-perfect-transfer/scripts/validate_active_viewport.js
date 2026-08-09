@@ -132,6 +132,13 @@ async function main() {
   const selectorMap = selectorMapPath ? readJson(selectorMapPath) : null;
   const accepted = buildAcceptedIndex(acceptedPath ? readJson(acceptedPath) : []);
   const byViewport = new Map(targets.viewports.map((v) => [Number(v.viewport), v]));
+  // A viewport with no recorded targets would measure nothing and still report
+  // pass, so asking for 375 when the donor recorded 390 must be an error rather
+  // than an empty green run.
+  const unrecorded = viewports.filter((v) => !byViewport.has(v));
+  if (unrecorded.length) {
+    throw new Error(`no rect targets recorded for viewport(s) ${unrecorded.join(', ')}; recorded: ${[...byViewport.keys()].join(', ')}`);
+  }
   const browser = await launchChromium({ executablePath: arg('browser-executable') || undefined });
   const results = [];
   let globalMax = 0;
@@ -213,7 +220,7 @@ async function main() {
       return { nodes, unresolved, mode: 'markers' };
     }, { viewport, selectors, styleProps: TEXT_METRIC_PROPS.concat(BOX_PROPS) });
 
-    const targetGroup = byViewport.get(viewport) || { targets: [] };
+    const targetGroup = byViewport.get(viewport);
     const domMap = new Map((probe.nodes || []).map((n) => [n.data_h2d_path, n]));
     const targetMap = new Map(targetGroup.targets.map((t) => [t.data_h2d_path, t]));
     const missing = [], extra = [], issues = [], warnings = [], acceptedHits = [];
@@ -266,6 +273,7 @@ async function main() {
     }
 
     for (const p of domMap.keys()) if (!targetMap.has(p)) extra.push(p);
+    if (!checked) issues.push({ type: 'nothing-measured', message: `no target was resolved on ${viewport}px: the candidate carries neither the expected markers nor a matching selector map` });
     if (probe.error) issues.push({ type: 'branch-root', message: probe.error });
     for (const u of probe.unresolved || []) issues.push({ type: 'selector-unresolved', path: u.path, selector: u.selector, message: u.reason });
 

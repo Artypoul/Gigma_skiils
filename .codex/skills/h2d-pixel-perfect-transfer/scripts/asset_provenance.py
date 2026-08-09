@@ -75,7 +75,7 @@ def load_inventory(path: Path | None) -> dict[str, dict[str, Any]]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument('--assets', nargs='+', required=True, help='Files, directories or globs shipped by the candidate')
+    ap.add_argument('--assets', nargs='*', default=[], help='Files, directories or globs shipped by the candidate. Omit only together with --allow-empty.')
     ap.add_argument('--raw-asset-inventory', type=Path)
     ap.add_argument('--decisions', type=Path, help='JSON map: {"<path>": {"third_party_brand": bool, "owner_decision": "...", ...}}')
     ap.add_argument('--threshold-bytes', type=int, default=DEFAULT_THRESHOLD)
@@ -90,12 +90,18 @@ def main() -> int:
 
     assets: list[dict[str, Any]] = []
     issues: list[dict[str, str]] = []
+    used_decision_keys: set[str] = set()
     cwd = Path.cwd()
 
+    if not args.assets and not args.allow_empty:
+        ap.error('--assets is required unless --allow-empty declares that the candidate ships no assets')
+
     files, unmatched = collect_files(args.assets)
+    # A misspelled argument stays an error even under --allow-empty: that flag
+    # declares "there are no assets", not "ignore what I typed".
     for entry in unmatched:
         issues.append({'path': entry, 'issue': 'asset argument matched no files: fix the path or glob instead of shipping an unchecked asset'})
-    if not files and not args.allow_empty:
+    if not files and args.assets and not args.allow_empty:
         issues.append({'path': '(none)', 'issue': 'no assets resolved; pass --allow-empty only when the candidate genuinely ships no assets'})
 
     for path in files:
@@ -106,7 +112,12 @@ def main() -> int:
         key = str(rel).replace('\\', '/')
         digest = sha256_file(path)
         size = path.stat().st_size
-        decision = decisions.get(key) or decisions.get(path.name) or {}
+        # Keyed by full path only. A basename fallback would let one decision
+        # about `logo.png` silently clear every other `logo.png` in the tree,
+        # whatever its bytes or origin.
+        decision = decisions.get(key) or {}
+        if decision:
+            used_decision_keys.add(key)
 
         matched = inventory.get(digest)
         if matched:
@@ -157,6 +168,11 @@ def main() -> int:
             issues.append({'path': key, 'issue': 'origin unknown: not in the h2d inventory and not declared'})
 
         assets.append(entry)
+
+    # A decision nobody applied usually means a typo in its key, which would
+    # otherwise leave the real asset silently undeclared.
+    for stale in sorted(set(decisions) - used_decision_keys):
+        issues.append({'path': stale, 'issue': 'decision key matches no shipped asset: use the exact path as shipped'})
 
     result = 'pass' if not issues else 'needs-decision'
     report = {
