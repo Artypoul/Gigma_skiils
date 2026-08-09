@@ -12,6 +12,9 @@ function toBool(v, d=true){
 }
 async function main(){
   const original=arg('original'); const candidate=arg('candidate'); const outDir=arg('out-dir','h2d-transfer-output'); const viewports=String(arg('viewports','390')).split(',').map(Number).filter(v=>!Number.isNaN(v));
+  const heightMapRaw=arg('height-map');
+  const heightMap=heightMapRaw ? JSON.parse(heightMapRaw) : {};
+  const hideOriginalSelector=arg('hide-original-selector');
   const maxMismatchRatio=Number(arg('max-pixel-mismatch-ratio','0.005'));
   const pythonBin=arg('python','python');
   if(!candidate) throw new Error('Usage: --candidate file --original url optional --viewports 390,768 --out-dir dir');
@@ -22,9 +25,13 @@ async function main(){
     for(const side of ['candidate','original']){
       const url = side==='candidate' ? candidate : original;
       if(!url) continue;
-      const page=await browser.newPage({viewport:{width:vp,height:Number(arg('height','1600'))}, deviceScaleFactor:1, locale:arg('locale','en-US'), timezoneId:arg('timezone','Europe/Berlin')});
+      const page=await browser.newPage({viewport:{width:vp,height:Number(heightMap[vp] || arg('height','1600'))}, deviceScaleFactor:1, locale:arg('locale','en-US'), timezoneId:arg('timezone','Europe/Berlin')});
       await page.emulateMedia({reducedMotion: arg('reduced-motion','reduce')});
       await page.goto(toUrl(url),{waitUntil:'networkidle'});
+      if(side==='original' && hideOriginalSelector){
+        await page.addStyleTag({content:`${hideOriginalSelector}{display:none!important}`});
+        await page.locator(hideOriginalSelector).evaluateAll(nodes => nodes.forEach(node => node.remove()));
+      }
       const finalUrl=page.url(); const file=path.join(outDir,'screenshots',`${side}_${vp}.png`);
       await page.screenshot({path:file, fullPage:toBool(arg('full-page','true'), true)});
       row[side]=path.relative(outDir,file);

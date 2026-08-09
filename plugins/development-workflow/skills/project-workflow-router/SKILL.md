@@ -9,11 +9,13 @@ Use this skill to decide which workflow chain to run. It is a router, not a repl
 
 ## Always Start
 
-1. Use `project-context-bootstrap` first when it is available.
-2. Read the project-local `AGENTS.md` and memory files before choosing a workflow.
-3. Prefer local project skills over generic global skills.
-4. If a named skill is available, read its `SKILL.md` before acting.
-5. If the user asked for review, audit, check-up, консилиум, plan-only, or read-only work, end with a report. Do not edit, commit, push, create PRs, merge, or deploy.
+1. Before starting any new task, ask Art one concise clarifying question about the expected result and wait for his answer. Do not inspect, edit, commit, push, create a PR, merge, deploy, or call external APIs until he answers. The only exception is a direct answer to that clarification: continue from the answer without asking the same question again.
+2. Use `project-context-bootstrap` first when it is available.
+3. Read the project-local `AGENTS.md` and memory files before choosing a workflow.
+4. Prefer local project skills over generic global skills.
+5. If a named skill is available, read its `SKILL.md` before acting.
+6. If the user asked for review, audit, check-up, консилиум, plan-only, or read-only work, end with a report. Do not edit, commit, push, create PRs, merge, or deploy.
+7. If Art says "сделай PR", "оформи PR", or otherwise asks for a PR without saying draft, route it as a GitHub PR that is Ready for review/non-draft. This does not mean merge or deploy.
 
 ## Route Matrix
 

@@ -18,6 +18,7 @@ js_repl = true
 ```
 
 - You can also start a new session with `--enable js_repl` (equivalent to `-c features.js_repl=true`).
+- Codex Desktop: `js_repl` is usually disabled there (`features.js_repl = false`) and cannot be toggled mid-session. Do NOT block the task on this precondition in Desktop — fall back to the built-in in-app browser control (Browser plugin / `node_repl` browser API) for interactive UI checks, and mention the fallback once in the report.
 - After enabling `js_repl`, start a new Codex session so the tool list refreshes.
 - For now, run this workflow with sandboxing disabled: start Codex with `--sandbox danger-full-access` (or the equivalent config for `sandbox_mode=danger-full-access`). This is a temporary requirement while `js_repl` + Playwright support inside the sandbox is still being completed.
 - Run setup from the same project directory you need to debug.

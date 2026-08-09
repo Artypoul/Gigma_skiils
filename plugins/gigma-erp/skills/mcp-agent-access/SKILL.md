@@ -8,7 +8,11 @@ allowed-tools: Bash Read Grep
 
 Цель: подключить внешний MCP-сервер к Gigma ERP через технического `User` с `is_agent=true` и обычный `Authorization: Bearer <agent_token>`.
 
-Источник деталей: `../../reference/agent-mcp-access.md`. Если нужно менять backend-код, дополнительно используй Graphify hooks ниже и сверяй исходники.
+Источник деталей: `../../reference/agent-mcp-access.md`. Если нужно менять backend-код, дополнительно используй Graphify hooks ниже и сверяй исходники. Если работа идёт в checkout `itecho-erp-backend`, для готовых MCP-профилей и allowlist сначала читай `docs/agent-mcp-tool-profiles.md`.
+
+- Для обычного помощника проекта по умолчанию использовать профиль `V0 + V1 Project Assistant Readonly`: `["view-orders", "view-tasks", "view-counterparties", "view-users", "view-applications"]`. После выдачи проверить разрешённый read endpoint и запрет agent-admin endpoint (`GET /api/agents` должен дать `403`).
+- Не выдавать обычному помощнику V5/system права: `create-users`, `edit-users`, `view-admins`, `create-admins`, `edit-admins`, `create-permissions`, `edit-permissions`, `create-roles`, `edit-roles`, `view-agents`, `create-agents`, `edit-agents`, `manage-agent-tokens`.
+- V2/V3/V4, write, finance, webhook, catalog/storefront и agent-admin профили держать отдельными токенами и включать только после явного решения владельца и exact `method + path` allowlist.
 
 ## Главная модель
 
