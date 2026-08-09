@@ -18,7 +18,7 @@ async function main(){
   const maxMismatchRatio=Number(arg('max-pixel-mismatch-ratio','0.005'));
   const pythonBin=arg('python','python');
   if(!candidate) throw new Error('Usage: --candidate file --original url optional --viewports 390,768 --out-dir dir');
-  const {chromium}=require('playwright'); const browser=await chromium.launch({headless:true});
+  const {launchChromium}=require('./browser'); const browser=await launchChromium();
   fs.mkdirSync(path.join(outDir,'screenshots'),{recursive:true}); const rowsByViewport=new Map();
   for(const vp of viewports){
     const row={viewport:vp};

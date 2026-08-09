@@ -27,12 +27,12 @@ function pixelStatsPng(buffer){
 async function main(){
   const html=arg('html'); const assetMapPath=arg('asset-map'); const outDir=arg('out-dir','h2d-transfer-output');
   if(!html || !assetMapPath) throw new Error('Usage: --html file --asset-map reports/asset_map.json --out-dir h2d-transfer-output');
-  const { chromium } = require('playwright');
+  const { launchChromium } = require('./browser');
   const rawMap = JSON.parse(fs.readFileSync(assetMapPath,'utf8'));
   const assets = Array.isArray(rawMap) ? rawMap : (rawMap.assets || []);
   const reportDir = path.join(outDir,'reports'); const cropDir = path.join(outDir,'screenshots','painted_asset_crops');
   ensureDir(reportDir); ensureDir(cropDir);
-  const browser = await chromium.launch({headless:true});
+  const browser = await launchChromium();
   const broken = []; const allRequests=[];
   const paintRows=[]; const visRows=[];
   const viewports = [...new Set(assets.flatMap(a => a.viewports || [Number(arg('viewport','390'))]))];

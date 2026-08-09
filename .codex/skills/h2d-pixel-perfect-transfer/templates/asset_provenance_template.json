@@ -1,0 +1,27 @@
+{
+  "result": "pass",
+  "size_threshold_bytes": 1048576,
+  "assets": [
+    {
+      "path": "public/hero-orb-1440.png",
+      "bytes": 156504,
+      "sha256": "11c591b8aa21d63ee8c60062a6e7e516b39b66cd8dc9000000000000000000aa",
+      "origin": "h2d asset_0212 (canvas frame, 1440 branch)",
+      "origin_kind": "h2d-extracted",
+      "third_party_brand": false,
+      "license_note": "Abstract decorative render, no donor wordmark visible."
+    },
+    {
+      "path": "public/hero-showreel.mp4",
+      "bytes": 8028023,
+      "sha256": "24f255bf5ff710a00ba09d8bc5122b53fdf10e77f030000000000000000000bb",
+      "origin": "donor CDN showreel referenced by the hero video node",
+      "origin_kind": "donor-cdn",
+      "third_party_brand": true,
+      "owner_decision": "approved-as-placeholder",
+      "decision_note": "Owner approved shipping the donor reel as a temporary placeholder on 2026-08-09; replace with own footage before publish. Note the 8 MB weight on a host without response compression.",
+      "license_note": "Third-party brand footage — not licensed for production use."
+    }
+  ],
+  "issues": []
+}

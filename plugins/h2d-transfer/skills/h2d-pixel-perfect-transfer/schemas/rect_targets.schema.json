@@ -85,6 +85,42 @@
                     }
                   },
                   "additionalProperties": true
+                },
+                "text_style": {
+                  "description": "Donor typography in CSS camelCase, compared straight against getComputedStyle on the candidate. Metric props fail the gate; fontFamily is reported as a substitution.",
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "rendered_font": {
+                  "description": "Font the donor's browser actually used. A brand family declared but rendered as a system face proves a fallback, e.g. missing script coverage.",
+                  "type": "object",
+                  "properties": {
+                    "family": {
+                      "type": "string"
+                    },
+                    "post_script_name": {
+                      "type": "string"
+                    },
+                    "declared": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "box_style": {
+                  "description": "Container constraints (maxWidth, padding, gap, margin) that the candidate must reproduce structurally instead of compensating for.",
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
                 }
               },
               "additionalProperties": true

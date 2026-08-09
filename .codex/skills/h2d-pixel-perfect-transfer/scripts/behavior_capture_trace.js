@@ -16,7 +16,7 @@ async function state(page, selector){
 async function main(){
   const url=arg('url'), matrixPath=arg('matrix'), out=arg('out'), side=arg('side','original');
   if(!url||!matrixPath||!out) throw new Error('Usage: --url url --matrix interaction_matrix.json --side original|candidate --out traces.jsonl');
-  const {chromium}=require('playwright'); const matrix=JSON.parse(fs.readFileSync(matrixPath,'utf8')); const browser=await chromium.launch({headless:true}); const page=await browser.newPage({viewport:{width:Number(arg('viewport','390')),height:Number(arg('height','1400'))}});
+  const {launchChromium}=require('./browser'); const matrix=JSON.parse(fs.readFileSync(matrixPath,'utf8')); const browser=await launchChromium(); const page=await browser.newPage({viewport:{width:Number(arg('viewport','390')),height:Number(arg('height','1400'))}});
   const traces=[]; const screenshotDir=path.join(path.dirname(path.dirname(out)),'screenshots','behavior'); fs.mkdirSync(screenshotDir,{recursive:true});
   for(const it of matrix.interactions||[]){
     await page.goto(toUrl(url),{waitUntil:'networkidle'});

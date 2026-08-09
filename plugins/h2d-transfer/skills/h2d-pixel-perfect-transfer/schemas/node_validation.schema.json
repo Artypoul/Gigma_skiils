@@ -48,7 +48,24 @@
           "max_delta": {
             "type": "number"
           },
+          "mode": {
+            "description": "How candidate nodes were resolved: data-h2d-path markers, or a selector map when transferring into an existing project.",
+            "type": "string",
+            "enum": [
+              "markers",
+              "selector-map"
+            ]
+          },
+          "style_checked": {
+            "type": "integer"
+          },
           "issues": {
+            "type": "array"
+          },
+          "warnings": {
+            "type": "array"
+          },
+          "accepted_deviations": {
             "type": "array"
           }
         },
@@ -58,7 +75,24 @@
     "global_max_delta": {
       "type": "number"
     },
+    "style_threshold_px": {
+      "type": "number"
+    },
+    "strict_font_family": {
+      "type": "boolean"
+    },
+    "strict_box_style": {
+      "type": "boolean"
+    },
     "issues": {
+      "type": "array"
+    },
+    "warnings": {
+      "description": "Non-failing findings that must still be resolved in review.md: font substitutions and unmatched container constraints.",
+      "type": "array"
+    },
+    "accepted_deviations": {
+      "description": "Deltas the owner approved, e.g. a heading that is taller in another language. Each entry carries the reason.",
       "type": "array"
     }
   },

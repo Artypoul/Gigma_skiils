@@ -46,6 +46,7 @@ SCHEMA_BY_TEMPLATE = {
     'output_contract_static_template.json':'output_contract.schema.json',
     'validation_run_template.json':'validation_run.schema.json',
     'font_manifest_template.json':'font_manifest.schema.json',
+    'asset_provenance_template.json':'asset_provenance.schema.json',
 }
 
 
@@ -67,6 +68,13 @@ def validate_json(data: Any, schema_path: Path) -> list[str]:
         return [str(e).split('\n')[0]]
 
 def check_package(pkg: Path) -> dict[str, Any]:
+    # Guard against the common foot-gun of passing the .h2d file (or any other
+    # path) instead of the skill package directory.
+    if not pkg.is_dir() or not (pkg/'templates').is_dir() or not (pkg/'schemas').is_dir():
+        raise SystemExit(
+            f"--check-package expects the skill package directory (with templates/ and schemas/), got: {pkg}\n"
+            "To validate a transfer output, use --output <dir> instead."
+        )
     checks=[]; issues=[]
     # schema/template validation
     for tmpl, schema in SCHEMA_BY_TEMPLATE.items():
@@ -124,12 +132,17 @@ def add_h2d_unpack_strict_checks(checks: list[dict[str, str]], unpack_data: Any|
     checks.append({'name':'h2d_unpack_status_ok','result':'pass' if status == 'ok' else 'fail','message':f'status={status!r}'})
     checks.append({'name':'source_unpack_verdict_pass','result':'pass' if verdict == 'pass' else 'fail','message':f'source_unpack_verdict={verdict!r}'})
 
-def add_live_comparison_strict_check(checks: list[dict[str, str]], diff_data: Any|None) -> None:
+def add_live_comparison_strict_check(checks: list[dict[str, str]], diff_data: Any|None, accept_changed_source: bool=False) -> None:
     if not isinstance(diff_data, dict):
         checks.append({'name':'live_comparison_result_pass','result':'fail','message':'missing diff_summary data'})
         return
     result = diff_data.get('result')
-    checks.append({'name':'live_comparison_result_pass','result':'pass' if result == 'pass' else 'fail','message':f'diff_summary.result={result!r}; final ready requires pass'})
+    if result == 'pass':
+        checks.append({'name':'live_comparison_result_pass','result':'pass','message':'diff_summary.result=pass'})
+    elif result == 'changed-source' and accept_changed_source:
+        checks.append({'name':'live_comparison_result_pass','result':'pass','message':'diff_summary.result=changed-source accepted by owner via --accept-changed-source; snapshot is the reference'})
+    else:
+        checks.append({'name':'live_comparison_result_pass','result':'fail','message':f'diff_summary.result={result!r}; final ready requires pass, or changed-source with the owner-confirmed --accept-changed-source flag'})
 
 def add_liveness_strict_check(checks: list[dict[str, str]], liveness_data: Any|None, liveness_required: bool) -> None:
     if not isinstance(liveness_data, dict):
@@ -165,10 +178,11 @@ def infer_liveness_required(out: Path, explicit: str) -> bool:
         except Exception: pass
     return False
 
-def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: str='auto') -> dict[str, Any]:
+def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: str='auto', accept_changed_source: bool=False) -> dict[str, Any]:
     checks=[]; issues=[]; reports=out/'reports'
     behavior_required=infer_behavior_required(out, behavior_required_arg)
     liveness_required=infer_liveness_required(out, liveness_required_arg)
+    diff_allowed={'pass','changed-source'} if accept_changed_source else {'pass'}
     required=[
         ('source_intake.json','source_intake.schema.json',None),
         ('source_manifest.json','source_manifest.schema.json',None),
@@ -176,14 +190,16 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         ('raw_asset_inventory.json','raw_asset_inventory.schema.json',None),
         ('decode_candidates.json','decode_candidates.schema.json',None),
         ('schema_discovery.json','schema_discovery.schema.json',None),
+        ('font_manifest.json','font_manifest.schema.json',{'font-exact','font-substituted'}),
         ('rect_targets.json','rect_targets.schema.json',None),
         ('asset_map.json','asset_map.schema.json',None),
         ('asset_bitmap_audit.json','asset_bitmap_audit.schema.json',{'pass','manual-review'}),
         ('asset_visibility_chain.json','asset_visibility_chain.schema.json',{'pass'}),
         ('broken_asset_requests.json','broken_asset_requests.schema.json',{'pass'}),
         ('asset_paint_validation.json','asset_paint_validation.schema.json',{'pass'}),
+        ('asset_provenance.json','asset_provenance.schema.json',{'pass'}),
         ('node_validation.json','node_validation.schema.json',{'pass'}),
-        ('diff_summary.json','diff_summary.schema.json',{'pass'}),
+        ('diff_summary.json','diff_summary.schema.json',diff_allowed),
         ('behavior_validation.json','behavior_validation.schema.json',{'pass'} if behavior_required else {'static-scope','not-tested','pass'}),
         ('liveness_validation.json','liveness_validation.schema.json',{'pass'} if liveness_required else {'static-scope','not-tested','pass'}),
         ('output_manifest.json','output_manifest.schema.json',{'pass'}),
@@ -218,22 +234,22 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         if fn == 'diff_summary.json': diff_data = d
         if fn == 'liveness_validation.json': liveness_data = d
     add_h2d_unpack_strict_checks(checks, unpack_data)
-    add_live_comparison_strict_check(checks, diff_data)
+    add_live_comparison_strict_check(checks, diff_data, accept_changed_source)
     add_liveness_strict_check(checks, liveness_data, liveness_required)
     # Review file
     review=reports/'review.md'; checks.append({'name':'review.md','result':'pass' if review.exists() and review.stat().st_size>0 else 'fail','message':'ok' if review.exists() else 'missing'})
     result='pass' if all(c['result']=='pass' for c in checks) else 'needs-fix'
     issues=[c for c in checks if c['result']!='pass']
-    return {'result':result,'behavior_required':behavior_required,'liveness_required':liveness_required,'checked_at':datetime.now(timezone.utc).isoformat(),'checks':checks,'issues':issues}
+    return {'result':result,'behavior_required':behavior_required,'liveness_required':liveness_required,'changed_source_accepted':accept_changed_source,'checked_at':datetime.now(timezone.utc).isoformat(),'checks':checks,'issues':issues}
 
 def main() -> int:
-    ap=argparse.ArgumentParser(); ap.add_argument('--check-package',type=Path); ap.add_argument('--output',type=Path); ap.add_argument('--behavior-required',default='auto',choices=['auto','true','false','yes','no','1','0']); ap.add_argument('--liveness-required',default='auto',choices=['auto','true','false','yes','no','1','0']); ap.add_argument('--out',type=Path)
+    ap=argparse.ArgumentParser(); ap.add_argument('--check-package',type=Path); ap.add_argument('--output',type=Path); ap.add_argument('--behavior-required',default='auto',choices=['auto','true','false','yes','no','1','0']); ap.add_argument('--liveness-required',default='auto',choices=['auto','true','false','yes','no','1','0']); ap.add_argument('--accept-changed-source',action='store_true',help='Owner confirmed the .h2d snapshot stays the reference although the live original drifted; diff_summary may then be changed-source instead of pass.'); ap.add_argument('--out',type=Path)
     args=ap.parse_args()
     if args.check_package:
         res=check_package(args.check_package)
         out=args.out or (Path(tempfile.gettempdir())/'h2d-transfer-package-validation.json')
     elif args.output:
-        res=check_output(args.output,args.behavior_required,args.liveness_required)
+        res=check_output(args.output,args.behavior_required,args.liveness_required,args.accept_changed_source)
         out=args.out or args.output/'reports'/'validation_run.json'
     else:
         ap.error('Use --check-package or --output')

@@ -78,7 +78,10 @@ Generic frontend engineering skills for reusable project work, not tied to Gigma
 ### H2D pixel-perfect transfer
 Скил для переноса страниц и блоков из `.h2d` в Tailwind HTML/React по исполняемому контракту, а не "на глаз".
 - Вход: **`h2d-pixel-perfect-transfer`**.
-- Главное правило: сначала source intake и unpack, потом layout transfer, а после последней правки обязательны geometry, asset paint, live diff, behavior и liveness/WebGL gates через `scripts/run_all_gates.py`.
+- Главное правило: сначала source intake и unpack, затем типографика и контейнеры, и только потом блоки; геометрия воспроизводится структурой донора, а не компенсациями (spacer, `scale(1.00…)`, дробные сдвиги). После последней правки обязательны font, geometry + text styles, asset paint, asset provenance, live diff, behavior и liveness/WebGL gates через `scripts/run_all_gates.py`.
+- Отчёты порождаются скриптами: отчёт, написанный руками ради прохождения схемы, считается провалом гейта.
+- Свой текст важнее геометрии донора: если контент не влезает, скил останавливается и спрашивает владельца, а не сокращает молча (решение пишется в `accepted_deviations`).
+- Перенос в живой проект поддержан режимом `--selector-map`, поэтому продовую разметку не нужно засорять служебными атрибутами.
 - Референсы: `.codex/reference/h2d-transfer-contracts.md`, `.codex/reference/h2d-transfer-liveness-motion-webgl.md`, `.codex/reference/h2d-transfer-mandatory-invocation.md`.
 
 ## Принцип для всех
