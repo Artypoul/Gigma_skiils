@@ -15,13 +15,25 @@ The hook recognizes conservative stable trivial prompts (for example, `2 + 2`, a
 
 Hook execution requires PowerShell 7 (`pwsh`) on `PATH`. If the runtime does not provide it, report mechanical enforcement as unavailable and do not claim that Task Lock hooks are active.
 
+## Enforcement Modes
+
+Enforcement is two-tier. Without a Task Lock the hooks run in **advisory mode**: tools are allowed, the agent gets one warning per session, but `production-shell` and `external-write` actions are still hard-denied. Creating a Task Lock switches the session into **strict mode** with the full gate set (context, workflow, risk, scope, publish, evidence, final status) until the lock reaches a terminal status; after that the session falls back to advisory mode until a new lock is created. The Stop hook never blocks completion without a lock; the only soft stop-block fires once when tools were used before the clarification step. The sections below describe strict mode.
+
 Run every controller action as its own one-line shell tool call. The hook recognizes the canonical root expression shown below without allowing chained commands.
 
-In a plugin runtime, use the real plugin root. When the shell tool is POSIX Bash, invoke the same action through `pwsh`. Use `CLAUDE_PLUGIN_ROOT` instead of `PLUGIN_ROOT` in a Claude plugin runtime:
+In a plugin runtime, use the real plugin root. In the Codex agent shell the plugin env variables are usually NOT set: call the controller by its literal absolute path instead (the same plugin root this skill was loaded from); the hook accepts the literal form only when it points exactly at this plugin's controller. In the Codex agent shell the plugin env variables are usually NOT set: call the controller by its literal absolute path instead (the same plugin root this skill was loaded from); the hook accepts the literal form only when it points exactly at this plugin's controller. In the Codex agent shell the plugin env variables are usually NOT set: call the controller by its literal absolute path instead (the same plugin root this skill was loaded from); the hook accepts the literal form only when it points exactly at this plugin's controller. When the shell tool is POSIX Bash, invoke the same action through `pwsh`. Use `CLAUDE_PLUGIN_ROOT` instead of `PLUGIN_ROOT` in a Claude plugin runtime:
 
 ```bash
 pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
 ```
+
+In the Codex agent shell the plugin env variables are usually unset too, so the `$PLUGIN_ROOT` example above will NOT resolve there. Call the controller by its literal absolute path — the same plugin root this skill was loaded from:
+
+```powershell
+& '<plugin-root>/skills/first-pass-quality-gate/scripts/quality-control.ps1' -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -DoneWhen "criterion 1"
+```
+
+The hook accepts the literal form only when the path points exactly at this plugin's controller.
 
 In a standalone `.codex/skills` mirror there is no plugin-root environment variable. Resolve the absolute directory containing this loaded `SKILL.md` from the skill catalog, and invoke its controller directly. Replace the placeholder with that existing directory; do not create an alias, symlink, copy, or alternate route:
 

@@ -54,7 +54,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $script:SchemaVersion = 3
-$script:PolicyVersion = '0.3.0'
+$script:PolicyVersion = '0.4.0'
 $script:ListSeparator = '~~'
 
 function Get-UtcNow {
@@ -224,6 +224,8 @@ function Read-State {
         if ($state -and $state.gates -and -not $state.gates.ContainsKey('publish')) {
             $state.gates.publish = if ($state.task -and $state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
         }
+        if ($state -and -not $state.ContainsKey('clarificationNagged')) { $state.clarificationNagged = $false }
+        if ($state -and -not $state.ContainsKey('postTerminalActivity')) { $state.postTerminalActivity = $false }
         if ($state -and $state.task) {
             if (-not $state.task.ContainsKey('writeScopePaths')) { $state.task.writeScopePaths = @($state.task.scopePaths) }
             if (-not $state.task.ContainsKey('workflowStage')) { $state.task.workflowStage = 'none' }
@@ -277,6 +279,8 @@ function New-State {
         phase = 'awaiting_clarification'
         promptCount = 0
         clarificationAsked = $false
+        clarificationNagged = $false
+        postTerminalActivity = $false
         clarified = $false
         clarificationSatisfiedBy = $null
         specificationBasisHash = $null
@@ -402,6 +406,92 @@ function New-StopBlock {
     @{ decision = 'block'; reason = $Message }
 }
 
+function New-PreToolWarn {
+    # Advisory-режим: НЕ выдаём permissionDecision, чтобы не подменять родной approve-механизм хоста;
+    # агент получает только предупреждение (additionalContext + systemMessage).
+    param([Parameter(Mandatory)][string]$Message)
+    @{
+        hookSpecificOutput = @{
+            hookEventName = 'PreToolUse'
+            additionalContext = $Message
+        }
+        systemMessage = $Message
+    }
+}
+
+function New-PreToolAsk {
+    # Advisory-режим: неклассифицируемая команда эскалируется на подтверждение пользователю.
+    param([Parameter(Mandatory)][string]$Message)
+    @{
+        hookSpecificOutput = @{
+            hookEventName = 'PreToolUse'
+            permissionDecision = 'ask'
+            permissionDecisionReason = $Message
+        }
+    }
+}
+
+function Test-IsDestructiveWriteCommand {
+    # Рекурсивные удаления и переписывание истории Git — деструктивны даже как «локальный write».
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $gitHistory = '(?i)\bgit\s+(merge|rebase)\b'
+    $posixRecursive = '(?i)(?:^|[;&|]\s*|\s)rm(?:\.exe)?\s+[^\r\n]*-[a-z]*r'
+    $psRecursive = '(?i)\bRemove-Item\b[^\r\n]*(-Recurse|-Force)'
+    $winRecursive = '(?i)\b(rmdir|rd)\b[^\r\n]*/s|\bdel\b[^\r\n]*/[sq]'
+    $Command -match ($gitHistory + '|' + $posixRecursive + '|' + $psRecursive + '|' + $winRecursive)
+}
+
+function Get-AdvisoryHardDeny {
+    # Даже без Task Lock производственные/деструктивные действия остаются заблокированными.
+    param([Parameter(Mandatory)][hashtable]$Classification)
+    if ($Classification.kind -eq 'production-shell') {
+        return New-PreToolDeny 'Advisory mode: destructive/production/merge/deploy shell is still blocked without a production Task Lock. Create a Task Lock and Entity Lock with fresh confirmation first.'
+    }
+    if ($Classification.kind -eq 'external-write') {
+        return New-PreToolDeny 'Advisory mode: external writes are still blocked without a production Task Lock, exact Entity Lock, and fresh confirmation.'
+    }
+    if ($Classification.kind -eq 'write' -and (Test-IsDestructiveWriteCommand ([string]$Classification.command))) {
+        return New-PreToolDeny 'Advisory mode: destructive shell mutations (git merge/rebase, recursive/forced deletes) are blocked without a Task Lock. Use scoped file tools or create a Task Lock first.'
+    }
+    $null
+}
+
+
+function Get-AdvisoryDecision {
+    # Общий advisory-путь: production/external — жёсткий deny; неклассифицируемый shell — ask;
+    # остальное — одно предупреждение на сессию без permissionDecision.
+    param([Parameter(Mandatory)][hashtable]$Classification, [Parameter(Mandatory)][string]$Root,
+          [Parameter(Mandatory)][string]$Id, [switch]$DryRun, [Parameter(Mandatory)][string]$WarnMessage,
+          [string]$ToolName = '')
+    $hard = Get-AdvisoryHardDeny -Classification $Classification
+    if ($hard) { return $hard }
+    if ($ToolName -eq 'Bash' -and (Test-HasShellCommandChaining ([string]$Classification.command))) {
+        # Цепочка с безобидным префиксом может скрывать мутацию — эскалируем на подтверждение.
+        return New-PreToolAsk 'Advisory mode: chained/piped shell commands cannot be classified safely; confirm manually or run one command per call. External/production writes still require a production Task Lock.'
+    }
+    if ($Classification.kind -eq 'unclassified-shell') {
+        return New-PreToolAsk 'Advisory mode: this shell command cannot be classified safely, so it needs manual confirmation. External/production writes still require a production Task Lock.'
+    }
+    if ($Classification.kind -ne 'management' -and -not (Test-AdvisoryAlreadyWarned -Root $Root -Id $Id -DryRun:$DryRun)) {
+        return New-PreToolWarn $WarnMessage
+    }
+    $null
+}
+
+function Test-AdvisoryAlreadyWarned {
+    # Одно предупреждение на сессию, чтобы advisory-режим не спамил на каждый инструмент.
+    param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Id, [switch]$DryRun)
+    $dir = Join-Path $Root 'advisory'
+    $flag = Join-Path $dir (($Id -replace '[^A-Za-z0-9._-]', '_') + '.flag')
+    if (Test-Path -LiteralPath $flag) { return $true }
+    if (-not $DryRun) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        New-Item -ItemType File -Force -Path $flag | Out-Null
+    }
+    $false
+}
+
 function Get-CommandText {
     param([AllowNull()]$ToolInput)
     if ($ToolInput -is [hashtable]) {
@@ -420,8 +510,13 @@ function Test-IsQualityControlCommand {
     $controllerRelative = 'skills[\\/]first-pass-quality-gate[\\/]scripts[\\/]quality-control\.ps1'
     $canonicalPath = ('^\s*&\s*["'']?{0}[\\/]{1}["'']?(?=\s+-Action\b)' -f $allowedRoot, $controllerRelative)
     $posixPath = ('^\s*pwsh(?:\.exe)?\s+-NoProfile\s+-File\s+["'']?{0}[\\/]{1}["'']?(?=\s+-Action\b)' -f $posixRoot, $controllerRelative)
-    $isPowerShellCall = $Command -match $canonicalPath
-    $isPosixCall = $Command -match $posixPath
+    # Literal-путь разрешён ТОЛЬКО если он посимвольно указывает на настоящий контроллер этого плагина:
+    # в шелле агента переменных PLUGIN_ROOT нет, и это единственная форма, которую он может построить сам.
+    $selfPath = [regex]::Escape($PSCommandPath) -replace '\\\\', '[\\/]'
+    $literalCall = ('^\s*&\s*["'']{0}["''](?=\s+-Action\b)' -f $selfPath)
+    $literalPosix = ('^\s*pwsh(?:\.exe)?\s+-NoProfile\s+(?:-ExecutionPolicy\s+Bypass\s+)?-File\s+["'']{0}["''](?=\s+-Action\b)' -f $selfPath)
+    $isPowerShellCall = $Command -match $canonicalPath -or $Command -match $literalCall
+    $isPosixCall = $Command -match $posixPath -or $Command -match $literalPosix
     if (-not $isPowerShellCall -and -not $isPosixCall) { return $false }
     if ($Command -notmatch '(?i)-Action\s+(StartTask|ConfirmContext|SetGate|SetEntityLock|AuthorizeProduction|AddEvidence|SetStatus|AuthorizeDelegation|VerifyDelegation|AcknowledgeWriteRecovery|ShowStatus|ResetTask|Version)\b') { return $false }
     if ($isPowerShellCall -and $Command -notmatch '^\s*&\s*') { return $false }
@@ -870,15 +965,20 @@ function Get-ToolSuccess {
 function Invoke-SessionStart {
     param([Parameter(Mandatory)][hashtable]$HookData, [Parameter(Mandatory)][string]$Root)
     $id = [string]$HookData.session_id
+    $corruptBox = @{ value = $false }
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
+        if (-not $state -and (Test-Path -LiteralPath $path)) { $corruptBox.value = $true; return }
         if (-not $state) { $state = New-State $HookData }
         if ($HookData.ContainsKey('turn_id')) { $state.turnId = [string]$HookData.turn_id }
         $state.model = [string]$HookData.model
         $state.cwd = [string]$HookData.cwd
         Write-State -Path $path -State $state
         Set-CurrentSessionIndex -Root $Root -State $state
+    }
+    if ($corruptBox.value) {
+        return @{ systemMessage = 'First-pass quality: the session state file exists but cannot be read; failing closed. Repair or remove the corrupt state file (tools stay denied until then).' }
     }
     @{
         hookSpecificOutput = @{
@@ -896,6 +996,10 @@ function Invoke-UserPromptSubmit {
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
+        if (-not $state -and (Test-Path -LiteralPath $path)) {
+            $outputBox.value = @{ systemMessage = 'First-pass quality: the session state file exists but cannot be read; failing closed. Repair or remove the corrupt state file (tools stay denied until then).' }
+            return
+        }
         if (-not $state) { $state = New-State $HookData }
         if ([string]$state.status -in @('ready', 'partial', 'blocked', 'unknown')) {
             $previous = $state
@@ -987,14 +1091,29 @@ function Invoke-PreToolUse {
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
-        if (-not $state) { $decisionBox.value = New-PreToolDeny 'Quality state is missing. Start a new task and create a Task Lock before tools.'; return }
+        if (-not $state) {
+            if (Test-Path -LiteralPath $path) {
+                # Файл состояния есть, но не читается: это порча, а не отсутствие — fail closed.
+                $decisionBox.value = New-PreToolDeny 'Quality state file exists but cannot be read; failing closed. Repair or remove the corrupt state file, then start a new task.'
+                return
+            }
+            # Advisory-режим: состояния нет (старая сессия или hooks появились позже) — не душим работу,
+            # но производственные/деструктивные действия блокируем всегда.
+            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -ToolName $toolName -WarnMessage 'First-pass quality: quality state is missing, so mechanical gates run in advisory mode (production actions stay blocked). For full enforcement start a new task and create a Task Lock.'
+            return
+        }
         if ($state.stopOverride) { $decisionBox.value = New-PreToolDeny 'Art requested stop; no further tool use is allowed.'; return }
         if ($classification.kind -eq 'management') { return }
         if (-not $state.task) {
-            $decisionBox.value = New-PreToolDeny 'Task Lock is missing. For a fully specified request use audited StartTask -FullySpecified -SpecificationBasis; otherwise ask the required clarification question, then run StartTask.'
+            # Advisory-режим: Task Lock не создан — предупреждаем один раз, производственное блокируем.
+            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -ToolName $toolName -WarnMessage 'First-pass quality: no Task Lock, so gates run in advisory mode (production actions stay blocked). For strict enforcement run StartTask (audited, or -FullySpecified -SpecificationBasis) after the clarification.'
             return
         }
-        if ([string]$state.status -ne 'active') { $decisionBox.value = New-PreToolDeny "Task is already terminal ($($state.status)); start a new Task Lock before more tools."; return }
+        if ([string]$state.status -ne 'active') {
+            # Advisory-режим: прежний замок завершён; новые сообщения не должны блокироваться намертво.
+            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -ToolName $toolName -WarnMessage "First-pass quality: previous Task Lock is terminal ($($state.status)) — advisory mode until a new Task Lock is created (production actions stay blocked)."
+            return
+        }
         $requiredAction = Get-RequiredAction -Classification $classification
         if ($requiredAction -and $requiredAction -notin @($state.task.allowedActions)) {
             $decisionBox.value = New-PreToolDeny "Task Lock does not allow action '$requiredAction'."; return
@@ -1134,9 +1253,13 @@ function Invoke-PreToolUse {
     }
     if ($decisionBox.value) {
         $stateForLog = Read-State (Get-StatePath -Root $Root -Id $id)
+        $decisionOut = $decisionBox.value.hookSpecificOutput
+        $logResult = if ($decisionOut -and $decisionOut.ContainsKey('permissionDecision')) {
+            switch ([string]$decisionOut.permissionDecision) { 'deny' { 'denied' } 'ask' { 'ask' } default { 'allowed' } }
+        } else { 'advisory' }
         Write-Telemetry -Root $Root -Record @{
             sessionId = $id; turnId = [string]$HookData.turn_id; model = [string]$HookData.model; cwd = [string]$HookData.cwd
-            event = 'PreToolUse'; action = $classification.kind; result = 'denied'; toolName = $toolName
+            event = 'PreToolUse'; action = $classification.kind; result = $logResult; toolName = $toolName
             phase = if ($stateForLog) { $stateForLog.phase } else { 'missing' }; status = if ($stateForLog) { $stateForLog.status } else { 'missing' }
             risk = if ($stateForLog -and $stateForLog.task) { $stateForLog.task.risk } else { '' }; userCorrectionDetected = $false
         }
@@ -1169,14 +1292,18 @@ function Invoke-PostToolUse {
         if ($classification.kind -in $mutationKinds) {
             $state.tools.writes = [int]$state.tools.writes + 1
             if (-not $success) { $state.failedWritePending = $true }
+            if ([string]$state.status -ne 'active') { $state.postTerminalActivity = $true }
         }
         if ($classification.kind -in @('write', 'unclassified-shell', 'external-write', 'production-shell')) {
             $state.lastWriteToolUseId = [string]$HookData.tool_use_id
             $state.lastWriteAt = Get-UtcNow
-            $state.gates.publish = if ($state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
-            $state.gates.acceptance = 'pending'
-            $state.gates.selfReview = 'pending'
-            if ($state.task.reviewRequired) { $state.gates.review = 'pending' }
+            if ([string]$state.status -eq 'active') {
+                # Гейты пересбрасываются только у живого замка; advisory-активность после terminal его не трогает.
+                $state.gates.publish = if ($state.task -and $state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
+                $state.gates.acceptance = 'pending'
+                $state.gates.selfReview = 'pending'
+                if ($state.task -and $state.task.reviewRequired) { $state.gates.review = 'pending' }
+            }
             if ($success -and $toolName -match '^(apply_patch|Edit|Write)$') {
                 $workdir = Get-ToolWorkdir -ToolInput $HookData.tool_input -Fallback ([string]$HookData.cwd)
                 foreach ($file in @(Get-ApplyPatchFiles -ToolInput $HookData.tool_input -Cwd $workdir)) {
@@ -1184,7 +1311,7 @@ function Invoke-PostToolUse {
                 }
             }
         }
-        if ($success -and $classification.kind -eq 'push' -and $state.task.reviewRequired) {
+        if ($success -and [string]$state.status -eq 'active' -and $classification.kind -eq 'push' -and $state.task -and $state.task.reviewRequired) {
             $state.gates.review = 'pending'
         }
         if ($classification.kind -eq 'delegation' -and $state.delegation) {
@@ -1231,7 +1358,7 @@ function Invoke-PreCompact {
 function Invoke-PostCompact {
     param([Parameter(Mandatory)][hashtable]$HookData, [Parameter(Mandatory)][string]$Root)
     $id = [string]$HookData.session_id
-    $messageBox = @{ value = 'Quality state could not be restored; all mutations remain blocked.' }
+    $messageBox = @{ value = 'Quality state could not be restored; hooks continue in advisory mode (production actions stay blocked). Re-create the Task Lock to restore strict enforcement.' }
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
@@ -1251,9 +1378,9 @@ function Invoke-PermissionRequest {
     $preInput = @{}
     foreach ($key in $HookData.Keys) { $preInput[$key] = $HookData[$key] }
     if (-not $preInput.ContainsKey('tool_use_id')) { $preInput.tool_use_id = 'permission-request' }
-    $deny = Invoke-PreToolUse -HookData $preInput -Root $Root -DryRun
-    if ($deny) {
-        $message = [string]$deny.hookSpecificOutput.permissionDecisionReason
+    $decision = Invoke-PreToolUse -HookData $preInput -Root $Root -DryRun
+    if ($decision -and $decision.hookSpecificOutput -and [string]$decision.hookSpecificOutput.permissionDecision -eq 'deny') {
+        $message = [string]$decision.hookSpecificOutput.permissionDecisionReason
         return New-PermissionDeny $message
     }
     @{}
@@ -1287,7 +1414,12 @@ function Invoke-Stop {
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
-        if (-not $state) { $outputBox.value = New-StopBlock 'Quality state is missing. Reinitialize the task and create a Task Lock.'; return }
+        if (-not $state) {
+            if (Test-Path -LiteralPath $path) {
+                $outputBox.value = New-StopBlock 'Quality state file exists but cannot be read; do not claim readiness. Repair or remove the corrupt state file, then finish.'
+            }
+            return
+        }
         if ($state.stopOverride) {
             if ($state.status -eq 'active') {
                 $state.status = 'blocked'
@@ -1308,7 +1440,13 @@ function Invoke-Stop {
             if ($state.directAnswerEligible -and [int]$state.tools.count -eq 0 -and -not [string]::IsNullOrWhiteSpace($last)) {
                 return
             }
-            $outputBox.value = New-StopBlock 'Before tools or a substantive answer, ask Art one concise clarification question about the expected result.'
+            if ([int]$state.tools.count -gt 0 -and -not $state.clarificationNagged) {
+                # Мягкий блок один раз: агент начал инструменты, не спросив про ожидаемый результат.
+                $state.clarificationNagged = $true
+                Write-State -Path $path -State $state
+                $outputBox.value = New-StopBlock 'You used tools without the clarification step. Ask Art one concise question about the expected result, or create an audited Task Lock (StartTask), then finish.'
+                return
+            }
             return
         }
         if ($state.phase -eq 'needs_task_decision' -and -not $state.task) {
@@ -1318,12 +1456,13 @@ function Invoke-Stop {
                 Write-State -Path $path -State $state
                 return
             }
-            $outputBox.value = New-StopBlock 'Decide the boundary: use StartTask -Continuation for an already clarified continuation, or ask one concise clarification question for a new task.'
             return
         }
-        if (-not $state.task) { $outputBox.value = New-StopBlock 'Create a Task Lock with $first-pass-quality-gate before finishing the answer.'; return }
+        if (-not $state.task) { return }
         if ($state.status -eq 'active') { $outputBox.value = New-StopBlock 'Set an explicit terminal quality status: ready, partial, blocked, or unknown. Active is not a final status.'; return }
-        if ($state.status -eq 'ready') {
+        if ($state.status -eq 'ready' -and -not $state.postTerminalActivity) {
+            # Пост-терминальная advisory-активность не ре-валидирует уже закрытый замок:
+            # ready был проверен в SetStatus; строгая повторная проверка касается только strict-хода.
             $problems = @(Get-ReadinessProblems $state)
             if ($problems.Count -gt 0) { $outputBox.value = New-StopBlock ('Ready is not supported by evidence: ' + ($problems -join ' ')); return }
         }

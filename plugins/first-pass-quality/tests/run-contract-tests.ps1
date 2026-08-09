@@ -112,8 +112,9 @@ function Initialize-ClarifiedSession {
     $pre.tool_name = 'Bash'
     $pre.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }
     $pre.tool_use_id = 'pre-clarification-read'
-    $denied = Invoke-HookCase $pre
-    Assert-True ($denied.hookSpecificOutput.permissionDecision -eq 'deny') 'Tools must be denied before clarification.'
+    $warned = Invoke-HookCase $pre
+    Assert-True ($warned.hookSpecificOutput.PSObject.Properties.Name -notcontains 'permissionDecision') 'Advisory mode must not inject a permission decision.'
+    Assert-True ([string]$warned.hookSpecificOutput.additionalContext -match 'advisory') 'Pre-clarification advisory must warn via additional context.'
 
     $stop = New-BaseEvent $Session 't1' 'Stop'
     $stop.stop_hook_active = $false
@@ -166,6 +167,32 @@ try {
     $managementCall.tool_input.command = 'pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
     $managementCall.tool_use_id = 'management-posix-start-task'
     Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'The documented POSIX pwsh StartTask command must bypass the missing-lock gate as management.'
+    $null = Invoke-StateCase $management @(
+        '-Action', 'StartTask', '-Outcome', 'Management bypass under strict lock', '-Scope', $workspace,
+        '-Mode', 'local-change', '-Risk', 'low', '-CompletionPolicy', 'deliver-current-state',
+        '-Workflow', 'none', '-DoneWhen', 'management bypass proven', '-AllowedActions', 'read~~validate', '-AllowDirty'
+    )
+    $managementCall.tool_input.command = '& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action ShowStatus'
+    $managementCall.tool_use_id = 'management-under-lock'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'Management must bypass AllowedActions under a strict lock.'
+    $managementCall.tool_input.command = "& '$control' -Action ShowStatus"
+    $managementCall.tool_use_id = 'management-literal-amp'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'A literal path to the real controller must count as management.'
+    $managementCall.tool_input.command = "pwsh -NoProfile -File '$control' -Action ShowStatus"
+    $managementCall.tool_use_id = 'management-literal-posix'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'A literal pwsh -File call to the real controller must count as management.'
+    $managementCall.tool_input.command = "& '$control' -Action ShowStatus"
+    $managementCall.tool_use_id = 'management-literal-amp'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'A literal path to the real controller must count as management.'
+    $managementCall.tool_input.command = "pwsh -NoProfile -File '$control' -Action ShowStatus"
+    $managementCall.tool_use_id = 'management-literal-posix'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'A literal pwsh -File call to the real controller must count as management.'
+    $managementCall.tool_input.command = "& '$control' -Action ShowStatus"
+    $managementCall.tool_use_id = 'management-literal-amp'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'A literal path to the real controller must count as management.'
+    $managementCall.tool_input.command = "pwsh -NoProfile -File '$control' -Action ShowStatus"
+    $managementCall.tool_use_id = 'management-literal-posix'
+    Assert-True ($null -eq (Invoke-HookCase $managementCall)) 'A literal pwsh -File call to the real controller must count as management.'
     $managementCall.tool_input.command = '& "$($env:PLUGIN_ROOT ?? $env:CLAUDE_PLUGIN_ROOT)/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome test'
     $managementCall.tool_input.command += '; Remove-Item outside.txt'
     $managementCall.tool_use_id = 'management-chained-command'
@@ -340,7 +367,13 @@ try {
     $readyStop.stop_hook_active = $false
     $readyStop.last_assistant_message = 'Готово: критерии и проверки подтверждены.'
     Assert-True ($null -eq (Invoke-HookCase $readyStop)) 'Evidence-backed ready must be allowed.'
-    Assert-True ((Invoke-HookCase $preTest).hookSpecificOutput.permissionDecision -eq 'deny') 'No tools may run after a terminal status.'
+    Assert-True ($null -eq (Invoke-HookCase $preTest)) 'After a terminal status tools fall back to advisory mode.'
+    $terminalProd = New-BaseEvent $session 't3' 'PreToolUse'; $terminalProd.tool_name = 'Bash'; $terminalProd.tool_input = @{ command = 'gh pr merge 7 --merge'; workdir = $workspace }; $terminalProd.tool_use_id = 'terminal-prod'
+    Assert-True ((Invoke-HookCase $terminalProd).hookSpecificOutput.permissionDecision -eq 'deny') 'Production shell must stay blocked in advisory mode after terminal status.'
+    $termWrite = New-BaseEvent $session 't3' 'PostToolUse'; $termWrite.tool_name = 'apply_patch'; $termWrite.tool_input = @{ patch = 'noop' }; $termWrite.tool_response = @{ exit_code = 0 }; $termWrite.tool_use_id = 'terminal-write'
+    $null = Invoke-HookCase $termWrite
+    $termStop = New-BaseEvent $session 't3' 'Stop'; $termStop.stop_hook_active = $false; $termStop.last_assistant_message = 'Дописал заметку после готовности.'
+    Assert-True ($null -eq (Invoke-HookCase $termStop)) 'Post-terminal advisory writes must not re-trigger strict readiness blocks.'
 
     $incomplete = 'contract-incomplete'
     Initialize-ClarifiedSession $incomplete
@@ -828,10 +861,57 @@ try {
     $stopTool = New-BaseEvent $stopSession 't2' 'PreToolUse'; $stopTool.tool_name = 'Bash'; $stopTool.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $stopTool.tool_use_id = 'after-stop'
     Assert-True ((Invoke-HookCase $stopTool).hookSpecificOutput.permissionDecision -eq 'deny') 'All tools must be blocked after stop.'
 
+    $advisory = 'contract-advisory-nostate'
+    $advisoryRead = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryRead.tool_name = 'Bash'; $advisoryRead.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $advisoryRead.tool_use_id = 'advisory-read-1'
+    $advisoryFirst = Invoke-HookCase $advisoryRead
+    Assert-True ($advisoryFirst.hookSpecificOutput.PSObject.Properties.Name -notcontains 'permissionDecision') 'Missing state must not inject a permission decision.'
+    Assert-True ([string]$advisoryFirst.hookSpecificOutput.additionalContext -match 'advisory') 'Missing-state advisory must warn via additional context.'
+    $advisoryRead.tool_use_id = 'advisory-read-2'
+    Assert-True ($null -eq (Invoke-HookCase $advisoryRead)) 'Advisory warning must fire only once per session.'
+    $advisoryProd = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryProd.tool_name = 'Bash'; $advisoryProd.tool_input = @{ command = 'terraform apply -auto-approve'; workdir = $workspace }; $advisoryProd.tool_use_id = 'advisory-prod'
+    Assert-True ((Invoke-HookCase $advisoryProd).hookSpecificOutput.permissionDecision -eq 'deny') 'Production shell must stay denied without state.'
+    $advisoryExternal = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryExternal.tool_name = 'Bash'; $advisoryExternal.tool_input = @{ command = 'ssh deploy@host systemctl restart app'; workdir = $workspace }; $advisoryExternal.tool_use_id = 'advisory-external'
+    Assert-True ((Invoke-HookCase $advisoryExternal).hookSpecificOutput.permissionDecision -eq 'deny') 'External writes must stay denied without state.'
+    $advisoryUnknown = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryUnknown.tool_name = 'Bash'; $advisoryUnknown.tool_input = @{ command = 'python -c "import urllib.request"'; workdir = $workspace }; $advisoryUnknown.tool_use_id = 'advisory-unknown'
+    Assert-True ((Invoke-HookCase $advisoryUnknown).hookSpecificOutput.permissionDecision -eq 'ask') 'Unclassified shell must escalate to ask in advisory mode.'
+    $corruptDir = Join-Path $testRoot 'sessions'
+    New-Item -ItemType Directory -Force -Path $corruptDir | Out-Null
+    Set-Content -LiteralPath (Join-Path $corruptDir 'contract-corrupt-state.json') -Value '{ this is not json' -Encoding UTF8
+    $corruptPre = New-BaseEvent 'contract-corrupt-state' 't1' 'PreToolUse'; $corruptPre.tool_name = 'Bash'; $corruptPre.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $corruptPre.tool_use_id = 'corrupt-read'
+    Assert-True ((Invoke-HookCase $corruptPre).hookSpecificOutput.permissionDecision -eq 'deny') 'Corrupt state must fail closed, not fall back to advisory.'
+    $corruptStop = New-BaseEvent 'contract-corrupt-state' 't1' 'Stop'; $corruptStop.stop_hook_active = $false; $corruptStop.last_assistant_message = 'Готово.'
+    Assert-True ((Invoke-HookCase $corruptStop).decision -eq 'block') 'Stop must also fail closed on a corrupt state file.'
+    $corruptPrompt = New-BaseEvent 'contract-corrupt-state' 't2' 'UserPromptSubmit'; $corruptPrompt.prompt = 'Продолжи работу.'
+    $corruptUps = Invoke-HookCase $corruptPrompt
+    Assert-True ([string]$corruptUps.systemMessage -match 'cannot be read') 'UserPromptSubmit must not recreate state over a corrupt file.'
+    $corruptPre2 = New-BaseEvent 'contract-corrupt-state' 't2' 'PreToolUse'; $corruptPre2.tool_name = 'Bash'; $corruptPre2.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $corruptPre2.tool_use_id = 'corrupt-read-2'
+    Assert-True ((Invoke-HookCase $corruptPre2).hookSpecificOutput.permissionDecision -eq 'deny') 'Tools must stay denied after a prompt on a corrupt state.'
+    $advisoryChained = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryChained.tool_name = 'Bash'; $advisoryChained.tool_input = @{ command = 'git status; python -c "import urllib.request"'; workdir = $workspace }; $advisoryChained.tool_use_id = 'advisory-chained'
+    Assert-True ((Invoke-HookCase $advisoryChained).hookSpecificOutput.permissionDecision -eq 'ask') 'A read-prefixed chained command must escalate to ask in advisory mode.'
+    $advisoryMerge = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryMerge.tool_name = 'Bash'; $advisoryMerge.tool_input = @{ command = 'git merge feature-x'; workdir = $workspace }; $advisoryMerge.tool_use_id = 'advisory-merge'
+    Assert-True ((Invoke-HookCase $advisoryMerge).hookSpecificOutput.permissionDecision -eq 'deny') 'git merge must stay denied in advisory mode.'
+    $advisoryRmrf = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryRmrf.tool_name = 'Bash'; $advisoryRmrf.tool_input = @{ command = 'rm -rf build'; workdir = $workspace }; $advisoryRmrf.tool_use_id = 'advisory-rmrf'
+    Assert-True ((Invoke-HookCase $advisoryRmrf).hookSpecificOutput.permissionDecision -eq 'deny') 'Recursive delete must stay denied in advisory mode.'
+    $advisoryStop = New-BaseEvent $advisory 't1' 'Stop'; $advisoryStop.stop_hook_active = $false; $advisoryStop.last_assistant_message = 'Готово.'
+    Assert-True ($null -eq (Invoke-HookCase $advisoryStop)) 'Stop must not block when state is missing.'
+
+    $nag = 'contract-clarification-nag'
+    $nagStart = New-BaseEvent $nag 't0' 'SessionStart'; $nagStart.Remove('turn_id'); $nagStart.source = 'startup'
+    $null = Invoke-HookCase $nagStart
+    $nagPrompt = New-BaseEvent $nag 't1' 'UserPromptSubmit'; $nagPrompt.prompt = 'Поменяй конфиг сервиса как обсуждали.'
+    $null = Invoke-HookCase $nagPrompt
+    $nagPre = New-BaseEvent $nag 't1' 'PreToolUse'; $nagPre.tool_name = 'Bash'; $nagPre.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $nagPre.tool_use_id = 'nag-read'
+    $null = Invoke-HookCase $nagPre
+    $nagPost = New-BaseEvent $nag 't1' 'PostToolUse'; $nagPost.tool_name = 'Bash'; $nagPost.tool_input = $nagPre.tool_input; $nagPost.tool_response = @{ exit_code = 0 }; $nagPost.tool_use_id = 'nag-read'
+    $null = Invoke-HookCase $nagPost
+    $nagStop = New-BaseEvent $nag 't1' 'Stop'; $nagStop.stop_hook_active = $false; $nagStop.last_assistant_message = 'Сделал часть работы.'
+    Assert-True ((Invoke-HookCase $nagStop).decision -eq 'block') 'Tools without clarification must trigger one soft stop-block.'
+    Assert-True ($null -eq (Invoke-HookCase $nagStop)) 'The clarification stop-block must fire only once.'
+
     [pscustomobject]@{
         status = 'passed'
         assertions = $script:Assertions
-        policyVersion = '0.3.0'
+        policyVersion = '0.4.0'
         codexContract = '0.144.3'
     } | ConvertTo-Json
 } finally {

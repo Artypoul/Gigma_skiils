@@ -66,14 +66,14 @@ Generic frontend engineering skills for reusable project work, not tied to Gigma
 
 ### First-pass quality
 
-Механический guardrail для первой проходки и честного завершения задач Codex.
+Механический guardrail (policy 0.4.x) работает в двух режимах. **Advisory** (Task Lock не создан, состояние отсутствует или terminal): инструменты работают с одним предупреждением на сессию; `production-shell`/`external-write` всегда deny; цепочки и неклассифицируемый shell эскалируются в `ask`; завершение хода не блокируется. **Strict** (создан активный Task Lock): полный контракт ниже. Где механика отключена конфигурацией, та же дисциплина ведётся текстом (см. `$feature`).
 
-- Вход: **`first-pass-quality-gate`** — создаёт Task Lock до мутации, фиксирует scope/write scope, workflow stage, разрешённые действия, критерии до публикации и финальные DoneWhen.
-- Evidence: acceptance разрешена только по свежему успешному результату точного инструмента после последней содержательной записи.
-- PR: обычные commit/push/PR-операции отделены от production; каждый успешный push заново открывает обязательный review-gate.
-- `$feature`: first-pass оборачивает, но не заменяет project/feature workflow; planning и implementation используют разные Task Locks. Дублирующий watch/turnstile для той же сессии не регистрировать.
-- Production: merge/deploy/force-push и внешние сущности требуют typed wrapper, точного entity lock и одноразового свежего подтверждения пользователя.
-- Runtime: после установки или обновления hooks становятся проверяемо активны только в новой Codex-задаче после reload/trust.
+- Вход в strict: **`first-pass-quality-gate`** — Task Lock фиксирует scope/write scope, workflow stage, разрешённые действия, критерии до публикации и финальные DoneWhen. Task Lock опционален: без него действует advisory-режим.
+- Evidence (strict): acceptance разрешена только по свежему успешному результату точного инструмента после последней содержательной записи.
+- PR (strict): обычные commit/push/PR-операции отделены от production; каждый успешный push заново открывает обязательный review-gate.
+- `$feature`: при включённой механике first-pass оборачивает workflow (planning и implementation — разные Task Locks); при отключённой — фазовая дисциплина ведётся текстом по самому скиллу, контроллер не вызывается. Дублирующий watch/turnstile для той же сессии не регистрировать.
+- Production: merge/deploy/force-push и внешние сущности — typed wrapper предпочтителен; raw shell только по явному разрешению владельца в последней реплике, с точной привязкой к цели/среде/семейству команд и одноразово (при включённой механике — плюс entity lock).
+- Runtime: после установки или обновления hooks становятся проверяемо активны только в новой Codex-задаче после reload/trust; порча файла состояния — fail closed.
 
 ### H2D pixel-perfect transfer
 Скил для переноса страниц и блоков из `.h2d` в Tailwind HTML/React по исполняемому контракту, а не "на глаз".
