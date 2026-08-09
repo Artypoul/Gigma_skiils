@@ -446,9 +446,14 @@ function Get-AdvisoryDecision {
     # Общий advisory-путь: production/external — жёсткий deny; неклассифицируемый shell — ask;
     # остальное — одно предупреждение на сессию без permissionDecision.
     param([Parameter(Mandatory)][hashtable]$Classification, [Parameter(Mandatory)][string]$Root,
-          [Parameter(Mandatory)][string]$Id, [switch]$DryRun, [Parameter(Mandatory)][string]$WarnMessage)
+          [Parameter(Mandatory)][string]$Id, [switch]$DryRun, [Parameter(Mandatory)][string]$WarnMessage,
+          [string]$ToolName = '')
     $hard = Get-AdvisoryHardDeny -Classification $Classification
     if ($hard) { return $hard }
+    if ($ToolName -eq 'Bash' -and (Test-HasShellCommandChaining ([string]$Classification.command))) {
+        # Цепочка с безобидным префиксом может скрывать мутацию — эскалируем на подтверждение.
+        return New-PreToolAsk 'Advisory mode: chained/piped shell commands cannot be classified safely; confirm manually or run one command per call. External/production writes still require a production Task Lock.'
+    }
     if ($Classification.kind -eq 'unclassified-shell') {
         return New-PreToolAsk 'Advisory mode: this shell command cannot be classified safely, so it needs manual confirmation. External/production writes still require a production Task Lock.'
     }
@@ -1069,19 +1074,19 @@ function Invoke-PreToolUse {
             }
             # Advisory-режим: состояния нет (старая сессия или hooks появились позже) — не душим работу,
             # но производственные/деструктивные действия блокируем всегда.
-            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -WarnMessage 'First-pass quality: quality state is missing, so mechanical gates run in advisory mode (production actions stay blocked). For full enforcement start a new task and create a Task Lock.'
+            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -ToolName $toolName -WarnMessage 'First-pass quality: quality state is missing, so mechanical gates run in advisory mode (production actions stay blocked). For full enforcement start a new task and create a Task Lock.'
             return
         }
         if ($state.stopOverride) { $decisionBox.value = New-PreToolDeny 'Art requested stop; no further tool use is allowed.'; return }
         if ($classification.kind -eq 'management') { return }
         if (-not $state.task) {
             # Advisory-режим: Task Lock не создан — предупреждаем один раз, производственное блокируем.
-            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -WarnMessage 'First-pass quality: no Task Lock, so gates run in advisory mode (production actions stay blocked). For strict enforcement run StartTask (audited, or -FullySpecified -SpecificationBasis) after the clarification.'
+            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -ToolName $toolName -WarnMessage 'First-pass quality: no Task Lock, so gates run in advisory mode (production actions stay blocked). For strict enforcement run StartTask (audited, or -FullySpecified -SpecificationBasis) after the clarification.'
             return
         }
         if ([string]$state.status -ne 'active') {
             # Advisory-режим: прежний замок завершён; новые сообщения не должны блокироваться намертво.
-            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -WarnMessage "First-pass quality: previous Task Lock is terminal ($($state.status)) — advisory mode until a new Task Lock is created (production actions stay blocked)."
+            $decisionBox.value = Get-AdvisoryDecision -Classification $classification -Root $Root -Id $id -DryRun:$DryRun -ToolName $toolName -WarnMessage "First-pass quality: previous Task Lock is terminal ($($state.status)) — advisory mode until a new Task Lock is created (production actions stay blocked)."
             return
         }
         $requiredAction = Get-RequiredAction -Classification $classification
@@ -1223,9 +1228,13 @@ function Invoke-PreToolUse {
     }
     if ($decisionBox.value) {
         $stateForLog = Read-State (Get-StatePath -Root $Root -Id $id)
+        $decisionOut = $decisionBox.value.hookSpecificOutput
+        $logResult = if ($decisionOut -and $decisionOut.ContainsKey('permissionDecision')) {
+            switch ([string]$decisionOut.permissionDecision) { 'deny' { 'denied' } 'ask' { 'ask' } default { 'allowed' } }
+        } else { 'advisory' }
         Write-Telemetry -Root $Root -Record @{
             sessionId = $id; turnId = [string]$HookData.turn_id; model = [string]$HookData.model; cwd = [string]$HookData.cwd
-            event = 'PreToolUse'; action = $classification.kind; result = 'denied'; toolName = $toolName
+            event = 'PreToolUse'; action = $classification.kind; result = $logResult; toolName = $toolName
             phase = if ($stateForLog) { $stateForLog.phase } else { 'missing' }; status = if ($stateForLog) { $stateForLog.status } else { 'missing' }
             risk = if ($stateForLog -and $stateForLog.task) { $stateForLog.task.risk } else { '' }; userCorrectionDetected = $false
         }
@@ -1376,7 +1385,12 @@ function Invoke-Stop {
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
-        if (-not $state) { return }
+        if (-not $state) {
+            if (Test-Path -LiteralPath $path) {
+                $outputBox.value = New-StopBlock 'Quality state file exists but cannot be read; do not claim readiness. Repair or remove the corrupt state file, then finish.'
+            }
+            return
+        }
         if ($state.stopOverride) {
             if ($state.status -eq 'active') {
                 $state.status = 'blocked'

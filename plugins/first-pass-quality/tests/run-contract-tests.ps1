@@ -875,6 +875,10 @@ try {
     Set-Content -LiteralPath (Join-Path $corruptDir 'contract-corrupt-state.json') -Value '{ this is not json' -Encoding UTF8
     $corruptPre = New-BaseEvent 'contract-corrupt-state' 't1' 'PreToolUse'; $corruptPre.tool_name = 'Bash'; $corruptPre.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $corruptPre.tool_use_id = 'corrupt-read'
     Assert-True ((Invoke-HookCase $corruptPre).hookSpecificOutput.permissionDecision -eq 'deny') 'Corrupt state must fail closed, not fall back to advisory.'
+    $corruptStop = New-BaseEvent 'contract-corrupt-state' 't1' 'Stop'; $corruptStop.stop_hook_active = $false; $corruptStop.last_assistant_message = 'Готово.'
+    Assert-True ((Invoke-HookCase $corruptStop).decision -eq 'block') 'Stop must also fail closed on a corrupt state file.'
+    $advisoryChained = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryChained.tool_name = 'Bash'; $advisoryChained.tool_input = @{ command = 'git status; python -c "import urllib.request"'; workdir = $workspace }; $advisoryChained.tool_use_id = 'advisory-chained'
+    Assert-True ((Invoke-HookCase $advisoryChained).hookSpecificOutput.permissionDecision -eq 'ask') 'A read-prefixed chained command must escalate to ask in advisory mode.'
     $advisoryStop = New-BaseEvent $advisory 't1' 'Stop'; $advisoryStop.stop_hook_active = $false; $advisoryStop.last_assistant_message = 'Готово.'
     Assert-True ($null -eq (Invoke-HookCase $advisoryStop)) 'Stop must not block when state is missing.'
 
