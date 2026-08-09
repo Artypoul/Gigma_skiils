@@ -218,6 +218,18 @@ class BrowserGateTests(unittest.TestCase):
             trace = json.loads(out.read_text(encoding="utf-8").strip())
             self.assertTrue(any(row["type"] in {"trigger-error", "playback-not-advancing"} for row in trace["errors"]))
 
+    def test_generated_webgl_capture_contains_real_nonblank_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); donor = root / "donor.html"; inventory = root / "inventory.json"; out = root / "webgl.json"
+            donor.write_text("<!doctype html><canvas id='gl' width='16' height='16'></canvas><script>const context=gl.getContext('webgl',{preserveDrawingBuffer:true});context.clearColor(1,0,0,1);context.clear(context.COLOR_BUFFER_BIT)</script>", encoding="utf-8")
+            subprocess.run(["node", str(SKILL / "scripts" / "liveness_inventory.js"), "--url", str(donor), "--out", str(inventory), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            subprocess.run(["node", str(SKILL / "scripts" / "webgl_capture.js"), "--url", str(donor), "--inventory", str(inventory), "--out", str(out), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            report = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(report["result"], "pass")
+            self.assertEqual(len(report["contexts"]), 1)
+            self.assertEqual(len(report["contexts"][0]["frame_hashes"]), 3)
+            self.assertGreaterEqual(report["contexts"][0]["non_blank_samples"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

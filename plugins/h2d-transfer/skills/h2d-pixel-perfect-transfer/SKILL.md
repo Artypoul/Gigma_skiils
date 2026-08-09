@@ -325,6 +325,7 @@ Run this when the original contains animation, canvas, WebGL, video, parallax, t
 
 ```bash
 node scripts/liveness_inventory.js --url h2d-transfer-output/reference/donor.html --out h2d-transfer-output/reports/liveness_inventory.json
+node scripts/webgl_capture.js --url h2d-transfer-output/dist/hero.html --inventory h2d-transfer-output/reports/liveness_inventory.json --out h2d-transfer-output/reports/webgl_capture_report.json
 node scripts/liveness_capture_trace.js --url h2d-transfer-output/reference/donor.html --inventory h2d-transfer-output/reports/liveness_inventory.json --side original --out h2d-transfer-output/reference/reports/original_animation_trace.jsonl
 node scripts/liveness_capture_trace.js --url h2d-transfer-output/dist/hero.html --inventory h2d-transfer-output/reports/liveness_inventory.json --side candidate --out h2d-transfer-output/reports/candidate_animation_trace.jsonl
 python scripts/liveness_compare_traces.py --original h2d-transfer-output/reference/reports/original_animation_trace.jsonl --candidate h2d-transfer-output/reports/candidate_animation_trace.jsonl --inventory h2d-transfer-output/reports/liveness_inventory.json --original-root h2d-transfer-output/reference --candidate-root h2d-transfer-output --out h2d-transfer-output/reports/liveness_validation.json
