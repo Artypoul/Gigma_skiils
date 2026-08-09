@@ -63,7 +63,7 @@ DoneWhen: полный синтетический `.h2d → contract → frozen 
 - Decoder provenance: contract/current runner повторно декодирует pinned `.h2d` штатным decoder и сверяет decoder hash/version и все unpack/tree hashes; подмена промежуточного decoded/tree файла до contract не проходит.
 - Dynamic requiredness: contract generator обязан получить reference classification для всей viewport/profile matrix; удалённый или сфальсифицированный classification manifest не превращает scope в static.
 - Integration inputs: geometry selector-map, candidate behavior/liveness mappings, readiness selector/timeouts, accepted deviations, font substitutions, asset map/decisions и их hashes являются частью immutable contract; отсутствующий или изменённый sidecar останавливает прогон.
-- Approval provenance: любое `approved` требует immutable owner-confirmation record, созданную до final contract, с approver identity, exact fields/scope и hash исходного сообщения; agent-authored boolean/reason не считается approval.
+- Approval provenance: любое `approved` требует либо owner-signed record, либо read-only provenance из trusted owner-controlled transport/repository event с проверенным actor ID/event ID/timestamp, exact fields/scope и hash исходного payload. Самодекларированный identity, локальный файл, hash или agent-authored boolean/reason не считаются approval; финализатор не имеет права создавать trusted approval event.
 - Asset scan: globs/paths, все scan roots, size threshold и allow-empty закреплены в контракте; сужение scan root после генерации не допускается.
 - Accepted deviations: normalization строится из конкретного approved field и его paint region, не из bbox всего node; unrelated critical subregions внутри и снаружи node продолжают сравниваться. `changed-source` не используется для content divergence.
 - Responsive runtime: original baseline и candidate replay имеют запись для каждой пары viewport/profile; donor selectors преобразуются через закреплённые candidate mappings.
@@ -118,7 +118,7 @@ DoneWhen: полный синтетический `.h2d → contract → frozen 
 21. Discovery-limit/cycle fixture: >200 controls, surface после 1500-го node, cycles и exhausted budget дают explicit non-pass; narrowing allowlist без owner state decision не очищает excluded states.
 22. Navigation/error fixture: wrong blocked destination/download metadata и new pageerror/unhandled rejection/console error падают без внешнего эффекта.
 23. Candidate-closure fixture: evidence output не меняет digest, а изменение included HTML/CSS/config/dependency/build input делает run stale.
-24. Approval fixture: self-authored `approved: true` без predating owner confirmation record никогда не проходит.
+24. Approval fixture: self-authored `approved: true`, локально сфабрикованный owner message и неподписанная record никогда не проходят; signed/trusted-event provenance с verified actor ID проходит только в exact scope.
 25. Legacy bypass fixture: direct `run_all_gates.py` после candidate mutation не проходит без regeneration/current hashes.
 26. Existing H2D 0.3.0 compatibility tests/fixtures для typography, selector-map, asset provenance и changed-source.
 27. `npm run check:js`, package self-check, `quick_validate.py` для изменённых skills.
@@ -135,5 +135,6 @@ DoneWhen: полный синтетический `.h2d → contract → frozen 
 - Codex plan review round 4: связал visual/dynamic freeze одним donor identity; добавил safe read-only traversal, recursive controls/forms/scroll/touch, runtime resource closure, decoder re-derivation, semantic-content pinning, injective mappings, local visual thresholds, CSS-motion requiredness и non-mutating canvas/GPU fingerprint.
 - Codex plan review round 5: уточнил expected-transition no-op, offline/exact-request traversal без WebSocket, field-scoped deviations, inline/generated assets с redaction, listener surfaces, keyboard/accessibility, bounded state graph, explicit candidate file closure и intermediate responsive probes.
 - Codex plan review round 6: распространил sandbox на offline donor; добавил DOM handler properties, storage/random determinism, intercepted navigation/download intent, CSS trigger sequences, immutable exhausted coverage, pointer gestures, runtime errors, shadow/frame boundaries, build toolchain/env и verifiable owner confirmations.
+- Codex targeted plan review: owner approval теперь требует криптографическую подпись или verified actor provenance из trusted owner-controlled event, а не самодостаточный локальный hash.
 
 Блокеров для реализации после plan review-gate нет. Главный риск — потерять более новые гарантии H2D 0.3.0; он закрывается совместимым merge и отдельными регрессионными тестами.
