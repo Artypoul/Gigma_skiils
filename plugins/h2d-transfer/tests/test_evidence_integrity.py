@@ -202,6 +202,21 @@ class EvidenceIntegrityTests(unittest.TestCase):
             self.assertEqual(records[0]["cwd"], str(lifecycle_cwd.resolve()))
             self.assertEqual(records[0]["resolved_path"], str(executable.resolve()))
 
+    def test_bare_executable_uses_child_cwd_for_relative_path_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            lifecycle_cwd = Path(temp) / "candidate" / "app"
+            lifecycle_cwd.mkdir(parents=True)
+            executable = lifecycle_cwd / ("local-runner.EXE" if os.name == "nt" else "local-runner")
+            executable.write_text("runner", encoding="utf-8")
+            if os.name != "nt":
+                executable.chmod(0o755)
+            environment = {"PATH": "."}
+            if os.name == "nt":
+                environment["PATHEXT"] = ".EXE"
+            with patch.dict(os.environ, environment, clear=False):
+                records = command_executable_records([["local-runner"]], lifecycle_cwd)
+            self.assertEqual(records[0]["resolved_path"], str(executable.resolve()))
+
     def test_self_authored_approval_is_rejected(self) -> None:
         with self.assertRaisesRegex(EvidenceError, "trusted verification"):
             verify_approval_records([{"approved": True, "scope": ["hero.copy"]}])

@@ -89,7 +89,13 @@ def resolve_command_executable(value: str, cwd: Path | None = None) -> Path:
     elif "/" in value or "\\" in value:
         resolved = (execution_root / candidate).resolve()
     else:
-        discovered = shutil.which(value)
+        search_entries = []
+        for entry in os.get_exec_path():
+            current = Path(entry or ".")
+            if not current.is_absolute():
+                current = execution_root / current
+            search_entries.append(str(current.resolve()))
+        discovered = shutil.which(value, path=os.pathsep.join(search_entries))
         if not discovered:
             raise EvidenceError(f"pinned command executable cannot be resolved: {value}")
         resolved = Path(discovered).resolve()
