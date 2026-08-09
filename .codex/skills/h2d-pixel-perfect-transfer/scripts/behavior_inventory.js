@@ -92,22 +92,21 @@ async function main() {
     const matrixKey = `${viewport.width}x${viewport.height}@${profile.id}`;
     classificationRow = (classification.rows || []).find(row => row.matrix_key === matrixKey);
     if (!classificationRow) throw new Error(`Classification is missing ${matrixKey}`);
-    const bySelector = new Map(data.rows.map(row => [`${row.frame_path}|${row.selector}`, row]));
+    const byStateSelector = new Map();
     for (const state of classificationRow.states || []) {
       const prerequisite = (state.sequence || []).map(selector => ({ action: 'click', selector }));
       for (const control of state.controls || []) {
-        const framePath = control.frame_path || 'main'; const key = `${framePath}|${control.selector}`;
+        const framePath = control.frame_path || 'main'; const key = `${state.state_sha256}|${framePath}|${control.selector}`;
         const candidate = {
           selector: control.selector, frame_path: framePath, selector_count: control.selector_count,
           kind: control.kind || 'listener-surface', label: control.label || control.selector,
           criticality: 'critical', listeners: control.listeners || [], h2d_path: control.h2d_path || null,
-          prerequisite_sequence: prerequisite,
+          state_sha256: state.state_sha256, prerequisite_sequence: prerequisite,
         };
-        const previous = bySelector.get(key);
-        if (!previous || prerequisite.length < (previous.prerequisite_sequence || []).length) bySelector.set(key, { ...(previous || {}), ...candidate });
+        byStateSelector.set(key, candidate);
       }
     }
-    data.rows = [...bySelector.values()].sort((a,b) => `${a.frame_path}|${a.selector}`.localeCompare(`${b.frame_path}|${b.selector}`));
+    data.rows = [...byStateSelector.values()].sort((a,b) => `${a.prerequisite_sequence.length}|${a.state_sha256}|${a.frame_path}|${a.selector}`.localeCompare(`${b.prerequisite_sequence.length}|${b.state_sha256}|${b.frame_path}|${b.selector}`));
   }
   data.rows.forEach((row, index) => { row.component_id = `${viewport.width}:${profile.id}:${index}`; });
   const unresolved = data.rows.filter(row => row.selector_count !== 1);

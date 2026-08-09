@@ -42,6 +42,24 @@ class BrowserGateTests(unittest.TestCase):
             self.assertEqual(hidden["prerequisite_sequence"], [{"action": "click", "selector": "#open"}])
             self.assertIn("click", hidden["listeners"])
 
+    def test_behavior_inventory_keeps_same_selector_in_each_reachable_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); donor = root / "donor.html"; h2d = root / "source.h2d"
+            donor.write_text("<!doctype html><button id='next'>Next</button><output id='step'>0</output><script>next.onclick=()=>{const value=Number(step.textContent)+1;step.textContent=String(value);if(value===2)next.remove()}</script>", encoding="utf-8")
+            h2d.write_text("{}", encoding="utf-8")
+            matrix = root / "matrix.json"; profiles = root / "profiles.json"; profile = root / "profile.json"; visual = root / "visual"; classification = root / "classification.json"; inventory = root / "inventory.json"
+            matrix.write_text(json.dumps([{"width":390,"height":844,"kind":"decoded"}]), encoding="utf-8")
+            profile_data = {"id":"desktop","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}
+            profiles.write_text(json.dumps([profile_data]), encoding="utf-8"); profile.write_text(json.dumps(profile_data), encoding="utf-8")
+            subprocess.run(["node", str(SKILL / "scripts" / "freeze_visual_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--matrix", str(matrix), "--profiles", str(profiles), "--out-dir", str(visual), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            subprocess.run(["node", str(SKILL / "scripts" / "classify_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--h2d", str(h2d), "--matrix", str(matrix), "--profiles", str(profiles), "--visual-manifest", str(visual / "visual_reference_manifest.json"), "--out", str(classification), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            subprocess.run(["node", str(SKILL / "scripts" / "behavior_inventory.js"), "--url", str(donor), "--viewport", "390", "--height", "844", "--profile", str(profile), "--classification", str(classification), "--out", str(inventory), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            report = json.loads(inventory.read_text(encoding="utf-8"))
+            occurrences = [row for row in report["components"] if row["selector"] == "#next"]
+            self.assertEqual(len(occurrences), 2)
+            self.assertEqual(sorted(len(row["prerequisite_sequence"]) for row in occurrences), [0, 1])
+            self.assertEqual(len({row["state_sha256"] for row in occurrences}), 2)
+
     def test_classification_discovers_breakpoints_timers_and_interaction_resources(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); donor = root / "donor.html"; h2d = root / "source.h2d"
