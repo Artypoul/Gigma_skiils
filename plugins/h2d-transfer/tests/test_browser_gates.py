@@ -20,11 +20,12 @@ class BrowserGateTests(unittest.TestCase):
     def test_classification_reaches_hidden_motion_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); donor = root / "donor.html"; h2d = root / "source.h2d"
-            donor.write_text("""<!doctype html><style>#modal{display:none}.spin{animation:pulse 1s infinite}@keyframes pulse{50%{transform:scale(1.1)}}</style><button id='open'>Open</button><div id='modal'><div class='spin'>Animated modal</div></div><script>document.getElementById('open').onclick=()=>document.getElementById('modal').style.display='block'</script>""", encoding="utf-8")
+            donor.write_text("""<!doctype html><style>#modal{display:none}.spin{animation:pulse 1s infinite}@keyframes pulse{50%{transform:scale(1.1)}}</style><button id='open'>Open</button><div id='modal'><div class='spin'>Animated modal</div><button id='hidden-action'>Hidden action</button></div><script>document.getElementById('open').onclick=()=>document.getElementById('modal').style.display='block';document.getElementById('hidden-action').onclick=event=>event.currentTarget.dataset.used='1'</script>""", encoding="utf-8")
             h2d.write_text("{}", encoding="utf-8")
             matrix = root / "matrix.json"; profiles = root / "profiles.json"; visual_out = root / "visual"; classification = root / "classification.json"
             matrix.write_text(json.dumps([{"width":390,"height":844,"kind":"decoded"}]), encoding="utf-8")
-            profiles.write_text(json.dumps([{"id":"mobile","headless":True,"device_scale_factor":1,"is_mobile":True,"has_touch":True,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}]), encoding="utf-8")
+            profile_data = {"id":"mobile","headless":True,"device_scale_factor":1,"is_mobile":True,"has_touch":True,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}
+            profiles.write_text(json.dumps([profile_data]), encoding="utf-8")
             subprocess.run(["node", str(SKILL / "scripts" / "freeze_visual_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--matrix", str(matrix), "--profiles", str(profiles), "--out-dir", str(visual_out), "--project-root", str(SKILL)], cwd=SKILL, check=True)
             subprocess.run(["node", str(SKILL / "scripts" / "classify_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--h2d", str(h2d), "--matrix", str(matrix), "--profiles", str(profiles), "--visual-manifest", str(visual_out / "visual_reference_manifest.json"), "--out", str(classification), "--project-root", str(SKILL), "--max-states", "12"], cwd=SKILL, check=True)
             report = json.loads(classification.read_text(encoding="utf-8"))
@@ -32,6 +33,54 @@ class BrowserGateTests(unittest.TestCase):
             self.assertTrue(report["behavior_required"])
             self.assertTrue(report["liveness_required"])
             self.assertGreaterEqual(len(report["rows"][0]["states"]), 2)
+            inventory = root / "behavior-inventory.json"
+            profile = root / "profile.json"; profile.write_text(json.dumps(profile_data), encoding="utf-8")
+            subprocess.run(["node", str(SKILL / "scripts" / "behavior_inventory.js"), "--url", str(donor), "--classification", str(classification), "--profile", str(profile), "--viewport", "390", "--height", "844", "--out", str(inventory), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            behavior = json.loads(inventory.read_text(encoding="utf-8"))
+            hidden = next(row for row in behavior["components"] if row["selector"] == "#hidden-action")
+            self.assertEqual(behavior["result"], "pass")
+            self.assertEqual(hidden["prerequisite_sequence"], [{"action": "click", "selector": "#open"}])
+            self.assertIn("click", hidden["listeners"])
+
+    def test_classification_discovers_breakpoints_timers_and_interaction_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); donor = root / "donor.html"; h2d = root / "source.h2d"
+            (root / "lazy.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><rect width='20' height='20'/></svg>", encoding="utf-8")
+            donor.write_text("""<!doctype html><style>@media (min-width: 48em){body{padding:1px}}@media (max-width: 1024px){body{margin:0}}</style><div role='navigation'>Structural navigation</div><button id='load'>Load</button><img id='lazy' alt=''><script>setTimeout(()=>document.body.dataset.ready='1',10);document.getElementById('load').onclick=()=>document.getElementById('lazy').src='lazy.svg'</script>""", encoding="utf-8")
+            h2d.write_text("{}", encoding="utf-8")
+            matrix = root / "matrix.json"; profiles = root / "profiles.json"; visual = root / "visual"; classification = root / "classification.json"
+            matrix.write_text(json.dumps([{"width":390,"height":844,"kind":"decoded"}]), encoding="utf-8")
+            profiles.write_text(json.dumps([{"id":"desktop","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}]), encoding="utf-8")
+            subprocess.run(["node", str(SKILL / "scripts" / "freeze_visual_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--matrix", str(matrix), "--profiles", str(profiles), "--out-dir", str(visual), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            subprocess.run(["node", str(SKILL / "scripts" / "classify_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--h2d", str(h2d), "--matrix", str(matrix), "--profiles", str(profiles), "--visual-manifest", str(visual / "visual_reference_manifest.json"), "--out", str(classification), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            report = json.loads(classification.read_text(encoding="utf-8"))
+            self.assertEqual(report["breakpoints"], [768, 1024])
+            self.assertTrue(report["liveness_required"])
+            self.assertIn("lazy.svg", {row["path"] for row in report["donor_closure"]})
+            controls = report["rows"][0]["states"][0]["controls"]
+            self.assertFalse(any(row.get("role") == "navigation" for row in controls))
+            liveness = root / "liveness.json"
+            subprocess.run(["node", str(SKILL / "scripts" / "liveness_inventory.js"), "--url", str(donor), "--viewport", "390", "--height", "844", "--out", str(liveness), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            inventory = json.loads(liveness.read_text(encoding="utf-8"))
+            self.assertEqual(inventory["result"], "pass")
+            self.assertTrue(any(row["kind"] == "unknown-runtime" for row in inventory["surfaces"]))
+
+    def test_classification_fails_closed_on_delegated_global_listener(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); donor = root / "donor.html"; h2d = root / "source.h2d"
+            donor.write_text("<!doctype html><style>@media(min-width:50vw){body{margin:0}}</style><button id='child'>Child</button><script>document.addEventListener('click',event=>event.target.dataset.clicked='1');window.onkeydown=()=>{}</script>", encoding="utf-8")
+            h2d.write_text("{}", encoding="utf-8")
+            matrix = root / "matrix.json"; profiles = root / "profiles.json"; visual = root / "visual"; classification = root / "classification.json"
+            matrix.write_text(json.dumps([{"width":390,"height":844,"kind":"decoded"}]), encoding="utf-8")
+            profiles.write_text(json.dumps([{"id":"desktop","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}]), encoding="utf-8")
+            subprocess.run(["node", str(SKILL / "scripts" / "freeze_visual_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--matrix", str(matrix), "--profiles", str(profiles), "--out-dir", str(visual), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            completed = subprocess.run(["node", str(SKILL / "scripts" / "classify_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--h2d", str(h2d), "--matrix", str(matrix), "--profiles", str(profiles), "--visual-manifest", str(visual / "visual_reference_manifest.json"), "--out", str(classification), "--project-root", str(SKILL)], cwd=SKILL, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 2)
+            report = json.loads(classification.read_text(encoding="utf-8"))
+            self.assertEqual(report["result"], "fail")
+            self.assertTrue(any("unresolved delegated listener" in issue.get("message", "") for issue in report["issues"]))
+            self.assertTrue(any("window:keydown" in issue.get("message", "") for issue in report["issues"]))
+            self.assertTrue(any("unsupported responsive breakpoint query" in issue.get("message", "") for issue in report["issues"]))
 
     def test_raw_h2d_to_atomic_bundle_and_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -75,6 +124,7 @@ class BrowserGateTests(unittest.TestCase):
             self.assertEqual({row["path"] for row in manifest["donor_closure"]}, {"donor.html", "theme.css"})
             self.assertEqual(set(manifest["environment_by_profile"]), {"desktop", "mobile"})
             self.assertTrue(all("renderer" in row["environment"]["graphics"] for row in manifest["rows"]))
+            self.assertTrue(all("fonts" not in row["environment"] for row in manifest["rows"]))
             original_identity = manifest["donor_identity"]
             (root / "theme.css").write_text("body{margin:0;background:#111}h1{font:700 32px Arial}", encoding="utf-8")
             stale_classification = subprocess.run(["node", str(SKILL / "scripts" / "classify_reference.js"), "--donor", str(donor), "--donor-root", str(root), "--h2d", str(h2d), "--matrix", str(matrix), "--profiles", str(profiles), "--visual-manifest", str(out / "visual_reference_manifest.json"), "--out", str(root / "stale-classification.json"), "--project-root", str(SKILL)], cwd=SKILL, capture_output=True, text=True)
@@ -91,7 +141,8 @@ class BrowserGateTests(unittest.TestCase):
             donor.write_text("<!doctype html><div><button>One</button><button>Two</button></div>", encoding="utf-8")
             subprocess.run(["node", str(SKILL / "scripts" / "behavior_inventory.js"), "--url", str(donor), "--out", str(out), "--project-root", str(SKILL)], cwd=SKILL, check=True)
             report = json.loads(out.read_text(encoding="utf-8"))
-            self.assertEqual(report["result"], "pass")
+            self.assertEqual(report["result"], "partial")
+            self.assertFalse(report["coverage_complete"])
             self.assertEqual(len({row["selector"] for row in report["components"]}), 2)
             self.assertTrue(all(row["selector_count"] == 1 for row in report["components"]))
 
@@ -104,6 +155,39 @@ class BrowserGateTests(unittest.TestCase):
             self.assertEqual(report["result"], "pass")
             self.assertTrue(report["liveness_required"])
             self.assertTrue(any(row["kind"] == "css-transition" and "hover" in row["triggers"] for row in report["surfaces"]))
+
+    def test_candidate_behavior_replay_uses_implementation_map(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); candidate = root / "candidate.html"; matrix = root / "matrix.json"; mapping = root / "map.json"; out = root / "reports" / "candidate.jsonl"
+            candidate.write_text("<!doctype html><button id='candidate' aria-expanded='false'>Toggle</button><script>document.getElementById('candidate').onclick=event=>event.currentTarget.setAttribute('aria-expanded','true')</script>", encoding="utf-8")
+            matrix.write_text(json.dumps({"interactions":[{"interaction_id":"toggle:click","component_id":"toggle","selector":"#original","frame_path":"main","action":"click","expected_transition":True,"sequence":[{"action":"click","selector":"#original"}]}]}), encoding="utf-8")
+            mapping.write_text(json.dumps({"result":"pass","mappings":[{"component_id":"toggle","original_selector":"#original","candidate_selector":"#candidate"}]}), encoding="utf-8")
+            subprocess.run(["node", str(SKILL / "scripts" / "behavior_capture_trace.js"), "--url", str(candidate), "--matrix", str(matrix), "--implementation-map", str(mapping), "--side", "candidate", "--out", str(out), "--project-root", str(SKILL)], cwd=SKILL, check=True)
+            trace = json.loads(out.read_text(encoding="utf-8").strip())
+            self.assertEqual(trace["resolved_selector"], "#candidate")
+            self.assertEqual(trace["after"]["aria_expanded"], "true")
+            self.assertEqual(trace["errors"], [])
+
+    def test_preexisting_blocked_transport_does_not_fake_action_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); donor = root / "donor.html"; matrix = root / "matrix.json"; out = root / "reports" / "original.jsonl"
+            donor.write_text("<!doctype html><div id='noop' style='width:40px;height:40px'>No-op</div><script>navigator.sendBeacon('https://example.com/boot','x')</script>", encoding="utf-8")
+            matrix.write_text(json.dumps({"interactions":[{"interaction_id":"noop:click","component_id":"noop","selector":"#noop","frame_path":"main","action":"click","expected_transition":True,"sequence":[{"action":"click","selector":"#noop"}]}]}), encoding="utf-8")
+            completed = subprocess.run(["node", str(SKILL / "scripts" / "behavior_capture_trace.js"), "--url", str(donor), "--matrix", str(matrix), "--side", "original", "--out", str(out), "--project-root", str(SKILL)], cwd=SKILL, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+            trace = json.loads(out.read_text(encoding="utf-8").strip())
+            self.assertTrue(any(row["action"] == "expected-transition" for row in trace["errors"]))
+            self.assertEqual(trace["blocked_transports"], [])
+
+    def test_required_video_playback_failure_is_not_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); donor = root / "donor.html"; inventory = root / "inventory.json"; out = root / "reports" / "original.jsonl"
+            donor.write_text("<!doctype html><video id='video'></video>", encoding="utf-8")
+            inventory.write_text(json.dumps({"result":"pass","coverage_complete":True,"surfaces":[{"surface_id":"video","selector":"#video","kind":"video","triggers":["playback"]}]}), encoding="utf-8")
+            completed = subprocess.run(["node", str(SKILL / "scripts" / "liveness_capture_trace.js"), "--url", str(donor), "--inventory", str(inventory), "--out", str(out), "--project-root", str(SKILL)], cwd=SKILL, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+            trace = json.loads(out.read_text(encoding="utf-8").strip())
+            self.assertTrue(any(row["type"] in {"trigger-error", "playback-not-advancing"} for row in trace["errors"]))
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1] / "skills" / "h2d-pixel-perfect-transfer"
 sys.path.insert(0, str(SKILL / "scripts"))
-from evidence_integrity import candidate_closure, canonical_json_sha256, command_executable_records, sha256_file  # noqa: E402
+from evidence_integrity import candidate_closure, canonical_json_sha256, command_executable_records_for_specs, sha256_file  # noqa: E402
 
 
 class ManagedLifecycleTests(unittest.TestCase):
@@ -40,7 +40,7 @@ class ManagedLifecycleTests(unittest.TestCase):
             (reference / "reference.png").write_bytes(b"reference")
             donor_closure = [{"path": "donor.html", "sha256": "0" * 64, "size": 0}]
             donor_identity = f"sha256:{canonical_json_sha256(donor_closure)}"
-            classification = {"result": "pass", "generator_sha256": sha256_file(SKILL / "scripts" / "classify_reference.js"), "behavior_required": False, "liveness_required": False, "coverage_complete": True, "source_sha256": source_sha, "donor_identity": donor_identity, "matrix_keys": ["390x844@headless"]}
+            classification = {"result": "pass", "generator_sha256": sha256_file(SKILL / "scripts" / "classify_reference.js"), "behavior_required": False, "liveness_required": False, "coverage_complete": True, "source_sha256": source_sha, "donor_identity": donor_identity, "donor_closure": donor_closure, "matrix_keys": ["390x844@headless"], "breakpoints": []}
             bundle = {
                 "schema_version": "2.0", "result": "pass", "coverage_complete": True,
                 "source_sha256": source_sha, "donor_identity": donor_identity, "donor_closure": donor_closure,
@@ -106,13 +106,14 @@ class ManagedLifecycleTests(unittest.TestCase):
                 "browser_profiles": [{"id": "headless", "headless": True, "device_scale_factor": 1, "is_mobile": False, "has_touch": False, "locale": "en-US", "timezone": "UTC", "reduced_motion": "reduce"}],
                 "candidate": {"mode": "managed-url", "project_root": "candidate", "include": ["index.html"], "closure_sha256": closure["digest"], "lifecycle": lifecycle},
                 "classification": bundle["classification"],
+                "breakpoint_source": {"kind": "generated-reference-classification", "donor_identity": donor_identity, "breakpoints": []},
                 "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": sha256_file(bundle_path)},
                 "sidecars": [
                     {"path": "build.py", "sha256": sha256_file(build)},
                     {"path": "reports.py", "sha256": sha256_file(reports)},
                 ],
                 "approvals": [], "current_commands": current_commands,
-                "command_executables": command_executable_records(current_commands + lifecycle_commands),
+                "command_executables": command_executable_records_for_specs([(command, candidate) for command in current_commands + lifecycle_commands]),
                 "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"],
             }
             contract_path = contract_dir / "transfer_contract.json"

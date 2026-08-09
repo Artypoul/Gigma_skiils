@@ -22,10 +22,11 @@ async function main() {
     for(const [index,el] of all.slice(0,maxElements).entries()){
       if(!visible(el))continue;const cs=getComputedStyle(el);const animated=cs.animationName&&cs.animationName!=='none'&&cs.animationDuration!=='0s';const transitioned=cs.transitionProperty&&cs.transitionDuration&&cs.transitionDuration!=='0s';
       if(animated||transitioned)surfaces.push({surface_id:`${viewportWidth}:${animated?'css-animation':'css-transition'}:${index}`,kind:animated?'css-animation':'css-transition',selector:stable(el),criticality:'critical',triggers:triggers(el,cs),timing:{animationName:cs.animationName,animationDuration:cs.animationDuration,animationDelay:cs.animationDelay,transitionProperty:cs.transitionProperty,transitionDuration:cs.transitionDuration,transitionDelay:cs.transitionDelay}});
-      if(el instanceof HTMLCanvasElement){const actual=el.getAttribute('data-h2d-canvas-context');surfaces.push({surface_id:`${viewportWidth}:canvas:${index}`,kind:actual?`canvas-${actual}`:'canvas-unobserved',selector:stable(el),criticality:'critical',triggers:['load','resize'],context_observed:actual||null});}
+      if(el instanceof HTMLCanvasElement){const actual=el.getAttribute('data-h2d-canvas-context');const kind=actual==='2d'?'canvas-2d':actual==='webgl'?'webgl':actual==='webgl2'?'webgl2':'canvas-unobserved';surfaces.push({surface_id:`${viewportWidth}:canvas:${index}`,kind,selector:stable(el),criticality:'critical',triggers:['load','resize'],context_observed:actual||null});}
       if(el instanceof HTMLVideoElement)surfaces.push({surface_id:`${viewportWidth}:video:${index}`,kind:'video',selector:stable(el),criticality:'critical',triggers:['load','playback'],autoplay:el.autoplay,muted:el.muted,loop:el.loop});
     }
     if((window.__h2dRaf||{}).fired>0)surfaces.push({surface_id:`${viewportWidth}:requestAnimationFrame:document`,kind:'requestAnimationFrame',selector:'html',criticality:'critical',triggers:['load'],raf:window.__h2dRaf});
+    const timers=(window.__h2dRuntime||{}).timers||[];if(timers.length)surfaces.push({surface_id:`${viewportWidth}:timer:document`,kind:'unknown-runtime',selector:'html',criticality:'critical',triggers:['load'],timer_registrations:timers.slice(0,200)});
     return { surfaces, truncated, discovered:all.length, raf:window.__h2dRaf||{} };
   }, { maxElements, viewportWidth:viewport.width });
   await browser.close();
@@ -33,7 +34,7 @@ async function main() {
   const result = data.truncated || unobserved.length ? 'fail' : (data.surfaces.length ? 'pass' : 'not-tested');
   const report = { result, coverage_complete: result !== 'fail', truncated:data.truncated, discovered_elements:data.discovered, liveness_required:data.surfaces.length>0, url, viewports:[viewport.width], profile_id:profile.id, raf:data.raf, surfaces:data.surfaces, issues:unobserved.map(row=>({type:'canvas-context-unobserved',surface_id:row.surface_id})) };
   fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));
-  fs.writeFileSync(path.join(path.dirname(out),'webgl_capture_report.json'),JSON.stringify({result:unobserved.length?'fail':(data.surfaces.some(row=>row.kind.includes('webgl'))?'pass':'not-present'),contexts:data.surfaces.filter(row=>row.kind.startsWith('canvas-')).map(row=>({canvas_selector:row.selector,context_type:row.kind.replace('canvas-',''),frame_hashes:[],pixels_change_over_time:false,non_blank_samples:0})),issues:report.issues},null,2));
+  const hasWebgl=data.surfaces.some(row=>row.kind.includes('webgl'));fs.writeFileSync(path.join(path.dirname(out),'webgl_capture_report.json'),JSON.stringify({result:unobserved.length?'fail':(hasWebgl?'partial':'not-present'),contexts:data.surfaces.filter(row=>['canvas-2d','webgl','webgl2'].includes(row.kind)).map(row=>({canvas_selector:row.selector,context_type:row.kind==='canvas-2d'?'2d':row.kind,frame_hashes:[],pixels_change_over_time:false,non_blank_samples:0})),issues:[...report.issues,...(hasWebgl?[{type:'webgl-runtime-capture-required'}]:[])]},null,2));
   console.log(`result=${result} surfaces=${data.surfaces.length} truncated=${data.truncated} out=${out}`);if(result==='fail')process.exitCode=2;
 }
 main().catch(error=>{console.error(error.stack||error);process.exit(1);});

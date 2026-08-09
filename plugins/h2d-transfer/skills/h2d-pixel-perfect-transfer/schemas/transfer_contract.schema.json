@@ -3,7 +3,7 @@
   "title": "H2D immutable transfer contract",
   "type": "object",
   "additionalProperties": true,
-  "required": ["schema_version", "workspace_root", "source", "decoder", "decoded_artifacts", "responsive_matrix", "browser_profiles", "candidate", "classification", "reference_bundle", "sidecars", "approvals", "current_commands", "command_executables", "expected_reports"],
+  "required": ["schema_version", "workspace_root", "source", "decoder", "decoded_artifacts", "responsive_matrix", "browser_profiles", "breakpoint_source", "candidate", "classification", "reference_bundle", "sidecars", "approvals", "current_commands", "command_executables", "expected_reports"],
   "properties": {
     "schema_version": {"const": "2.0"},
     "workspace_root": {"type": "string", "minLength": 1},
@@ -18,13 +18,14 @@
       "type": "array", "minItems": 1,
       "items": {"type": "object", "required": ["id", "headless", "device_scale_factor", "is_mobile", "has_touch", "locale", "timezone", "reduced_motion"], "properties": {"id": {"type": "string", "minLength": 1}, "headless": {"type": "boolean"}, "device_scale_factor": {"type": "number", "exclusiveMinimum": 0}, "is_mobile": {"type": "boolean"}, "has_touch": {"type": "boolean"}, "locale": {"type": "string"}, "timezone": {"type": "string"}, "reduced_motion": {"enum": ["reduce", "no-preference"]}}, "additionalProperties": true}
     },
+    "breakpoint_source": {"type": "object", "required": ["kind", "donor_identity", "breakpoints"], "properties": {"kind": {"const": "generated-reference-classification"}, "donor_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "breakpoints": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}}}, "additionalProperties": false},
     "candidate": {"type": "object", "required": ["project_root", "include", "closure_sha256", "mode"], "properties": {"project_root": {"type": "string", "minLength": 1}, "include": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "closure_sha256": {"$ref": "#/$defs/sha256"}, "mode": {"enum": ["entry", "managed-url"]}}, "additionalProperties": true},
     "classification": {"type": "object", "required": ["behavior_required", "liveness_required", "coverage_complete"], "properties": {"behavior_required": {"type": "boolean"}, "liveness_required": {"type": "boolean"}, "coverage_complete": {"const": true}}, "additionalProperties": true},
     "reference_bundle": {"$ref": "#/$defs/hashedPath"},
     "sidecars": {"type": "array", "items": {"$ref": "#/$defs/hashedPath"}},
     "approvals": {"type": "array", "items": {"type": "object"}},
     "current_commands": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}},
-    "command_executables": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["command", "resolved_path", "sha256"], "properties": {"command": {"type": "string", "minLength": 1}, "resolved_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}, "additionalProperties": false}},
+    "command_executables": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["command", "cwd", "resolved_path", "sha256"], "properties": {"command": {"type": "string", "minLength": 1}, "cwd": {"type": "string", "minLength": 1}, "resolved_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}, "additionalProperties": false}},
     "expected_reports": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
   },
   "$defs": {

@@ -27,6 +27,25 @@ def normalized_intents(row: dict[str, Any]) -> list[dict[str, Any]]:
     return normalized
 
 
+def normalized_outcomes(row: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    requests = [{"method": item.get("method"), "url_sha256": item.get("canonical_url_sha256"), "action": item.get("action")} for item in row.get("blocked_requests") or []]
+    transports = [{"kind": item.get("kind"), "url": item.get("url")} for item in row.get("blocked_transports") or []]
+    return {"requests": requests, "transports": transports}
+
+
+def semantic_checks(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, str]:
+    fields = ["exists", "aria_expanded", "aria_checked", "value", "controlled_visible", "body_overflow", "accessibility_sha256"]
+    checks: dict[str, str] = {}
+    for phase in ("before", "after"):
+        for field in fields:
+            expected_value = (expected.get(phase) or {}).get(field)
+            actual_value = (actual.get(phase) or {}).get(field)
+            if expected_value is None and actual_value is None:
+                continue
+            checks[f"{phase}_{field}"] = "pass" if expected_value == actual_value else "fail"
+    return checks
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--original", type=Path, required=True)
@@ -40,7 +59,6 @@ def main() -> int:
     candidate = {row.get("interaction_id"): row for row in read_jsonl(args.candidate)}
     comparisons = []
     issues = []
-    fields = ["exists", "aria_expanded", "aria_checked", "value", "controlled_visible", "body_overflow", "accessibility_sha256"]
     for interaction_id, expected in original.items():
         actual = candidate.get(interaction_id)
         if expected.get("errors") or expected.get("runtime_errors"):
@@ -49,14 +67,9 @@ def main() -> int:
         if not actual:
             issues.append({"type": "missing-candidate-state", "interaction_id": interaction_id, "severity": "fail"})
             continue
-        checks: dict[str, Any] = {}
-        for field in fields:
-            expected_value = (expected.get("after") or {}).get(field)
-            actual_value = (actual.get("after") or {}).get(field)
-            if expected_value is None and actual_value is None:
-                continue
-            checks[field] = "pass" if expected_value == actual_value else "fail"
+        checks: dict[str, Any] = semantic_checks(expected, actual)
         checks["intent"] = "pass" if normalized_intents(expected) == normalized_intents(actual) else "fail"
+        checks["blocked_outcomes"] = "pass" if normalized_outcomes(expected) == normalized_outcomes(actual) else "fail"
         if actual.get("errors"):
             checks["candidate_action_errors"] = "fail"
         if actual.get("runtime_errors"):

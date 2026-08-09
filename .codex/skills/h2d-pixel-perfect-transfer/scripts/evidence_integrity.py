@@ -81,10 +81,13 @@ def require_local_candidate_urls(health_url: Any, identity_url: Any) -> None:
         raise EvidenceError("candidate lifecycle health and build identity URLs must use the same local origin")
 
 
-def resolve_command_executable(value: str) -> Path:
+def resolve_command_executable(value: str, cwd: Path | None = None) -> Path:
     candidate = Path(value)
-    if candidate.is_absolute() or candidate.parent != Path("."):
+    execution_root = (cwd or Path.cwd()).resolve()
+    if candidate.is_absolute():
         resolved = candidate.resolve()
+    elif "/" in value or "\\" in value:
+        resolved = (execution_root / candidate).resolve()
     else:
         discovered = shutil.which(value)
         if not discovered:
@@ -95,17 +98,28 @@ def resolve_command_executable(value: str) -> Path:
     return resolved
 
 
-def command_executable_records(commands: Iterable[list[str]]) -> list[dict[str, str]]:
-    records: dict[str, dict[str, str]] = {}
+def command_executable_records(commands: Iterable[list[str]], cwd: Path | None = None) -> list[dict[str, str]]:
+    execution_root = (cwd or Path.cwd()).resolve()
+    records: dict[tuple[str, str], dict[str, str]] = {}
     for command in commands:
         if not isinstance(command, list) or not command or any(not isinstance(item, str) or not item for item in command):
             raise EvidenceError("all pinned commands must be non-empty string arrays")
-        executable = resolve_command_executable(command[0])
-        record = {"command": command[0], "resolved_path": str(executable), "sha256": sha256_file(executable)}
-        previous = records.get(command[0])
+        executable = resolve_command_executable(command[0], execution_root)
+        record = {"command": command[0], "cwd": str(execution_root), "resolved_path": str(executable), "sha256": sha256_file(executable)}
+        key = (command[0], str(execution_root))
+        previous = records.get(key)
         if previous and previous != record:
             raise EvidenceError(f"command executable resolved inconsistently: {command[0]}")
-        records[command[0]] = record
+        records[key] = record
+    return [records[key] for key in sorted(records)]
+
+
+def command_executable_records_for_specs(command_specs: Iterable[tuple[list[str], Path]]) -> list[dict[str, str]]:
+    records: dict[tuple[str, str, str], dict[str, str]] = {}
+    for command, cwd in command_specs:
+        for record in command_executable_records([command], cwd):
+            key = (record["command"], record["cwd"], record["resolved_path"])
+            records[key] = record
     return [records[key] for key in sorted(records)]
 
 
@@ -177,6 +191,83 @@ def verify_hashed_files(base: Path, entries: Iterable[dict[str, Any]], label: st
             raise EvidenceError(f"{label}[{index}] changed: {rel}; expected {expected}, got {actual}")
         verified.append(rel)
     return verified
+
+
+def required_dynamic_roles(classification: dict[str, Any]) -> set[str]:
+    roles: set[str] = set()
+    if classification.get("behavior_required"):
+        roles |= {
+            "behavior-inventory", "interaction-matrix", "event-listener-inventory",
+            "behavior-state-targets", "original-behavior-traces", "behavior-state-screenshot",
+        }
+    if classification.get("liveness_required"):
+        roles |= {"liveness-inventory", "original-animation-traces", "liveness-screenshot"}
+        has_webgl = any(
+            "webgl" in str(surface.get("kind", "")).lower()
+            for row in classification.get("rows") or []
+            for state in row.get("states") or []
+            for surface in state.get("surfaces") or []
+            if isinstance(surface, dict)
+        )
+        if has_webgl:
+            roles.add("webgl-capture")
+    return roles
+
+
+def validate_dynamic_manifest(
+    dynamic: dict[str, Any],
+    classification: dict[str, Any],
+    expected_matrix: list[str],
+    artifact_base: Path | None = None,
+) -> None:
+    generator = Path(__file__).resolve().parent / "finalize_dynamic_reference.py"
+    if dynamic.get("result") != "pass" or dynamic.get("coverage_complete") is not True:
+        raise EvidenceError("dynamic reference manifest is incomplete or non-pass")
+    if dynamic.get("generator_sha256") != sha256_file(generator):
+        raise EvidenceError("dynamic reference manifest was not produced by the bundled finalizer")
+    if dynamic.get("classification_sha256") != canonical_json_sha256(classification):
+        raise EvidenceError("dynamic reference manifest is bound to a different generated classification")
+    if dynamic.get("donor_identity") != classification.get("donor_identity"):
+        raise EvidenceError("visual/classification/dynamic phases used different donor identities")
+    if sorted(dynamic.get("matrix_keys") or []) != sorted(expected_matrix):
+        raise EvidenceError("dynamic reference matrix differs from visual matrix")
+    artifacts = dynamic.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise EvidenceError("dynamic reference manifest has no artifacts")
+    required = required_dynamic_roles(classification)
+    if sorted(dynamic.get("required_roles") or []) != sorted(required):
+        raise EvidenceError("dynamic reference required roles differ from generated classification")
+    seen: set[tuple[str, str]] = set()
+    for index, item in enumerate(artifacts):
+        if not isinstance(item, dict):
+            raise EvidenceError(f"dynamic artifact[{index}] must be an object")
+        kind = item.get("kind")
+        path = item.get("path")
+        keys = item.get("matrix_keys")
+        if not isinstance(kind, str) or not kind or not isinstance(path, str) or not path:
+            raise EvidenceError(f"dynamic artifact[{index}] kind/path is missing")
+        if Path(path).is_absolute() or ".." in Path(path).parts:
+            raise EvidenceError(f"dynamic artifact[{index}] path is unsafe")
+        if not isinstance(keys, list) or not keys or any(key not in expected_matrix for key in keys):
+            raise EvidenceError(f"dynamic artifact[{index}] matrix coverage is invalid")
+        identity = (kind, path)
+        if identity in seen:
+            raise EvidenceError(f"dynamic artifact[{index}] duplicates {kind}@{path}")
+        seen.add(identity)
+        require_sha256(item.get("sha256"), f"dynamic artifact[{index}].sha256")
+        if artifact_base is not None:
+            target = resolve_inside(artifact_base, path, f"dynamic artifact[{index}]")
+            if not target.is_file() or target.stat().st_size == 0 or sha256_file(target) != item["sha256"]:
+                raise EvidenceError(f"dynamic artifact is missing, empty, or changed: {path}")
+    for role in required:
+        covered = {
+            key
+            for item in artifacts
+            if item.get("kind") == role
+            for key in item.get("matrix_keys") or []
+        }
+        if covered != set(expected_matrix):
+            raise EvidenceError(f"dynamic reference role {role} does not cover the complete matrix")
 
 
 def matrix_keys(contract: dict[str, Any]) -> list[str]:
@@ -294,10 +385,25 @@ def verify_reference_bundle(contract: dict[str, Any], contract_dir: Path) -> dic
         raise EvidenceError("reference donor classification was not generated by the bundled classifier")
     if classification.get("source_sha256") != source_sha or classification.get("donor_identity") != donor_id or sorted(classification.get("matrix_keys") or []) != expected_keys:
         raise EvidenceError("reference donor classification is bound to different source, donor, or matrix")
-    if contract.get("classification", {}).get("behavior_required") or contract.get("classification", {}).get("liveness_required"):
+    if classification.get("donor_closure") != donor_closure:
+        raise EvidenceError("reference donor classification closure differs from the bundle closure")
+    breakpoints = classification.get("breakpoints")
+    if not isinstance(breakpoints, list) or any(not isinstance(value, int) or isinstance(value, bool) or value < 1 for value in breakpoints) or breakpoints != sorted(set(breakpoints)):
+        raise EvidenceError("reference donor classification breakpoints are invalid")
+    dynamic_required = bool(classification.get("behavior_required") or classification.get("liveness_required"))
+    if dynamic_required:
         if bundle.get("dynamic", {}).get("donor_identity") != donor_id:
             raise EvidenceError("dynamic reference came from a different donor identity")
-    verify_hashed_files(bundle_path.parent, bundle.get("artifacts") or [], "reference artifacts")
+    artifact_entries = bundle.get("artifacts") or []
+    verify_hashed_files(bundle_path.parent, artifact_entries, "reference artifacts")
+    dynamic_manifests = [item for item in artifact_entries if isinstance(item, dict) and item.get("kind") == "dynamic-manifest"]
+    if dynamic_required:
+        if len(dynamic_manifests) != 1:
+            raise EvidenceError("dynamic reference requires exactly one hashed dynamic manifest")
+        manifest_path = resolve_inside(bundle_path.parent, dynamic_manifests[0].get("path", ""), "dynamic manifest")
+        validate_dynamic_manifest(load_json(manifest_path), classification, expected_keys, manifest_path.parent)
+    elif dynamic_manifests:
+        raise EvidenceError("static reference bundle may not contain a dynamic manifest")
     return bundle
 
 
@@ -339,6 +445,14 @@ def verify_contract(contract_path: Path, evidence_dir: Path | None = None) -> di
             raise EvidenceError(f"unsafe or reserved expected report path: {value!r}")
         resolve_inside(reports_root, Path(value).relative_to("reports"), "expected report")
     reference = verify_reference_bundle(contract, contract_path.parent)
+    if contract.get("classification") != reference.get("classification"):
+        raise EvidenceError("contract classification differs from the generated reference classification")
+    breakpoint_source = contract.get("breakpoint_source")
+    expected_breakpoints = sorted(reference.get("classification", {}).get("breakpoints") or [])
+    if not isinstance(breakpoint_source, dict) or breakpoint_source.get("kind") != "generated-reference-classification":
+        raise EvidenceError("contract breakpoint_source must come from the generated reference classification")
+    if breakpoint_source.get("donor_identity") != reference.get("donor_identity") or sorted(breakpoint_source.get("breakpoints") or []) != expected_breakpoints:
+        raise EvidenceError("contract breakpoint source differs from the pinned donor classification")
     workspace_value = contract.get("workspace_root")
     workspace = Path(workspace_value) if isinstance(workspace_value, str) and workspace_value else contract_path.parent
     if not workspace.is_absolute():
@@ -370,23 +484,24 @@ def verify_contract(contract_path: Path, evidence_dir: Path | None = None) -> di
             require_sha256(digest, f"candidate.lifecycle.public_env_sha256.{key}")
     candidate_files = {(root / entry["path"]).resolve() for entry in closure["files"]}
     sidecar_files = {(contract_path.parent / rel).resolve() for rel in verified_sidecars}
-    command_sets = list(contract.get("current_commands") or [])
+    command_specs: list[tuple[list[str], Path]] = [(command, root) for command in (contract.get("current_commands") or [])]
     lifecycle = candidate.get("lifecycle") or {}
+    lifecycle_cwd = resolve_inside(root, lifecycle.get("cwd") or ".", "candidate lifecycle cwd")
     for key in ("build", "start", "teardown"):
         if lifecycle.get(key):
-            command_sets.append(lifecycle[key])
-    actual_executables = command_executable_records(command_sets)
+            command_specs.append((lifecycle[key], lifecycle_cwd))
+    actual_executables = command_executable_records_for_specs(command_specs)
     pinned_executables = contract.get("command_executables")
     if not isinstance(pinned_executables, list) or pinned_executables != actual_executables:
         raise EvidenceError("command executable identities are missing, stale, or incomplete")
     known_input_suffixes = {".py", ".js", ".mjs", ".cjs", ".sh", ".ps1", ".cmd", ".bat", ".json", ".yaml", ".yml", ".toml", ".html", ".css", ".svg", ".txt"}
-    for command in command_sets:
+    for command, execution_cwd in command_specs:
         for value in command[1:]:
             if not isinstance(value, str):
                 continue
             raw_value = value.split("=", 1)[1] if value.startswith("--") and "=" in value else value
             path = Path(raw_value)
-            path = path.resolve() if path.is_absolute() else (root / path).resolve()
+            path = path.resolve() if path.is_absolute() else (execution_cwd / path).resolve()
             if not path.exists() and Path(raw_value).suffix.lower() in known_input_suffixes:
                 raise EvidenceError(f"pinned command input is missing: {path}")
             if path.is_file() and path not in candidate_files and path not in sidecar_files:

@@ -2,11 +2,13 @@
 /* Discover semantic and listener-backed controls without silently truncating coverage. */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { launchChromium, contextOptions, installNetworkSandbox, installRuntimeInstrumentation } = require('./browser');
 
 function arg(name, fallback = null) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : fallback; }
 function toUrl(value) { if (/^https?:\/\//.test(value) || /^file:/.test(value)) return value; return 'file://' + path.resolve(value).replace(/\\/g, '/'); }
 function loadJson(value, fallback) { return value ? JSON.parse(fs.readFileSync(value, 'utf8')) : fallback; }
+function sha(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 
 async function main() {
   const url = arg('url');
@@ -23,6 +25,7 @@ async function main() {
   await page.goto(toUrl(url), { waitUntil: 'networkidle' });
   const data = await page.evaluate(({ maxElements, viewportWidth }) => {
     const eventProps = ['onclick','ondblclick','onpointerdown','onpointerup','onpointermove','onmousedown','onmouseup','onmousemove','ontouchstart','ontouchend','onkeydown','onkeyup','oninput','onchange','onsubmit','ondragstart','ondragend','ondrop'];
+    const actionableRoles = new Set(['button','link','menuitem','menuitemcheckbox','menuitemradio','tab','checkbox','radio','switch','option','combobox','textbox','searchbox','slider','spinbutton','treeitem','gridcell']);
     function visible(el) { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0.001; }
     function stable(el) {
       if (el.id) return '#' + CSS.escape(el.id);
@@ -42,7 +45,7 @@ async function main() {
       if (all.length > maxElements) boundaries.push({ type: 'element-limit', frame_path: framePath, discovered: all.length, limit: maxElements });
       for (const el of all.slice(0, maxElements)) {
         if (!visible(el)) continue;
-        const semantic = el.matches('a[href],button,input,select,textarea,[role],[aria-expanded],[tabindex]:not([tabindex="-1"]),summary');
+        const semantic = el.matches('a[href],button,input,select,textarea,[aria-expanded],[tabindex]:not([tabindex="-1"]),summary') || actionableRoles.has(el.getAttribute('role'));
         const registered = String(el.getAttribute('data-h2d-listener-events') || '').split(',').filter(Boolean);
         const properties = eventProps.filter(name => typeof el[name] === 'function' || el.hasAttribute(name));
         if (!semantic && !registered.length && !properties.length) continue;
@@ -67,7 +70,7 @@ async function main() {
       if (all.length > maxElements) boundaries.push({ type: 'element-limit', frame_path: rootPath, discovered: all.length, limit: maxElements });
       for (const el of all.slice(0, maxElements)) {
         if (!visible(el)) continue;
-        const semantic = el.matches('a[href],button,input,select,textarea,[role],[aria-expanded],[tabindex]:not([tabindex="-1"]),summary');
+        const semantic = el.matches('a[href],button,input,select,textarea,[aria-expanded],[tabindex]:not([tabindex="-1"]),summary') || actionableRoles.has(el.getAttribute('role'));
         const registered = String(el.getAttribute('data-h2d-listener-events') || '').split(',').filter(Boolean);
         const properties = eventProps.filter(name => typeof el[name] === 'function' || el.hasAttribute(name));
         if (!semantic && !registered.length && !properties.length) continue;
@@ -76,14 +79,43 @@ async function main() {
       }
     }
     inspectDocument(document);
+    for (const listener of (window.__h2dRuntime || {}).global_listeners || []) boundaries.push({ type: 'delegated-listener', target: listener.target, event: listener.type });
+    for (const [target, value] of [['window', window], ['document', document]]) for (const name of eventProps) if (typeof value[name] === 'function') boundaries.push({ type: 'delegated-property-handler', target, event: name.slice(2) });
     return { rows, boundaries };
   }, { maxElements, viewportWidth: viewport.width });
   await browser.close();
+  const classificationPath = arg('classification');
+  let classification = null; let classificationRow = null;
+  if (classificationPath) {
+    classification = loadJson(classificationPath, null);
+    if (!classification || classification.result !== 'pass' || classification.coverage_complete !== true) throw new Error('Behavior inventory requires a complete generated classification');
+    const matrixKey = `${viewport.width}x${viewport.height}@${profile.id}`;
+    classificationRow = (classification.rows || []).find(row => row.matrix_key === matrixKey);
+    if (!classificationRow) throw new Error(`Classification is missing ${matrixKey}`);
+    const bySelector = new Map(data.rows.map(row => [`${row.frame_path}|${row.selector}`, row]));
+    for (const state of classificationRow.states || []) {
+      const prerequisite = (state.sequence || []).map(selector => ({ action: 'click', selector }));
+      for (const control of state.controls || []) {
+        const framePath = control.frame_path || 'main'; const key = `${framePath}|${control.selector}`;
+        const candidate = {
+          selector: control.selector, frame_path: framePath, selector_count: control.selector_count,
+          kind: control.kind || 'listener-surface', label: control.label || control.selector,
+          criticality: 'critical', listeners: control.listeners || [], h2d_path: control.h2d_path || null,
+          prerequisite_sequence: prerequisite,
+        };
+        const previous = bySelector.get(key);
+        if (!previous || prerequisite.length < (previous.prerequisite_sequence || []).length) bySelector.set(key, { ...(previous || {}), ...candidate });
+      }
+    }
+    data.rows = [...bySelector.values()].sort((a,b) => `${a.frame_path}|${a.selector}`.localeCompare(`${b.frame_path}|${b.selector}`));
+  }
+  data.rows.forEach((row, index) => { row.component_id = `${viewport.width}:${profile.id}:${index}`; });
   const unresolved = data.rows.filter(row => row.selector_count !== 1);
   const truncated = data.boundaries.some(item => item.type === 'element-limit');
-  const unsupported = data.boundaries.some(item => item.type === 'cross-origin-frame');
-  const result = unresolved.length || truncated || unsupported ? 'fail' : (data.rows.length ? 'pass' : 'not-tested');
-  const report = { result, coverage_complete: result !== 'fail', truncated, url, viewports: [viewport.width], profile_id: profile.id, components: data.rows, boundaries: data.boundaries, issues: unresolved.map(row => ({ type: 'selector-not-unique', component_id: row.component_id, count: row.selector_count })), blocked_requests: network.filter(row => row.action === 'blocked').length };
+  const unsupported = data.boundaries.some(item => ['cross-origin-frame','delegated-listener','delegated-property-handler'].includes(item.type));
+  const complete = Boolean(classificationRow) && !unresolved.length && !truncated && !unsupported;
+  const result = unresolved.length || truncated || unsupported ? 'fail' : (data.rows.length ? (complete ? 'pass' : 'partial') : 'not-tested');
+  const report = { result, coverage_complete: complete, reachable_states_complete: complete, classification_sha256: classificationPath ? sha(fs.readFileSync(classificationPath)) : null, truncated, url, viewports: [viewport.width], profile_id: profile.id, components: data.rows, boundaries: data.boundaries, issues: unresolved.map(row => ({ type: 'selector-not-unique', component_id: row.component_id, count: row.selector_count })), blocked_requests: network.filter(row => row.action === 'blocked').length };
   fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify(report, null, 2));
   fs.writeFileSync(path.join(path.dirname(out), 'event_listener_inventory.json'), JSON.stringify({ result, coverage_complete: report.coverage_complete, listeners: data.rows.map(row => ({ component_id: row.component_id, selector: row.selector, events: row.listeners })) }, null, 2));
   console.log(`result=${result} components=${data.rows.length} boundaries=${data.boundaries.length} out=${out}`);

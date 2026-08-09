@@ -63,14 +63,27 @@ Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder,
 
 Before implementation, freeze the runnable donor and finalize one contract. Do not type viewport lists from the filename or memory.
 
-1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, hashes the transitive local resource closure, captures every explicit viewport/profile under a deny-by-default network sandbox, and runs the bundled reachable-state classifier. Visual, classification and dynamic evidence must share that donor identity. A live URL is not a frozen reference.
-2. `create_transfer_contract.py` decodes the `.h2d` again with the bundled decoder, derives all decoded widths plus breakpoint/interval probes, pins browser capabilities, candidate build inputs, sidecars, expected reports and gate commands. Multiple decoded widths require an interval-complete donor breakpoint list; a midpoint alone is insufficient.
+1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, hashes the transitive local resource closure, captures every explicit viewport/profile under a deny-by-default network sandbox, and runs the bundled reachable-state classifier. The closure includes resources loaded only after interactions. Visual, classification and dynamic evidence must share that exact donor identity. A live URL is not a frozen reference.
+2. Breakpoints come only from the bundled generated classification (CSS/media queries plus runtime `matchMedia`), never from the filename, memory or a handwritten CLI list. Use `derive_reference_matrix.py` for a decoded-width seed matrix, run `freeze_reference_bundle.py --prepare-only`, then derive the final breakpoint/interval matrix from `reference_classification.json` and recapture the final reference. `create_transfer_contract.py` accepts only that pinned matrix/provenance pair.
 3. Every approved deviation/fallback/substitution needs a verified owner-signed or trusted owner-event receipt. A locally authored `approved: true` is invalid.
-4. `run_current_gates.py` pins executable binaries and file inputs, quarantines earlier reports, runs the commands, binds the final `source/` copies to the immutable `.h2d`/decode artifacts, and derives matrix completion from the current visual/geometry/typography/behavior/liveness artifacts. Managed URL mode requires an unused loopback origin, a live child process and JSON build identity bound to the current candidate/source closure. The candidate closure is re-hashed after generation; the evidence directory is the only allowed self-exclusion.
-5. Missing behavior/liveness classification, truncated discovery, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Never infer static scope from a missing report.
-6. When behavior or liveness is required, every discovery/inventory/mapping artifact must be a complete `pass`. `partial` or `manual-review` is diagnostic only and cannot reach final pass without a separately authenticated, exact-scope fallback contract.
+4. `run_current_gates.py` pins executable binaries and file inputs against the exact cwd used by each current/build/start/teardown command, quarantines earlier reports, runs the commands, binds the final `source/` copies to the immutable `.h2d`/decode artifacts, and derives matrix completion only from per-row passing visual/geometry/typography/behavior/liveness artifacts. Managed URL mode requires an unused loopback origin, a live child process and JSON build identity bound to the current candidate/source closure. The candidate closure is re-hashed after generation; the evidence directory is the only allowed self-exclusion.
+5. Missing behavior/liveness classification, truncated discovery, delegated document/window listeners, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Structural ARIA roles alone are not behavior; actionable roles/listeners are. Timers and media playback are liveness. Never infer static scope from a missing report.
+6. When behavior or liveness is required, every discovery/inventory/mapping artifact must be a complete `pass`. `partial`, `manual-review`, `not-tested` and `static-scope` do not count as completed required matrix rows. A dynamic bundle is final only when `finalize_dynamic_reference.py` generates a non-empty, complete role×matrix manifest bound to the exact classification; a handwritten/empty manifest is invalid.
 
 The same matrix is mandatory after feedback. A generic Playwright screenshot, one desktop width, one mobile width, or "viewport plus neighbor" is diagnostic only.
+
+The reference preparation sequence is deterministic:
+
+```bash
+python scripts/derive_reference_matrix.py --h2d input.h2d --height-map heights.json --out seed-matrix.json
+python scripts/freeze_reference_bundle.py --h2d input.h2d --donor donor.html --donor-root donor-root --matrix seed-matrix.json --profiles profiles.json --out h2d-transfer-output/contract/reference --prepare-only
+python scripts/derive_reference_matrix.py --h2d input.h2d --height-map heights.json --classification h2d-transfer-output/contract/reference/reference_classification.json --out final-matrix.json
+# Recapture/finalize dynamic artifacts against final-matrix.json when classification requires them.
+python scripts/finalize_dynamic_reference.py --classification h2d-transfer-output/contract/reference/reference_classification.json --artifact kind@matrix-key=path --out dynamic/dynamic_reference_manifest.json
+python scripts/freeze_reference_bundle.py --h2d input.h2d --donor donor.html --donor-root donor-root --matrix final-matrix.json --profiles profiles.json --dynamic-manifest dynamic/dynamic_reference_manifest.json --out h2d-transfer-output/contract/reference
+```
+
+For a genuinely static classification, omit the dynamic-finalizer command and the final `--dynamic-manifest` argument. If the final matrix differs from the seed and behavior/liveness is required, run `--prepare-only` once more on the final matrix before capturing/finalizing dynamic artifacts.
 
 ## Design System First
 
@@ -296,11 +309,11 @@ Readiness then rests on the node/text-style, asset, provenance, behavior and liv
 Run this when the user asks for working behavior or when classification finds semantic, listener-backed, form, keyboard, pointer, shadow/frame, or navigation/download behavior. Use the pinned offline runnable donor; the sandbox applies to offline files too. Live traversal needs exact request/action allowlists and is not the default.
 
 ```bash
-node scripts/behavior_inventory.js --url h2d-transfer-output/reference/donor.html --profile h2d-transfer-output/contract/profile.json --out h2d-transfer-output/reports/behavior_inventory.json
+node scripts/behavior_inventory.js --url h2d-transfer-output/reference/donor.html --classification h2d-transfer-output/contract/reference/reference_classification.json --profile h2d-transfer-output/contract/profile.json --out h2d-transfer-output/reports/behavior_inventory.json
 node scripts/behavior_matrix_generate.js --inventory h2d-transfer-output/reports/behavior_inventory.json --out h2d-transfer-output/reports/interaction_matrix.json
 node scripts/behavior_capture_trace.js --url h2d-transfer-output/reference/donor.html --matrix h2d-transfer-output/reports/interaction_matrix.json --profile h2d-transfer-output/contract/profile.json --side original --out h2d-transfer-output/reference/reports/original_behavior_traces.jsonl
 python scripts/behavior_build_state_targets.py --traces h2d-transfer-output/reference/reports/original_behavior_traces.jsonl --out h2d-transfer-output/reports/behavior_state_targets.json
-node scripts/behavior_capture_trace.js --url h2d-transfer-output/dist/hero.html --matrix h2d-transfer-output/reports/interaction_matrix.json --side candidate --out h2d-transfer-output/reports/candidate_behavior_traces.jsonl
+node scripts/behavior_capture_trace.js --url h2d-transfer-output/dist/hero.html --matrix h2d-transfer-output/reports/interaction_matrix.json --implementation-map h2d-transfer-output/reports/behavior_implementation_map.json --side candidate --out h2d-transfer-output/reports/candidate_behavior_traces.jsonl
 python scripts/behavior_compare_traces.py --original h2d-transfer-output/reference/reports/original_behavior_traces.jsonl --candidate h2d-transfer-output/reports/candidate_behavior_traces.jsonl --original-root h2d-transfer-output/reference --candidate-root h2d-transfer-output --out h2d-transfer-output/reports/behavior_validation.json
 ```
 
@@ -317,7 +330,7 @@ node scripts/liveness_capture_trace.js --url h2d-transfer-output/dist/hero.html 
 python scripts/liveness_compare_traces.py --original h2d-transfer-output/reference/reports/original_animation_trace.jsonl --candidate h2d-transfer-output/reports/candidate_animation_trace.jsonl --inventory h2d-transfer-output/reports/liveness_inventory.json --original-root h2d-transfer-output/reference --candidate-root h2d-transfer-output --out h2d-transfer-output/reports/liveness_validation.json
 ```
 
-Treat WebGL or canvas as a runtime surface, not as a decorative static asset.
+Every trace needs at least three strictly increasing samples starting at 0; comparison includes per-sample position/size, styles, pixels, canvas and media time. Required playback that cannot start/advance is non-pass. Treat WebGL or canvas as a runtime surface, not as a decorative static asset: `not-present` or a nominal `pass` without three hashed frames and non-blank samples for every inventoried WebGL canvas fails.
 
 ## Bundled Resources
 

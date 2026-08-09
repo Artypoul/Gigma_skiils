@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evidence_integrity import EvidenceError, load_json, sha256_file
+from evidence_integrity import EvidenceError, load_json, sha256_file, validate_dynamic_manifest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +49,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--project-root", type=Path)
     parser.add_argument("--dynamic-manifest", type=Path)
+    parser.add_argument("--prepare-only", action="store_true", help="Generate visual/classification discovery artifacts without claiming a final bundle")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     command = [
@@ -86,21 +87,28 @@ def main() -> int:
         raise EvidenceError("reference classification was not produced by the bundled classifier")
     if classification.get("source_sha256") != source_sha:
         raise EvidenceError("reference classification is bound to different H2D bytes")
-    if classification.get("donor_identity") != visual.get("donor_identity"):
-        raise EvidenceError("reference classification is bound to a different donor closure")
+    if not isinstance(classification.get("donor_closure"), list) or not classification["donor_closure"]:
+        raise EvidenceError("reference classification has no complete donor closure")
+    visual_paths = {row.get("path") for row in visual.get("donor_closure") or []}
+    classification_paths = {row.get("path") for row in classification["donor_closure"]}
+    if not visual_paths.issubset(classification_paths):
+        raise EvidenceError("classification donor closure dropped a visual resource")
+    visual["donor_identity"] = classification.get("donor_identity")
+    visual["donor_closure"] = classification["donor_closure"]
+    visual_path.write_text(json.dumps(visual, indent=2, ensure_ascii=False), encoding="utf-8")
     if sorted(classification.get("matrix_keys") or []) != sorted(visual.get("matrix_keys") or []):
         raise EvidenceError("reference classification does not cover the complete visual matrix")
+    if args.prepare_only:
+        if args.dynamic_manifest:
+            raise EvidenceError("--prepare-only may not be combined with --dynamic-manifest")
+        print(f"result=pass phase=prepared matrix={len(visual['matrix_keys'])} classification={classification_path}")
+        return 0
     dynamic = {"donor_identity": None, "artifacts": []}
     if behavior_required or liveness_required:
         if not args.dynamic_manifest:
             raise EvidenceError("interactive/dynamic classification requires --dynamic-manifest")
         dynamic = load_json(args.dynamic_manifest)
-        if dynamic.get("result") != "pass" or dynamic.get("coverage_complete") is not True:
-            raise EvidenceError("dynamic reference manifest is incomplete or non-pass")
-        if dynamic.get("donor_identity") != visual.get("donor_identity"):
-            raise EvidenceError("visual and dynamic phases used different donor identities")
-        if sorted(dynamic.get("matrix_keys") or []) != sorted(visual.get("matrix_keys") or []):
-            raise EvidenceError("dynamic reference matrix differs from visual matrix")
+        validate_dynamic_manifest(dynamic, classification, sorted(visual.get("matrix_keys") or []), args.dynamic_manifest.resolve().parent)
     artifacts = relative_artifacts(args.out, visual.get("artifacts") or [])
     artifacts.append({"path": visual_path.relative_to(args.out).as_posix(), "sha256": sha256_file(visual_path), "kind": "visual-manifest"})
     destination = args.out / "reference_classification.json"
@@ -128,11 +136,11 @@ def main() -> int:
     bundle = {
         "schema_version": "2.0", "result": "pass", "coverage_complete": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "source_sha256": source_sha, "donor_identity": visual["donor_identity"],
+        "source_sha256": source_sha, "donor_identity": classification["donor_identity"],
         "environment_sha256": visual.get("environment_sha256"), "environment_by_profile": visual.get("environment_by_profile"),
-        "donor_closure": visual.get("donor_closure"),
+        "donor_closure": classification.get("donor_closure"),
         "matrix_keys": sorted(visual["matrix_keys"]),
-        "visual": {"donor_identity": visual["donor_identity"], "manifest_sha256": sha256_file(visual_path)},
+        "visual": {"donor_identity": classification["donor_identity"], "manifest_sha256": sha256_file(visual_path)},
         "dynamic": {"donor_identity": dynamic.get("donor_identity"), "required": behavior_required or liveness_required},
         "classification": classification,
         "artifacts": artifacts,

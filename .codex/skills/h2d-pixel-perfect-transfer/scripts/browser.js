@@ -180,7 +180,8 @@ async function installNetworkSandbox(context, rules = []) {
 
 async function installRuntimeInstrumentation(context) {
   await context.addInitScript(() => {
-    window.__h2dRuntime = { listeners: [], canvas_contexts: [], property_handlers: [] };
+    window.__h2dRuntime = { listeners: [], global_listeners: [], canvas_contexts: [], property_handlers: [], timers: [], media_queries: [] };
+    const delegatedTypes = new Set(['click','dblclick','pointerdown','pointerup','pointermove','mousedown','mouseup','mousemove','touchstart','touchend','keydown','keyup','input','change','submit','dragstart','dragend','drop']);
     const originalAdd = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, listener, options) {
       try {
@@ -188,10 +189,32 @@ async function installRuntimeInstrumentation(context) {
           const current = new Set(String(this.getAttribute('data-h2d-listener-events') || '').split(',').filter(Boolean));
           current.add(String(type));
           this.setAttribute('data-h2d-listener-events', [...current].sort().join(','));
+        } else if ((this === window || this === document) && delegatedTypes.has(String(type))) {
+          const target = this === window ? 'window' : 'document';
+          const key = `${target}:${String(type)}`;
+          if (!window.__h2dRuntime.global_listeners.some(row => row.key === key)) window.__h2dRuntime.global_listeners.push({ key, target, type: String(type) });
         }
       } catch {}
       return originalAdd.call(this, type, listener, options);
     };
+    const originalSetTimeout = window.setTimeout.bind(window);
+    const originalSetInterval = window.setInterval.bind(window);
+    window.setTimeout = function(handler, delay, ...args) {
+      window.__h2dRuntime.timers.push({ kind: 'timeout', delay_ms: Number(delay || 0) });
+      return originalSetTimeout(handler, delay, ...args);
+    };
+    window.setInterval = function(handler, delay, ...args) {
+      window.__h2dRuntime.timers.push({ kind: 'interval', delay_ms: Number(delay || 0) });
+      return originalSetInterval(handler, delay, ...args);
+    };
+    if (window.matchMedia) {
+      const originalMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = function(query) {
+        const value = String(query);
+        if (!window.__h2dRuntime.media_queries.includes(value)) window.__h2dRuntime.media_queries.push(value);
+        return originalMatchMedia(value);
+      };
+    }
     if (window.HTMLCanvasElement) {
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function(type, ...args) {
@@ -246,7 +269,6 @@ async function environmentFingerprint(browser, context, page) {
       language: navigator.language,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       dpr: devicePixelRatio,
-      fonts: [...document.fonts].map(f => `${f.family}|${f.style}|${f.weight}|${f.status}`).sort(),
       graphics,
     };
   });

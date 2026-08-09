@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -22,6 +23,7 @@ from evidence_integrity import (  # noqa: E402
     verify_contract,
     verify_current_evidence,
     require_local_candidate_urls,
+    validate_dynamic_manifest,
 )
 from create_transfer_contract import responsive_matrix  # noqa: E402
 from freeze_reference_bundle import resolve_artifact_path  # noqa: E402
@@ -50,7 +52,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
         source_sha = sha256_file(source_dir / "input.h2d")
         donor_closure = [{"path": "donor.html", "sha256": "0" * 64, "size": 0}]
         donor_identity = f"sha256:{canonical_json_sha256(donor_closure)}"
-        classification = {"result": "pass", "generator_sha256": sha256_file(SKILL / "scripts" / "classify_reference.js"), "behavior_required": False, "liveness_required": False, "coverage_complete": True, "source_sha256": source_sha, "donor_identity": donor_identity, "matrix_keys": ["390x844@mobile"]}
+        classification = {"result": "pass", "generator_sha256": sha256_file(SKILL / "scripts" / "classify_reference.js"), "behavior_required": False, "liveness_required": False, "coverage_complete": True, "source_sha256": source_sha, "donor_identity": donor_identity, "donor_closure": donor_closure, "matrix_keys": ["390x844@mobile"], "breakpoints": []}
         bundle = {
             "schema_version": "2.0", "result": "pass", "coverage_complete": True,
             "source_sha256": source_sha, "donor_identity": donor_identity, "donor_closure": donor_closure,
@@ -88,9 +90,10 @@ class EvidenceIntegrityTests(unittest.TestCase):
             "browser_profiles": [{"id": "mobile", "headless": True, "device_scale_factor": 1, "is_mobile": True, "has_touch": True, "locale": "en-US", "timezone": "UTC", "reduced_motion": "reduce"}],
             "candidate": {"mode": "entry", "project_root": "candidate", "include": ["index.html"], "closure_sha256": closure["digest"]},
             "classification": bundle["classification"],
+            "breakpoint_source": {"kind": "generated-reference-classification", "donor_identity": donor_identity, "breakpoints": []},
             "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": sha256_file(bundle_path)},
             "sidecars": [], "approvals": [], "current_commands": [[sys.executable, "-c", "pass"]],
-            "command_executables": command_executable_records([[sys.executable, "-c", "pass"]]),
+            "command_executables": command_executable_records([[sys.executable, "-c", "pass"]], candidate),
             "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"],
         }
         contract_path = contract_dir / "transfer_contract.json"
@@ -165,6 +168,40 @@ class EvidenceIntegrityTests(unittest.TestCase):
             with self.assertRaisesRegex(EvidenceError, "expected report escapes"):
                 verify_contract(contract_path, evidence.parents[1])
 
+    def test_contract_classification_must_match_generated_bundle_exactly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, _ = self.fixture(Path(temp))
+            contract_path = evidence.parents[1] / "contract" / "transfer_contract.json"
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            contract["classification"]["behavior_required"] = True
+            contract["expected_reports"].append("reports/behavior_validation.json")
+            self.write_json(contract_path, contract)
+            with self.assertRaisesRegex(EvidenceError, "classification differs"):
+                verify_contract(contract_path, evidence.parents[1])
+
+    def test_dynamic_manifest_rejects_empty_required_artifacts(self) -> None:
+        classification = {"donor_identity":"sha256:" + "0" * 64,"behavior_required":True,"liveness_required":False}
+        dynamic = {
+            "result":"pass", "coverage_complete":True,
+            "generator_sha256":sha256_file(SKILL / "scripts" / "finalize_dynamic_reference.py"),
+            "classification_sha256":canonical_json_sha256(classification),
+            "donor_identity":classification["donor_identity"], "matrix_keys":["390x844@mobile"],
+            "required_roles":["behavior-inventory","behavior-state-screenshot","behavior-state-targets","event-listener-inventory","interaction-matrix","original-behavior-traces"],
+            "artifacts":[],
+        }
+        with self.assertRaisesRegex(EvidenceError, "has no artifacts"):
+            validate_dynamic_manifest(dynamic, classification, ["390x844@mobile"])
+
+    def test_command_executable_resolution_is_bound_to_lifecycle_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            lifecycle_cwd = Path(temp) / "candidate" / "app"
+            lifecycle_cwd.mkdir(parents=True)
+            executable = lifecycle_cwd / "local-runner"
+            executable.write_text("runner", encoding="utf-8")
+            records = command_executable_records([["./local-runner"]], lifecycle_cwd)
+            self.assertEqual(records[0]["cwd"], str(lifecycle_cwd.resolve()))
+            self.assertEqual(records[0]["resolved_path"], str(executable.resolve()))
+
     def test_self_authored_approval_is_rejected(self) -> None:
         with self.assertRaisesRegex(EvidenceError, "trusted verification"):
             verify_approval_records([{"approved": True, "scope": ["hero.copy"]}])
@@ -212,7 +249,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
             rogue.write_text("print('not covered')\n", encoding="utf-8")
             contract = json.loads(contract_path.read_text(encoding="utf-8"))
             contract["current_commands"] = [[sys.executable, str(rogue)]]
-            contract["command_executables"] = command_executable_records(contract["current_commands"])
+            contract["command_executables"] = command_executable_records(contract["current_commands"], candidate.parent)
             self.write_json(contract_path, contract)
             with self.assertRaisesRegex(EvidenceError, "outside candidate closure/hashed sidecars"):
                 verify_contract(contract_path, evidence.parents[1])
@@ -226,7 +263,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
             wrapper = root / "external-gate-wrapper"
             wrapper.write_text("version one\n", encoding="utf-8")
             contract["current_commands"] = [[str(wrapper)]]
-            contract["command_executables"] = command_executable_records(contract["current_commands"])
+            contract["command_executables"] = command_executable_records(contract["current_commands"], candidate.parent)
             self.write_json(contract_path, contract)
             verify_contract(contract_path, evidence.parents[1])
             wrapper.write_text("version two\n", encoding="utf-8")
@@ -236,7 +273,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
             selector_map = candidate.parent / "external-selectors.json"
             selector_map.write_text("{}", encoding="utf-8")
             contract["current_commands"] = [[sys.executable, "-c", "pass", str(selector_map)]]
-            contract["command_executables"] = command_executable_records(contract["current_commands"])
+            contract["command_executables"] = command_executable_records(contract["current_commands"], candidate.parent)
             self.write_json(contract_path, contract)
             with self.assertRaisesRegex(EvidenceError, "outside candidate closure/hashed sidecars"):
                 verify_contract(contract_path, evidence.parents[1])
@@ -249,10 +286,25 @@ class EvidenceIntegrityTests(unittest.TestCase):
             require_local_candidate_urls("http://127.0.0.1:5005/health", "http://127.0.0.1:5006/build-id")
 
     def test_sparse_responsive_contract_requires_interval_breakpoints(self) -> None:
-        with self.assertRaisesRegex(EvidenceError, "complete pinned --breakpoints"):
+        with self.assertRaisesRegex(EvidenceError, "complete generated donor breakpoints"):
             responsive_matrix([390, 1440], {"390": 844, "1440": 900}, [])
         rows = responsive_matrix([390, 1440], {"390": 844, "1440": 900}, [768])
         self.assertTrue({767, 768, 769, 915}.issubset({row["width"] for row in rows}))
+
+    def test_reference_matrix_is_derived_from_generated_breakpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); h2d = root / "source.h2d"; heights = root / "heights.json"; classification = root / "classification.json"; out = root / "matrix.json"
+            nodes = [{"type":"TEXT","tag":"span","x":10,"y":20 + index * 30,"width":200,"height":24,"text":f"Text {index}","children":[]} for index in range(12)]
+            h2d.write_text(json.dumps({"width":390,"height":844,"frame":{"type":"FRAME","tag":"div","x":0,"y":0,"width":390,"height":844,"children":nodes}}), encoding="utf-8")
+            heights.write_text('{"390":844}', encoding="utf-8")
+            self.write_json(classification, {
+                "result":"pass", "coverage_complete":True,
+                "generator_sha256":sha256_file(SKILL / "scripts" / "classify_reference.js"),
+                "source_sha256":sha256_file(h2d), "breakpoints":[768],
+            })
+            completed = subprocess.run([sys.executable, str(SKILL / "scripts" / "derive_reference_matrix.py"), "--h2d", str(h2d), "--height-map", str(heights), "--classification", str(classification), "--out", str(out)], capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual({row["width"] for row in json.loads(out.read_text(encoding="utf-8"))}, {390, 767, 768, 769})
 
     def test_dynamic_artifact_destination_cannot_escape_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

@@ -76,6 +76,30 @@ class CurrentRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(EvidenceError, "individual gate artifacts"):
                 verify_matrix_artifacts(Path(temp), {"result": "pass", "matrix_completed": ["390x844@headless"]}, {}, ["390x844@headless"])
 
+    def test_matrix_artifact_does_not_count_not_tested_as_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp); reports = output / "reports"; reports.mkdir()
+            matrix_key = "390x844@headless"; artifacts = []
+            for role, name, result in (("visual","diff_summary.json","not-tested"),("geometry","node_validation.json","pass"),("typography","font_manifest.json","font-exact")):
+                path = reports / name
+                path.write_text(json.dumps({"result":"pass","matrix_results":[{"matrix_key":matrix_key,"result":result}]}), encoding="utf-8")
+                artifacts.append({"role":role,"path":f"reports/{name}","sha256":sha256_file(path),"matrix_completed":[matrix_key]})
+            with self.assertRaisesRegex(EvidenceError, "does not contain the complete matrix"):
+                verify_matrix_artifacts(output, {"artifacts":artifacts}, {}, [matrix_key])
+
+    def test_webgl_inventory_rejects_not_present_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp); reports = output / "reports"; reports.mkdir()
+            inventory = json.loads((SKILL / "templates" / "liveness_inventory_template.json").read_text(encoding="utf-8"))
+            inventory["result"] = "pass"; inventory["coverage_complete"] = True
+            (reports / "liveness_inventory.json").write_text(json.dumps(inventory), encoding="utf-8")
+            capture = json.loads((SKILL / "templates" / "webgl_capture_report_template.json").read_text(encoding="utf-8"))
+            capture["result"] = "not-present"
+            (reports / "webgl_capture_report.json").write_text(json.dumps(capture), encoding="utf-8")
+            result = check_output(output, "false", "true")
+            consistency = next(row for row in result["checks"] if row["name"] == "webgl_inventory_consistency")
+            self.assertEqual(consistency["result"], "fail")
+
     def test_font_substitution_requires_verified_contract_scope(self) -> None:
         checks: list[dict[str, str]] = []
         add_font_approval_check(checks, {"result": "font-substituted"}, {"contract": {"approvals": []}})
@@ -94,7 +118,7 @@ class CurrentRunnerTests(unittest.TestCase):
             reference = contract_dir / "reference"; reference.mkdir(parents=True); (reference / "reference.png").write_bytes(b"pinned")
             source_sha = sha256_file(source / "input.h2d")
             donor_closure = [{"path":"donor.html","sha256":"0"*64,"size":0}]; donor_identity = f"sha256:{canonical_json_sha256(donor_closure)}"
-            classification = {"result":"pass","generator_sha256":sha256_file(SKILL/'scripts'/'classify_reference.js'),"behavior_required":False,"liveness_required":False,"coverage_complete":True,"source_sha256":source_sha,"donor_identity":donor_identity,"matrix_keys":["390x844@headless"]}
+            classification = {"result":"pass","generator_sha256":sha256_file(SKILL/'scripts'/'classify_reference.js'),"behavior_required":False,"liveness_required":False,"coverage_complete":True,"source_sha256":source_sha,"donor_identity":donor_identity,"donor_closure":donor_closure,"matrix_keys":["390x844@headless"],"breakpoints":[]}
             bundle = {"schema_version":"2.0","result":"pass","coverage_complete":True,"source_sha256":source_sha,"donor_identity":donor_identity,"donor_closure":donor_closure,"environment_by_profile":{"headless":"0"*64},"matrix_keys":["390x844@headless"],"visual":{"donor_identity":donor_identity},"dynamic":{"donor_identity":None},"classification":classification,"artifacts":[{"path":"reference.png","sha256":sha256_file(reference / "reference.png")} ]}
             bundle_path = reference / "reference_bundle.json"; bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
             helper = contract_dir / "generate_reports.py"
@@ -118,7 +142,7 @@ class CurrentRunnerTests(unittest.TestCase):
             names = ["source_intake","source_manifest","h2d_unpack_report","raw_asset_inventory","decode_candidates","schema_discovery","font_manifest","rect_targets","asset_map","asset_bitmap_audit","asset_visibility_chain","broken_asset_requests","asset_paint_validation","asset_provenance","node_validation","diff_summary","behavior_validation","liveness_validation","output_manifest","matrix_coverage"]
             closure = candidate_closure(candidate, ["index.html"], output)
             current_commands = [[sys.executable, str(helper)]]
-            contract = {"schema_version":"2.0","workspace_root":str(root),"source":{"path":"fresh_decode/source/input.h2d","sha256":source_sha},"decoder":{"path":"builtin:scripts/h2d_unpack_source.py","sha256":sha256_file(SKILL/'scripts'/'h2d_unpack_source.py')},"decoded_artifacts":[{"path":"fresh_decode/source/h2d_decoded.json","sha256":sha256_file(source/'h2d_decoded.json')},{"path":"fresh_decode/source/h2d_tree_index.json","sha256":sha256_file(source/'h2d_tree_index.json')}],"responsive_matrix":[{"width":390,"height":844,"kind":"decoded"}],"browser_profiles":[{"id":"headless","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}],"candidate":{"mode":"entry","project_root":"candidate","include":["index.html"],"closure_sha256":closure['digest']},"classification":bundle['classification'],"reference_bundle":{"path":"reference/reference_bundle.json","sha256":sha256_file(bundle_path)},"sidecars":[{"role":"report-generator","path":"generate_reports.py","sha256":sha256_file(helper)}],"approvals":[],"current_commands":current_commands,"command_executables":command_executable_records(current_commands),"expected_reports":[f"reports/{name}.json" for name in names] + ["reports/review.md"]}
+            contract = {"schema_version":"2.0","workspace_root":str(root),"source":{"path":"fresh_decode/source/input.h2d","sha256":source_sha},"decoder":{"path":"builtin:scripts/h2d_unpack_source.py","sha256":sha256_file(SKILL/'scripts'/'h2d_unpack_source.py')},"decoded_artifacts":[{"path":"fresh_decode/source/h2d_decoded.json","sha256":sha256_file(source/'h2d_decoded.json')},{"path":"fresh_decode/source/h2d_tree_index.json","sha256":sha256_file(source/'h2d_tree_index.json')}],"responsive_matrix":[{"width":390,"height":844,"kind":"decoded"}],"browser_profiles":[{"id":"headless","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}],"candidate":{"mode":"entry","project_root":"candidate","include":["index.html"],"closure_sha256":closure['digest']},"classification":bundle['classification'],"breakpoint_source":{"kind":"generated-reference-classification","donor_identity":donor_identity,"breakpoints":[]},"reference_bundle":{"path":"reference/reference_bundle.json","sha256":sha256_file(bundle_path)},"sidecars":[{"role":"report-generator","path":"generate_reports.py","sha256":sha256_file(helper)}],"approvals":[],"current_commands":current_commands,"command_executables":command_executable_records(current_commands,candidate),"expected_reports":[f"reports/{name}.json" for name in names] + ["reports/review.md"]}
             contract_path = contract_dir / "transfer_contract.json"; contract_path.write_text(json.dumps(contract), encoding="utf-8")
             completed = subprocess.run([sys.executable, str(SKILL / "scripts" / "run_current_gates.py"), "--contract", str(contract_path), "--output", str(output)], capture_output=True, text=True)
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)

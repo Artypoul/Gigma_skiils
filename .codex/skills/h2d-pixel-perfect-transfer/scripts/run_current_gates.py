@@ -79,7 +79,7 @@ def quarantine_previous_reports(output: Path, expected_reports: list[str]) -> No
             path.replace(target)
 
 
-def extract_matrix_keys(report: object) -> list[str]:
+def extract_matrix_keys(report: object, allowed_verdicts: set[str]) -> list[str]:
     if not isinstance(report, dict):
         return []
     found: set[str] = set()
@@ -89,28 +89,28 @@ def extract_matrix_keys(report: object) -> list[str]:
             continue
         for item in values:
             verdict = item.get("result", item.get("verdict")) if isinstance(item, dict) else None
-            if isinstance(item, dict) and isinstance(item.get("matrix_key"), str) and verdict in {"pass", "font-exact", "font-substituted", "static-scope", "not-tested"}:
+            if isinstance(item, dict) and isinstance(item.get("matrix_key"), str) and verdict in allowed_verdicts:
                 found.add(item["matrix_key"])
     return sorted(found)
 
 
 def verify_matrix_artifacts(output: Path, coverage: dict, classification: dict, expected_matrix: list[str]) -> None:
     role_paths = {
-        "visual": "reports/diff_summary.json",
-        "geometry": "reports/node_validation.json",
-        "typography": "reports/font_manifest.json",
+        "visual": ("reports/diff_summary.json", {"pass"}),
+        "geometry": ("reports/node_validation.json", {"pass"}),
+        "typography": ("reports/font_manifest.json", {"pass", "font-exact", "font-substituted"}),
     }
     if classification.get("behavior_required"):
-        role_paths["behavior"] = "reports/behavior_validation.json"
+        role_paths["behavior"] = ("reports/behavior_validation.json", {"pass"})
     if classification.get("liveness_required"):
-        role_paths["liveness"] = "reports/liveness_validation.json"
+        role_paths["liveness"] = ("reports/liveness_validation.json", {"pass"})
     rows = coverage.get("artifacts")
     if not isinstance(rows, list):
         raise EvidenceError("matrix coverage must cite the individual gate artifacts")
     by_role = {row.get("role"): row for row in rows if isinstance(row, dict) and isinstance(row.get("role"), str)}
     if set(by_role) != set(role_paths):
         raise EvidenceError(f"matrix coverage artifact roles differ: expected {sorted(role_paths)}, got {sorted(by_role)}")
-    for role, relative in role_paths.items():
+    for role, (relative, allowed_verdicts) in role_paths.items():
         row = by_role[role]
         if row.get("path") != relative or sorted(row.get("matrix_completed") or []) != expected_matrix:
             raise EvidenceError(f"matrix coverage for {role} is missing or incomplete")
@@ -118,7 +118,7 @@ def verify_matrix_artifacts(output: Path, coverage: dict, classification: dict, 
         path.relative_to(output)
         if not path.is_file() or row.get("sha256") != sha256_file(path):
             raise EvidenceError(f"matrix coverage for {role} is not bound to the current artifact")
-        artifact_keys = extract_matrix_keys(json.loads(path.read_text(encoding="utf-8")))
+        artifact_keys = extract_matrix_keys(json.loads(path.read_text(encoding="utf-8")), allowed_verdicts)
         if artifact_keys != expected_matrix:
             raise EvidenceError(f"{relative} does not contain the complete matrix")
 

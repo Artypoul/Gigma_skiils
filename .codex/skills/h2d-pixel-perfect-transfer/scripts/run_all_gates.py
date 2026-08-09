@@ -294,6 +294,8 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
     unpack_data = None
     diff_data = None
     liveness_data = None
+    liveness_inventory_data = None
+    webgl_capture_data = None
     node_data = None
     font_data = None
     for fn, schema, allowed in required:
@@ -301,8 +303,25 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         if fn == 'h2d_unpack_report.json': unpack_data = d
         if fn == 'diff_summary.json': diff_data = d
         if fn == 'liveness_validation.json': liveness_data = d
+        if fn == 'liveness_inventory.json': liveness_inventory_data = d
+        if fn == 'webgl_capture_report.json': webgl_capture_data = d
         if fn == 'node_validation.json': node_data = d
         if fn == 'font_manifest.json': font_data = d
+    if liveness_required and liveness_inventory_data:
+        webgl_surfaces = [row for row in (liveness_inventory_data.get('surfaces') or []) if isinstance(row, dict) and 'webgl' in str(row.get('kind', '')).lower()]
+        has_webgl = bool(webgl_surfaces)
+        webgl_result = (webgl_capture_data or {}).get('result')
+        contexts = (webgl_capture_data or {}).get('contexts') or []
+        captured = {
+            row.get('canvas_selector')
+            for row in contexts
+            if isinstance(row, dict) and 'webgl' in str(row.get('context_type', '')).lower()
+            and isinstance(row.get('frame_hashes'), list) and len(row['frame_hashes']) >= 3
+            and isinstance(row.get('non_blank_samples'), int) and row['non_blank_samples'] >= 1
+        }
+        expected_selectors = {row.get('selector') for row in webgl_surfaces}
+        ok = not has_webgl or (webgl_result == 'pass' and captured == expected_selectors)
+        checks.append({'name':'webgl_inventory_consistency','result':'pass' if ok else 'fail','message':'WebGL capture matches complete inventory' if ok else 'WebGL is inventoried but a pass capture with three frame hashes and non-blank samples for every canvas is missing'})
     add_font_consistency_check(checks, node_data, font_data)
     add_font_approval_check(checks, font_data, current_verified)
     add_h2d_unpack_strict_checks(checks, unpack_data)
