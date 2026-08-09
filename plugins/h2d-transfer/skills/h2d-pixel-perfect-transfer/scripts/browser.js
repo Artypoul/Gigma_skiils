@@ -57,9 +57,11 @@ function executableFromArgv(argv = process.argv) {
 async function launchChromium(options = {}) {
   const { chromium, pkg } = resolveChromium();
   const launchOptions = { headless: true, ...options };
+  // An explicit override wins whichever package resolved: the full playwright
+  // can also be present without its downloaded Chromium, and ignoring
+  // CHROME_PATH there would fail with a browser sitting right on disk.
   if (!launchOptions.executablePath) {
-    const fromCli = executableFromArgv();
-    if (fromCli) launchOptions.executablePath = fromCli;
+    launchOptions.executablePath = executableFromArgv() || process.env.CHROME_PATH || undefined;
   }
   if (!launchOptions.executablePath && pkg === 'playwright-core') {
     const local = findLocalChrome();

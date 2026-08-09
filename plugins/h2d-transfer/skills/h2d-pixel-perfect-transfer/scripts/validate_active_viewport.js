@@ -121,10 +121,10 @@ async function main() {
   const waitMs = Number(arg('wait-ms', '0'));
   const readyTimeout = Number(arg('ready-timeout-ms', '10000'));
   const strictFontFamily = flag('strict-font-family');
-  const strictBoxStyle = flag('strict-box-style');
+  const lenientBoxStyle = flag('lenient-box-style');
   const viewports = String(arg('viewports') || arg('viewport') || '').split(',').filter(Boolean).map((v) => Number(v));
   if (!candidate || !rectTargetsPath || !viewports.length) {
-    throw new Error('Usage: --candidate <file|url> --rect-targets <file> --viewports 390,768 --out <file> [--selector-map <file>] [--accepted-deviations <file>] [--ready-selector <css>] [--ready-timeout-ms 10000] [--wait-ms 0] [--strict-font-family] [--strict-box-style] [--browser-executable <path>]');
+    throw new Error('Usage: --candidate <file|url> --rect-targets <file> --viewports 390,768 --out <file> [--selector-map <file>] [--accepted-deviations <file>] [--ready-selector <css>] [--ready-timeout-ms 10000] [--wait-ms 0] [--strict-font-family] [--lenient-box-style] [--browser-executable <path>]');
   }
 
   const { launchChromium } = require('./browser');
@@ -150,6 +150,7 @@ async function main() {
     await page.goto(toTargetUrl(candidate), { waitUntil: 'load' });
     // Fonts must be settled before any typography or rect measurement.
     await page.evaluate(() => document.fonts && document.fonts.ready);
+    await page.evaluate(require('./font_probe').FONT_PROBE_SOURCE);
 
     const selectors = selectorsFor(selectorMap, viewport);
     // A live project page may still be hydrating or waiting on its first
@@ -179,11 +180,21 @@ async function main() {
         const style = {};
         for (const prop of styleProps) style[prop] = cs[prop];
         style.fontFamily = cs.fontFamily;
+        // The declared stack says nothing about what actually painted: a brand
+        // face that failed to load, or lacks the glyphs for this text, falls
+        // back silently while getComputedStyle still reports it.
+        const primary = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim();
+        let primaryAvailable = null;
+        try {
+          primaryAvailable = window.__h2dFontUsed(primary, cs.fontWeight, cs.fontSize, cs.fontStyle, el.textContent);
+        } catch { primaryAvailable = null; }
         return {
           data_h2d_path: h2dPath,
           rect: { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height },
           tag: el.tagName,
-          style
+          style,
+          primary_family: primary,
+          primary_family_available: primaryAvailable
         };
       };
       const nodes = [];
@@ -256,6 +267,18 @@ async function main() {
           const entry = { type: 'font-family', path: p, expected: t.text_style.fontFamily, actual: n.style.fontFamily, note: 'must be documented in font_manifest.json as font-substituted' };
           if (strictFontFamily) issues.push(entry); else warnings.push(entry);
         }
+        // A matching declaration is not a matching render. Without this check a
+        // candidate can keep a broken brand-font declaration, paint a fallback,
+        // and still be called font-exact.
+        if (n.primary_family_available === false) {
+          warnings.push({
+            type: 'rendered-face-unavailable',
+            path: p,
+            declared: n.primary_family,
+            donor_rendered: t.rendered_font ? (t.rendered_font.post_script_name || t.rendered_font.family) : null,
+            note: 'the declared family cannot render this text, so a fallback paints it: font_manifest must say font-substituted'
+          });
+        }
       }
 
       if (t.box_style) {
@@ -265,9 +288,14 @@ async function main() {
           if (cmp.equal) continue;
           const entry = { type: 'box-style', path: p, field: prop, expected: t.box_style[prop], actual: n.style[prop] };
           if (cmp.delta != null) entry.delta = cmp.delta;
-          if (acceptedFor(accepted, viewport, p, prop)) acceptedHits.push({ ...entry, reason: 'accepted deviation' });
-          else if (strictBoxStyle) issues.push(entry);
-          else warnings.push(entry);
+          const ok = acceptedFor(accepted, viewport, p, prop);
+          // Failing by default is the teeth of the no-compensation rule: a
+          // container constraint replaced by a parent offset reaches the same
+          // rect, and a warning nobody must resolve would let it ship. The
+          // honest escape is an owner-approved deviation, not a quiet note.
+          if (ok) acceptedHits.push({ ...entry, reason: ok.reason });
+          else if (lenientBoxStyle) warnings.push(entry);
+          else issues.push(entry);
         }
       }
     }
@@ -299,7 +327,7 @@ async function main() {
     threshold_px: threshold,
     style_threshold_px: styleThreshold,
     strict_font_family: strictFontFamily,
-    strict_box_style: strictBoxStyle,
+    lenient_box_style: lenientBoxStyle,
     global_max_delta: globalMax,
     viewports: results,
     issues: results.flatMap((r) => r.issues.map((i) => ({ ...i, viewport: r.viewport }))),

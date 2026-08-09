@@ -110,7 +110,16 @@ async function main(){
     if(!original){
       throw new Error('--changed-source requires --original: the drift verdict must carry captured evidence of the live donor');
     }
-    if(result === 'fail' || result === 'manual-review' || result === 'pass'){
+    // Drift is a statement about the donor, so it may only downgrade a
+    // completed comparison. A missing screenshot, a diff-metrics crash or a
+    // normalized original means no comparison happened at all: turning that
+    // into changed-source would launder broken instrumentation into a pass.
+    const broken=rows.filter(row => !row.original || !row.candidate || row.diff_error || row.pixel_mismatch_ratio == null);
+    if(broken.length){
+      issues.push(`--changed-source refused: ${broken.length} viewport(s) produced no valid comparison (missing screenshot or diff metrics); fix the capture before declaring drift`);
+    } else if(hideOriginalSelector){
+      issues.push('--changed-source refused: the original was normalized via --hide-original-selector, so the captured comparison is not a clean live reference');
+    } else {
       issues.push(`live original drifted from the .h2d snapshot: ${changedSourceReason}`);
       issues.push('owner must confirm the snapshot stays the reference; the final runner then needs --accept-changed-source');
       result='changed-source';

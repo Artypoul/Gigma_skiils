@@ -156,7 +156,17 @@ Required source artifacts:
 - `source/h2d_decoded.json`
 - `source/h2d_tree_index.json`
 
-2. Design system first: fonts and containers (see Design System First), then `reports/font_manifest.json` from measured styles.
+2. Design system first: wire the fonts and container chain (see Design System First), then generate the manifest from the rendered page:
+
+```bash
+node scripts/font_manifest.js \
+  --candidate h2d-transfer-output/dist/hero.html \
+  --rect-targets h2d-transfer-output/reports/rect_targets.json \
+  --viewports 1440 \
+  --out h2d-transfer-output/reports/font_manifest.json
+```
+
+`font-exact` requires both that the primary families match the donor's and that each one can actually paint its text. A declared brand face that the browser silently replaces reports `font-mismatch-risk`: load the real face, or declare the fallback deliberately so the result is an honest `font-substituted`.
 3. Build viewport-scoped rect targets before final layout validation (the tree index rows carry `text_style` where the donor exposes it — targets inherit it):
 
 ```bash
@@ -183,6 +193,8 @@ node scripts/validate_active_viewport.js \
 ```
 
 In integration mode the validator waits for every mapped selector and for the layout to stop changing before measuring, so a hydrating page is not judged mid-flight. Add `--ready-selector` when the meaningful content arrives after an initial request.
+
+Container mismatches (`maxWidth`, `padding`, `gap`, `margin`) **fail** — that is what gives the no-compensation rule teeth, since a constraint replaced by a parent offset reaches the same rect. Resolve them structurally, or record an owner-approved deviation; `--lenient-box-style` downgrades them to warnings and is a temporary measure, not a way to ship.
 
 `--accepted-deviations` entries must each name the exact node, viewport, field list and a real reason — a blanket approval is rejected, because an approval that covers everything records nothing.
 

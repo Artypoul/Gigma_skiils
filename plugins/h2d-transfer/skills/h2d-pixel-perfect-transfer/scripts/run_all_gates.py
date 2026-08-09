@@ -166,7 +166,10 @@ def add_font_consistency_check(checks: list[dict[str, str]], node_data: Any|None
     if not isinstance(node_data, dict) or not isinstance(font_data, dict):
         checks.append({'name': 'font_manifest_matches_measurement', 'result': 'fail', 'message': 'cannot cross-check: node_validation or font_manifest data missing'})
         return
-    warnings = [w for w in (node_data.get('warnings') or []) if isinstance(w, dict) and w.get('type') == 'font-family']
+    # Both a different declared family and a declared family that cannot paint
+    # the text mean the same thing for this gate: something other than the
+    # donor's face is on screen.
+    warnings = [w for w in (node_data.get('warnings') or []) if isinstance(w, dict) and w.get('type') in {'font-family', 'rendered-face-unavailable'}]
     declared = font_data.get('result')
     if warnings and declared == 'font-exact':
         sample = warnings[0]
