@@ -1,0 +1,11 @@
+{
+  "schema_version": "2.0",
+  "result": "pass",
+  "coverage_complete": true,
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "donor_identity": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "matrix_keys": ["390x844@mobile-headless"],
+  "visual": {"donor_identity": "sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+  "dynamic": {"donor_identity": null},
+  "artifacts": [{"path": "screenshots/reference_390x844_mobile-headless.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}]
+}

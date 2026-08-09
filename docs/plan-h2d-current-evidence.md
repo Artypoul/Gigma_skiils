@@ -137,4 +137,6 @@ DoneWhen: полный синтетический `.h2d → contract → frozen 
 - Codex plan review round 6: распространил sandbox на offline donor; добавил DOM handler properties, storage/random determinism, intercepted navigation/download intent, CSS trigger sequences, immutable exhausted coverage, pointer gestures, runtime errors, shadow/frame boundaries, build toolchain/env и verifiable owner confirmations.
 - Codex targeted plan review: owner approval теперь требует криптографическую подпись или verified actor provenance из trusted owner-controlled event, а не самодостаточный локальный hash.
 
-Блокеров для реализации после plan review-gate нет. Главный риск — потерять более новые гарантии H2D 0.3.0; он закрывается совместимым merge и отдельными регрессионными тестами.
+Codex plan review-gate закрыт на коммите `6cfdcc1`: итоговый targeted review не нашёл major issues. Реализация сохраняет гарантии H2D 0.3.0 и добавляет immutable contract/reference/current-evidence chain, полный viewport/profile matrix, network sandbox, behavior/liveness traces, managed candidate lifecycle и обязательную проверку свежести в final gate.
+
+Локальная реализационная проверка перед первым implementation push: 17 Python/Playwright-тестов прошли на установленном Chromium; отдельно прошли JavaScript syntax-check, Python compile, stale-candidate/stale-build negative fixtures, external approval trust-anchor и font-substitution approval gates. Mirror sync и package validation зелёные; финальный статус остаётся незакрытым до CI и implementation review.

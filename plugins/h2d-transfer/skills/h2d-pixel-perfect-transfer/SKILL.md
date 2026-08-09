@@ -43,16 +43,33 @@ After complaint-driven feedback:
    - `reports/diff_summary.json.result == "pass"`, or `changed-source` explicitly accepted by the owner (see Drifted Donor)
    - `reports/behavior_validation.json.result == "pass"` for interactive scope
    - `reports/liveness_validation.json.result == "pass"` for dynamic or WebGL/canvas scope
+   - `reports/current_evidence.json.result == "pass"` and its matrix equals every contract viewport/profile pair
    - `reports/validation_run.json.result == "pass"`
 4. Run the final gate after the last HTML/CSS/assets/behavior/runtime change:
 
 ```bash
-python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required auto --liveness-required auto
+python scripts/run_current_gates.py \
+  --contract h2d-transfer-output/contract/transfer_contract.json \
+  --output h2d-transfer-output
 ```
+
+`run_all_gates.py --output ...` is no longer a regeneration path. It verifies mandatory current-evidence provenance and therefore fails on an old/manual report set or after any included candidate file changes. `--check-package` remains its package self-check mode.
 
 5. A static screenshot clone is a failure when the original has interaction, animation, canvas, WebGL, video, or scroll-linked motion unless the user explicitly accepts a documented static fallback.
 
 Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder, or from `.codex/reference/` after mirror sync, when you need the exact hard-gate wording.
+
+## Immutable Current-Evidence Contract
+
+Before implementation, freeze the runnable donor and finalize one contract. Do not type viewport lists from the filename or memory.
+
+1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, captures every explicit viewport/profile under a deny-by-default network sandbox, and binds visual and dynamic evidence to one donor identity. A live URL is not a frozen reference.
+2. `create_transfer_contract.py` decodes the `.h2d` again with the bundled decoder, derives all decoded widths plus breakpoint/interval probes, pins browser capabilities, candidate build inputs, sidecars, expected reports and gate commands.
+3. Every approved deviation/fallback/substitution needs a verified owner-signed or trusted owner-event receipt. A locally authored `approved: true` is invalid.
+4. `run_current_gates.py` runs the pinned commands, manages the candidate lifecycle, proves the complete matrix, and re-hashes the candidate closure after report generation. The evidence directory is the only allowed self-exclusion.
+5. Missing behavior/liveness classification, truncated discovery, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Never infer static scope from a missing report.
+
+The same matrix is mandatory after feedback. A generic Playwright screenshot, one desktop width, one mobile width, or "viewport plus neighbor" is diagnostic only.
 
 ## Design System First
 
@@ -175,7 +192,7 @@ node scripts/font_manifest.js \
   --out h2d-transfer-output/reports/font_manifest.json
 ```
 
-Every recorded viewport is measured by default, because typography is responsive; narrow the run only with `--allow-partial-viewports`. `font-exact` requires both that the primary families match the donor's and that each one can actually paint its text — a declared brand face the browser silently replaces reports `font-mismatch-risk`. A deliberate replacement needs recorded approval via `--substitutions` (`{"<donor family>": {"approved": true, "reason": "…", "approved_by": "…"}}`); without it the result is `manual-review`, so an accidental fallback never passes as a decision.
+Every recorded viewport is measured by default, because typography is responsive; narrow the run only with `--allow-partial-viewports`. `font-exact` requires both that the primary families match the donor's and that each one can actually paint its text — a declared brand face the browser silently replaces reports `font-mismatch-risk`. A deliberate replacement needs both a recorded `--substitutions` entry and an externally verified transfer-contract approval scoped to `font.substitutions`; without both, final validation fails, so an agent-authored fallback can never pass as the owner's decision.
 
 4. Implement the candidate blocks: `dist/<scope>.html`, an equivalent React/Tailwind component, or **integration mode** — the live project page itself.
 5. Validate geometry and text styles on the active viewport branch only. The candidate is either a file or a URL; when the project's markup cannot carry `data-h2d-path` markers, pass a selector map instead:
@@ -275,15 +292,15 @@ Readiness then rests on the node/text-style, asset, provenance, behavior and liv
 
 ## Behavior Pipeline
 
-Run this when the user asks for working behavior or when the original contains meaningful interaction:
+Run this when the user asks for working behavior or when classification finds semantic, listener-backed, form, keyboard, pointer, shadow/frame, or navigation/download behavior. Use the pinned offline runnable donor; the sandbox applies to offline files too. Live traversal needs exact request/action allowlists and is not the default.
 
 ```bash
-node scripts/behavior_inventory.js --url https://original.example --out h2d-transfer-output/reports/behavior_inventory.json
+node scripts/behavior_inventory.js --url h2d-transfer-output/reference/donor.html --profile h2d-transfer-output/contract/profile.json --out h2d-transfer-output/reports/behavior_inventory.json
 node scripts/behavior_matrix_generate.js --inventory h2d-transfer-output/reports/behavior_inventory.json --out h2d-transfer-output/reports/interaction_matrix.json
-node scripts/behavior_capture_trace.js --url https://original.example --matrix h2d-transfer-output/reports/interaction_matrix.json --side original --out h2d-transfer-output/reports/original_behavior_traces.jsonl
-python scripts/behavior_build_state_targets.py --traces h2d-transfer-output/reports/original_behavior_traces.jsonl --out h2d-transfer-output/reports/behavior_state_targets.json
+node scripts/behavior_capture_trace.js --url h2d-transfer-output/reference/donor.html --matrix h2d-transfer-output/reports/interaction_matrix.json --profile h2d-transfer-output/contract/profile.json --side original --out h2d-transfer-output/reference/reports/original_behavior_traces.jsonl
+python scripts/behavior_build_state_targets.py --traces h2d-transfer-output/reference/reports/original_behavior_traces.jsonl --out h2d-transfer-output/reports/behavior_state_targets.json
 node scripts/behavior_capture_trace.js --url h2d-transfer-output/dist/hero.html --matrix h2d-transfer-output/reports/interaction_matrix.json --side candidate --out h2d-transfer-output/reports/candidate_behavior_traces.jsonl
-python scripts/behavior_compare_traces.py --original h2d-transfer-output/reports/original_behavior_traces.jsonl --candidate h2d-transfer-output/reports/candidate_behavior_traces.jsonl --targets h2d-transfer-output/reports/behavior_state_targets.json --out h2d-transfer-output/reports/behavior_validation.json
+python scripts/behavior_compare_traces.py --original h2d-transfer-output/reference/reports/original_behavior_traces.jsonl --candidate h2d-transfer-output/reports/candidate_behavior_traces.jsonl --original-root h2d-transfer-output/reference --candidate-root h2d-transfer-output --out h2d-transfer-output/reports/behavior_validation.json
 ```
 
 Use `static-scope` only when the scope is genuinely non-interactive and that fact is documented in the output review.
@@ -293,10 +310,10 @@ Use `static-scope` only when the scope is genuinely non-interactive and that fac
 Run this when the original contains animation, canvas, WebGL, video, parallax, timers, runtime libraries, or any moving surface:
 
 ```bash
-node scripts/liveness_inventory.js --url https://original.example --out h2d-transfer-output/reports/liveness_inventory.json
-node scripts/liveness_capture_trace.js --url https://original.example --inventory h2d-transfer-output/reports/liveness_inventory.json --side original --out h2d-transfer-output/reports/original_animation_trace.jsonl
+node scripts/liveness_inventory.js --url h2d-transfer-output/reference/donor.html --out h2d-transfer-output/reports/liveness_inventory.json
+node scripts/liveness_capture_trace.js --url h2d-transfer-output/reference/donor.html --inventory h2d-transfer-output/reports/liveness_inventory.json --side original --out h2d-transfer-output/reference/reports/original_animation_trace.jsonl
 node scripts/liveness_capture_trace.js --url h2d-transfer-output/dist/hero.html --inventory h2d-transfer-output/reports/liveness_inventory.json --side candidate --out h2d-transfer-output/reports/candidate_animation_trace.jsonl
-python scripts/liveness_compare_traces.py --original h2d-transfer-output/reports/original_animation_trace.jsonl --candidate h2d-transfer-output/reports/candidate_animation_trace.jsonl --inventory h2d-transfer-output/reports/liveness_inventory.json --out h2d-transfer-output/reports/liveness_validation.json
+python scripts/liveness_compare_traces.py --original h2d-transfer-output/reference/reports/original_animation_trace.jsonl --candidate h2d-transfer-output/reports/candidate_animation_trace.jsonl --inventory h2d-transfer-output/reports/liveness_inventory.json --original-root h2d-transfer-output/reference --candidate-root h2d-transfer-output --out h2d-transfer-output/reports/liveness_validation.json
 ```
 
 Treat WebGL or canvas as a runtime surface, not as a decorative static asset.
@@ -321,3 +338,5 @@ Use these rules in the final answer:
 - `blocked` when a required live input or runtime dependency is unavailable.
 
 Do not collapse those states into a fake `pass`.
+
+In the user-facing final response, map a complete artifact `pass` to project status `ready`; map `needs-fix`/`manual-review` to `partial`, and keep `blocked` or `unknown` exact.

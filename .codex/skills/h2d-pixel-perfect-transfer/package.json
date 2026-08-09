@@ -1,16 +1,17 @@
 {
   "name": "h2d-pixel-perfect-transfer-skill",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "preflight": "python scripts/preflight_env.py",
-    "check:js": "node --check scripts/validate_active_viewport.js && node --check scripts/asset_paint_audit.js && node --check scripts/capture_visual_diff.js && node --check scripts/behavior_inventory.js && node --check scripts/behavior_matrix_generate.js && node --check scripts/behavior_capture_trace.js && node --check scripts/liveness_inventory.js && node --check scripts/liveness_capture_trace.js",
-    "validate:all": "python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required auto --liveness-required auto"
+    "check:js": "node --check scripts/browser.js && node --check scripts/freeze_visual_reference.js && node --check scripts/compare_frozen_visual.js && node --check scripts/validate_active_viewport.js && node --check scripts/asset_paint_audit.js && node --check scripts/capture_visual_diff.js && node --check scripts/behavior_inventory.js && node --check scripts/behavior_matrix_generate.js && node --check scripts/behavior_capture_trace.js && node --check scripts/liveness_inventory.js && node --check scripts/liveness_capture_trace.js",
+    "test": "python -m unittest discover -s ../../tests -p \"test_*.py\"",
+    "validate:all": "python scripts/run_current_gates.py --contract h2d-transfer-output/contract/transfer_contract.json --output h2d-transfer-output"
   },
   "dependencies": {
     "playwright": "^1.45.0",
     "pngjs": "^7.0.0"
   },
-  "description": "H2D pixel-perfect transfer skill with mandatory source intake, liveness, animation and WebGL gates."
+  "description": "H2D pixel-perfect transfer skill with immutable source/reference contracts, current-evidence provenance, full responsive browser matrices, behavior and liveness gates."
 }

@@ -1,9 +1,27 @@
 # Contracts overview
 
-The package uses one naming system across docs, schemas, templates and scripts.
+The package uses one naming system across docs, schemas, templates and scripts. Contract v2.0 makes final evidence current and immutable; the v1.x report contracts below remain the individual gate payloads.
 
 Static scope requires `behavior_validation.json` with `result=static-scope` or `not-tested`.
-Interactive scope requires full behavior artifacts. The final runner decides required behavior from CLI flag or from `behavior_validation.behavior_required`.
+Interactive scope requires full behavior artifacts. Requiredness comes only from the pinned reference classification in `transfer_contract.json`; neither a CLI guess nor a missing report can downgrade the scope.
+
+
+## v2.0 immutable/current-evidence contract
+
+`transfer_contract.json` pins:
+
+- the H2D bytes, bundled decoder identity and freshly regenerated decoded/tree artifacts;
+- decoded widths plus derived breakpoint-boundary and interval probes;
+- complete browser profiles, including DPR, touch/mobile input, locale, timezone and reduced motion;
+- exact candidate include closure, managed build/start/health/teardown and public toolchain/environment identity;
+- classification, sidecars, verified owner approvals, expected reports and regeneration commands. An approval only verifies against an external trust anchor: Ed25519 keys come from `H2D_OWNER_PUBLIC_KEYS_JSON`, while connector receipts come from `H2D_TRUSTED_OWNER_EVENTS_JSON`; a `verified: true` field inside the contract is never sufficient;
+- one `reference_bundle.json` whose static and dynamic artifacts share a donor identity and complete matrix.
+
+`current_evidence.json` is generated only by `run_current_gates.py`. It binds the current contract, runner, candidate digest before/after, complete matrix and hashes of every regenerated report. `run_all_gates.py --output` requires and independently verifies it, including a fresh candidate closure digest.
+
+The evidence output/cache is narrowly excluded from the candidate digest so generation does not invalidate itself. All real source, config, dependency and build inputs must be explicit includes. A changed include, sidecar, source, decoder, reference artifact or contract makes the old run stale.
+
+Approvals are not self-authenticating JSON. Any accepted deviation, changed-source choice, font substitution, asset decision, equivalence or static fallback needs a verified owner signature or trusted owner-controlled event receipt with exact scope. Locally authored identity/timestamp/hash fields do not pass.
 
 
 ## Mandatory source and final gate
@@ -16,7 +34,7 @@ The runner must require `source_manifest.json` plus these files before final pas
 - `source/h2d_decoded.json`
 - `source/h2d_tree_index.json`
 
-A transfer is not done until `python scripts/run_all_gates.py --output h2d-transfer-output --behavior-required auto` creates `reports/validation_run.json` with `result=pass`.
+A transfer is not done until `python scripts/run_current_gates.py --contract h2d-transfer-output/contract/transfer_contract.json --output h2d-transfer-output` creates both `reports/current_evidence.json` and `reports/validation_run.json` with `result=pass`.
 
 
 ## v1.7 liveness contract

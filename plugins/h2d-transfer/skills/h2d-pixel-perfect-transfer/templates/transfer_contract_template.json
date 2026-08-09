@@ -1,0 +1,19 @@
+{
+  "schema_version": "2.0",
+  "workspace_root": "..",
+  "source": {"path": "source/input.h2d", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+  "decoder": {"path": "builtin:scripts/h2d_unpack_source.py", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+  "decoded_artifacts": [
+    {"path": "source/h2d_decoded.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+    {"path": "source/h2d_tree_index.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}
+  ],
+  "responsive_matrix": [{"width": 390, "height": 844, "kind": "decoded"}],
+  "browser_profiles": [{"id": "mobile-headless", "headless": true, "device_scale_factor": 1, "is_mobile": true, "has_touch": true, "locale": "en-US", "timezone": "UTC", "reduced_motion": "reduce"}],
+  "candidate": {"mode": "entry", "project_root": "candidate", "include": ["src", "package.json"], "closure_sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+  "classification": {"behavior_required": false, "liveness_required": false, "coverage_complete": true},
+  "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+  "sidecars": [],
+  "approvals": [],
+  "current_commands": [["python", "scripts/generate-current-evidence.py"]],
+  "expected_reports": ["reports/matrix_coverage.json", "reports/node_validation.json"]
+}

@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Regenerate H2D reports and bind them to the current candidate and immutable contract."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+from evidence_integrity import EvidenceError, matrix_keys, sha256_bytes, sha256_file, verify_contract
+
+
+SCRIPT = Path(__file__).resolve()
+
+
+def bounded_cwd(root: Path, value: str | None) -> Path:
+    candidate = (root / (value or ".")).resolve()
+    candidate.relative_to(root.resolve())
+    if not candidate.is_dir():
+        raise EvidenceError(f"command cwd is missing: {candidate}")
+    return candidate
+
+
+def run_checked(command: list[str], cwd: Path, env: dict[str, str]) -> None:
+    if not isinstance(command, list) or not command or any(not isinstance(item, str) or not item for item in command):
+        raise EvidenceError("contract command must be a non-empty string array")
+    subprocess.run(command, cwd=cwd, env=env, check=True)
+
+
+def fetch_bounded(url: str, timeout_seconds: float) -> bytes:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=min(2.0, timeout_seconds)) as response:
+                if 200 <= response.status < 400:
+                    return response.read(16 * 1024 * 1024)
+        except Exception as error:  # bounded polling with retained root symptom
+            last_error = error
+        time.sleep(0.25)
+    raise EvidenceError(f"candidate health check failed for {url}: {last_error}")
+
+
+def verify_lifecycle_environment(lifecycle: dict, env: dict[str, str]) -> None:
+    probes = {"node": ["node", "--version"], "npm": ["npm", "--version"]}
+    for name, expected in (lifecycle.get("toolchain") or {}).items():
+        if name not in probes:
+            raise EvidenceError(f"unsupported toolchain probe {name!r}; supported: {sorted(probes)}")
+        actual = subprocess.run(probes[name], check=True, capture_output=True, text=True).stdout.strip()
+        if actual != expected:
+            raise EvidenceError(f"toolchain {name} changed: expected {expected!r}, got {actual!r}")
+    for name, expected in (lifecycle.get("public_env_sha256") or {}).items():
+        if name not in env:
+            raise EvidenceError(f"pinned public build environment variable is missing: {name}")
+        actual = sha256_bytes(env[name].encode("utf-8"))
+        if actual != expected:
+            raise EvidenceError(f"public build environment variable changed: {name}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--contract", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--no-final-legacy-gate", action="store_true", help="Diagnostic only: generate current evidence but do not claim final pass")
+    args = parser.parse_args()
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    contract_path = args.contract.resolve()
+    contract_path.relative_to(output)
+    verified = verify_contract(contract_path, output)
+    contract = verified["contract"]
+    before = verified["closure"]["digest"]
+    expected_matrix = matrix_keys(contract)
+    commands = contract.get("current_commands") or []
+    expected_reports = contract.get("expected_reports") or []
+    if not commands or not expected_reports:
+        raise EvidenceError("contract must pin non-empty current_commands and expected_reports")
+    env = os.environ.copy()
+    env.update({
+        "H2D_OUTPUT": str(output), "H2D_CONTRACT": str(contract_path),
+        "H2D_MATRIX_KEYS": json.dumps(expected_matrix),
+    })
+    candidate_root = verified["candidate_root"]
+    lifecycle = (contract.get("candidate") or {}).get("lifecycle") or {}
+    server: subprocess.Popen[str] | None = None
+    try:
+        if lifecycle:
+            verify_lifecycle_environment(lifecycle, env)
+        build = lifecycle.get("build")
+        if build:
+            run_checked(build, bounded_cwd(candidate_root, lifecycle.get("cwd")), env)
+        start = lifecycle.get("start")
+        if start:
+            if not isinstance(start, list) or not start:
+                raise EvidenceError("candidate lifecycle start must be a non-empty array")
+            server = subprocess.Popen(start, cwd=bounded_cwd(candidate_root, lifecycle.get("cwd")), env=env, text=True)
+            health = lifecycle.get("health_url")
+            if not isinstance(health, str) or not health:
+                raise EvidenceError("managed candidate lifecycle needs health_url")
+            fetch_bounded(health, float(lifecycle.get("health_timeout_seconds", 30)))
+            identity = fetch_bounded(lifecycle["build_identity_url"], float(lifecycle.get("health_timeout_seconds", 30)))
+            if sha256_bytes(identity) != lifecycle["build_identity_sha256"]:
+                raise EvidenceError("managed candidate served a stale or different build identity")
+        for command in commands:
+            run_checked(command, candidate_root, env)
+    finally:
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=float(lifecycle.get("teardown_timeout_seconds", 10)))
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait(timeout=5)
+        teardown = lifecycle.get("teardown") if lifecycle else None
+        if teardown:
+            run_checked(teardown, bounded_cwd(candidate_root, lifecycle.get("cwd")), env)
+    after_verified = verify_contract(contract_path, output)
+    after = after_verified["closure"]["digest"]
+    if before != after:
+        raise EvidenceError("candidate changed while current gates were running")
+    coverage_path = output / "reports" / "matrix_coverage.json"
+    if not coverage_path.is_file():
+        raise EvidenceError("current commands did not generate reports/matrix_coverage.json")
+    coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
+    completed = sorted(coverage.get("matrix_completed") or [])
+    if coverage.get("result") != "pass" or completed != expected_matrix:
+        raise EvidenceError("matrix coverage report is non-pass or incomplete")
+    report_entries = []
+    for value in expected_reports:
+        report = (output / value).resolve()
+        report.relative_to(output)
+        if not report.is_file() or report.stat().st_size == 0:
+            raise EvidenceError(f"expected current report is missing: {value}")
+        report_entries.append({"path": report.relative_to(output).as_posix(), "sha256": sha256_file(report)})
+    if "reports/matrix_coverage.json" not in {item["path"] for item in report_entries}:
+        report_entries.append({"path": "reports/matrix_coverage.json", "sha256": sha256_file(coverage_path)})
+    evidence = {
+        "schema_version": "2.0", "result": "pass", "generated_at": datetime.now(timezone.utc).isoformat(),
+        "contract_path": contract_path.relative_to(output).as_posix(),
+        "contract_sha256": sha256_file(contract_path), "runner_sha256": sha256_file(SCRIPT),
+        "candidate_digest_before": before, "candidate_digest_after": after,
+        "matrix_completed": completed, "reports": sorted(report_entries, key=lambda item: item["path"]),
+    }
+    evidence_path = output / "reports" / "current_evidence.json"
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(evidence, indent=2, ensure_ascii=False), encoding="utf-8")
+    if args.no_final_legacy_gate:
+        print(f"result=diagnostic-current evidence={evidence_path}")
+        return 3
+    from run_all_gates import check_output
+    classification = contract.get("classification") or {}
+    result = check_output(
+        output,
+        "true" if classification.get("behavior_required") else "false",
+        "true" if classification.get("liveness_required") else "false",
+        False,
+    )
+    final_path = output / "reports" / "validation_run.json"
+    final_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"result={result['result']} matrix={len(completed)} evidence={evidence_path}")
+    return 0 if result["result"] == "pass" else 2
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (EvidenceError, subprocess.CalledProcessError, ValueError) as error:
+        print(f"current gates blocked: {error}", file=sys.stderr)
+        raise SystemExit(2)

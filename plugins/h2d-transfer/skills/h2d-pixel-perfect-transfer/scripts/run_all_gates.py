@@ -11,6 +11,8 @@ try:
 except Exception:  # pragma: no cover
     jsonschema = None
 
+from evidence_integrity import EvidenceError, verify_current_evidence
+
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_BY_TEMPLATE = {
     'source_intake_template.json':'source_intake.schema.json',
@@ -47,6 +49,9 @@ SCHEMA_BY_TEMPLATE = {
     'validation_run_template.json':'validation_run.schema.json',
     'font_manifest_template.json':'font_manifest.schema.json',
     'asset_provenance_template.json':'asset_provenance.schema.json',
+    'transfer_contract_template.json':'transfer_contract.schema.json',
+    'reference_bundle_template.json':'reference_bundle.schema.json',
+    'current_evidence_template.json':'current_evidence.schema.json',
 }
 
 
@@ -189,6 +194,19 @@ def add_font_consistency_check(checks: list[dict[str, str]], node_data: Any|None
     checks.append({'name': 'font_manifest_matches_measurement', 'result': 'pass', 'message': f'font_manifest.result={declared!r} consistent with {len(warnings)} measured family warning(s)'})
 
 
+def add_font_approval_check(checks: list[dict[str, str]], font_data: Any|None, current_verified: Any|None) -> None:
+    if not isinstance(font_data, dict) or font_data.get('result') != 'font-substituted':
+        checks.append({'name': 'font_substitution_owner_approval', 'result': 'pass', 'message': 'no font substitution declared'})
+        return
+    approvals = current_verified['contract'].get('approvals') if current_verified else []
+    approved = any(record.get('approved') and 'font.substitutions' in (record.get('scope') or []) for record in (approvals or []))
+    checks.append({
+        'name': 'font_substitution_owner_approval',
+        'result': 'pass' if approved else 'fail',
+        'message': 'externally verified contract approval covers font.substitutions' if approved else 'font-substituted requires an externally verified contract approval scoped to font.substitutions',
+    })
+
+
 def infer_behavior_required(out: Path, explicit: str) -> bool:
     if explicit in ('true','yes','1'): return True
     if explicit in ('false','no','0'): return False
@@ -215,8 +233,21 @@ def infer_liveness_required(out: Path, explicit: str) -> bool:
 
 def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: str='auto', accept_changed_source: bool=False) -> dict[str, Any]:
     checks=[]; issues=[]; reports=out/'reports'
-    behavior_required=infer_behavior_required(out, behavior_required_arg)
-    liveness_required=infer_liveness_required(out, liveness_required_arg)
+    current_verified = None
+    try:
+        current_verified = verify_current_evidence(reports/'current_evidence.json')
+        checks.append({'name':'current_evidence.json','result':'pass','message':'current candidate, contract, reference and complete matrix verified'})
+    except (EvidenceError, OSError, ValueError, json.JSONDecodeError) as error:
+        checks.append({'name':'current_evidence.json','result':'fail','message':str(error)[:500]})
+    if current_verified:
+        classification = current_verified['contract'].get('classification') or {}
+        behavior_required = bool(classification.get('behavior_required'))
+        liveness_required = bool(classification.get('liveness_required'))
+    else:
+        # Preserve diagnostic detail for old outputs, but never allow it to
+        # compensate for a missing current-evidence pass above.
+        behavior_required=infer_behavior_required(out, behavior_required_arg)
+        liveness_required=infer_liveness_required(out, liveness_required_arg)
     diff_allowed={'pass','changed-source'} if accept_changed_source else {'pass'}
     required=[
         ('source_intake.json','source_intake.schema.json',None),
@@ -273,6 +304,7 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         if fn == 'node_validation.json': node_data = d
         if fn == 'font_manifest.json': font_data = d
     add_font_consistency_check(checks, node_data, font_data)
+    add_font_approval_check(checks, font_data, current_verified)
     add_h2d_unpack_strict_checks(checks, unpack_data)
     add_live_comparison_strict_check(checks, diff_data, accept_changed_source)
     add_liveness_strict_check(checks, liveness_data, liveness_required)
