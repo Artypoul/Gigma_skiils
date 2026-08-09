@@ -12,7 +12,7 @@ function main() {
   for (const component of inventory.components || []) {
     const base = { component_id: component.component_id, selector: component.selector, frame_path: component.frame_path || 'main', criticality: component.criticality || 'critical' };
     const prerequisite = component.prerequisite_sequence || [];
-    const push = (suffix, sequence, expectedTransition = false, expected = null) => interactions.push({ ...base, interaction_id: `${component.component_id}:${suffix}`, sequence: [...prerequisite, ...sequence], expected_transition: expectedTransition, expected });
+    const push = (suffix, sequence, expectedTransition = false, expected = null) => interactions.push({ ...base, interaction_id: `${component.component_id}:${suffix}`, prerequisite_count: prerequisite.length, sequence: [...prerequisite, ...sequence], expected_transition: expectedTransition, expected });
     const events = new Set(component.listeners || []);
     if (component.kind === 'disclosure') {
       push('open-click', [action('click', component.selector)], true, 'opened');

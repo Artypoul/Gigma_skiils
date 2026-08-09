@@ -80,13 +80,20 @@ async function main() {
     await page.goto(toUrl(url), { waitUntil: 'networkidle' });
     const primarySelector = candidateSelector(interaction.selector, interaction.component_id);
     if (!primarySelector) throw new Error(`candidate mapping is missing for ${interaction.component_id}`);
-    const before = await semanticState(page, primarySelector); const errors = []; const actionNetworkStart = network.length;
+    const errors = []; const sequence = interaction.sequence || [{ action: interaction.action, selector: interaction.selector }];
+    const prerequisiteCount = Number(interaction.prerequisite_count || 0);
+    if (!Number.isInteger(prerequisiteCount) || prerequisiteCount < 0 || prerequisiteCount > sequence.length) throw new Error(`invalid prerequisite_count for ${interaction.interaction_id}`);
+    const replay = async (steps, observedIntents) => {
+      for (const step of steps) {
+        const resolved = candidateSelector(step.selector, step.selector === interaction.selector ? interaction.component_id : null);
+        try { if (!resolved) throw new Error(`candidate mapping is missing for step ${step.selector}`); await perform(page, interaction, { ...step, selector: resolved }, observedIntents); await page.waitForTimeout(Number(arg('settle-ms', '250'))); }
+        catch (error) { errors.push({ action: step.action, message: String(error.message || error).slice(0,500) }); break; }
+      }
+    };
+    await replay(sequence.slice(0, prerequisiteCount), []);
+    const before = await semanticState(page, primarySelector); const actionNetworkStart = network.length;
     const actionTransportStart = await page.evaluate(() => (window.__h2dBlockedTransports || []).length);
-    for (const step of interaction.sequence || [{ action: interaction.action, selector: interaction.selector }]) {
-      const resolved = candidateSelector(step.selector, step.selector === interaction.selector ? interaction.component_id : null);
-      try { if (!resolved) throw new Error(`candidate mapping is missing for step ${step.selector}`); await perform(page, interaction, { ...step, selector: resolved }, intents); await page.waitForTimeout(Number(arg('settle-ms', '250'))); }
-      catch (error) { errors.push({ action: step.action, message: String(error.message || error).slice(0,500) }); break; }
-    }
+    if (!errors.length) await replay(sequence.slice(prerequisiteCount), intents);
     const after = await semanticState(page, primarySelector);
     const shot = `${side}_${interaction.interaction_id.replace(/[^a-z0-9_.-]/gi, '_')}.png`; const absolute = path.join(screenshotDir, shot); const buffer = await page.screenshot({ path: absolute, fullPage: false });
     const beforeComparable = JSON.stringify({ ...before, accessibility_sha256_source: undefined }); const afterComparable = JSON.stringify({ ...after, accessibility_sha256_source: undefined });
@@ -97,7 +104,7 @@ async function main() {
     if (interaction.expected_transition && !changed) errors.push({ action: 'expected-transition', message: 'declared transition produced no observed state, intent, request, or transport outcome' });
     const { accessibility_sha256_source: beforeAccessibility, ...beforePublic } = before;
     const { accessibility_sha256_source: afterAccessibility, ...afterPublic } = after;
-    traces.push({ side, interaction_id: interaction.interaction_id, component_id: interaction.component_id, selector: interaction.selector, resolved_selector: primarySelector, frame_path: interaction.frame_path || 'main', sequence: interaction.sequence, expected_transition: Boolean(interaction.expected_transition), criticality: interaction.criticality || 'critical', before: { ...beforePublic, accessibility_sha256: sha(beforeAccessibility || '') }, after: { ...afterPublic, accessibility_sha256: sha(afterAccessibility || '') }, intents: intents.map(item => item.destination ? { ...item, destination: redactUrl(item.destination) } : item), screenshot: path.join('screenshots','behavior',shot).replace(/\\/g,'/'), screenshot_sha256: sha(buffer), errors, runtime_errors: runtimeErrors, blocked_requests: actionNetwork.filter(row => row.action === 'blocked'), blocked_transports: actionTransports });
+    traces.push({ side, interaction_id: interaction.interaction_id, component_id: interaction.component_id, selector: interaction.selector, resolved_selector: primarySelector, frame_path: interaction.frame_path || 'main', prerequisite_count: prerequisiteCount, sequence, expected_transition: Boolean(interaction.expected_transition), criticality: interaction.criticality || 'critical', before: { ...beforePublic, accessibility_sha256: sha(beforeAccessibility || '') }, after: { ...afterPublic, accessibility_sha256: sha(afterAccessibility || '') }, intents: intents.map(item => item.destination ? { ...item, destination: redactUrl(item.destination) } : item), screenshot: path.join('screenshots','behavior',shot).replace(/\\/g,'/'), screenshot_sha256: sha(buffer), errors, runtime_errors: runtimeErrors, blocked_requests: actionNetwork.filter(row => row.action === 'blocked'), blocked_transports: actionTransports });
     await context.close();
   }
   await browser.close(); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, traces.map(row => JSON.stringify(row)).join('\n') + '\n');

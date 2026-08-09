@@ -30,6 +30,7 @@ class BehaviorAndLivenessTests(unittest.TestCase):
             subprocess.run(["node", str(SKILL / "scripts" / "behavior_matrix_generate.js"), "--inventory", str(inventory), "--out", str(out)], check=True)
             row = json.loads(out.read_text(encoding="utf-8"))["interactions"][0]
             self.assertEqual(row["sequence"][0], {"action":"click","selector":"#open"})
+            self.assertEqual(row["prerequisite_count"], 1)
 
     def test_behavior_comparison_checks_pre_interaction_semantics(self) -> None:
         sys.path.insert(0, str(SKILL / "scripts"))
