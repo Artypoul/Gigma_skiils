@@ -225,6 +225,7 @@ function Read-State {
             $state.gates.publish = if ($state.task -and $state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
         }
         if ($state -and -not $state.ContainsKey('clarificationNagged')) { $state.clarificationNagged = $false }
+        if ($state -and -not $state.ContainsKey('postTerminalActivity')) { $state.postTerminalActivity = $false }
         if ($state -and $state.task) {
             if (-not $state.task.ContainsKey('writeScopePaths')) { $state.task.writeScopePaths = @($state.task.scopePaths) }
             if (-not $state.task.ContainsKey('workflowStage')) { $state.task.workflowStage = 'none' }
@@ -279,6 +280,7 @@ function New-State {
         promptCount = 0
         clarificationAsked = $false
         clarificationNagged = $false
+        postTerminalActivity = $false
         clarified = $false
         clarificationSatisfiedBy = $null
         specificationBasisHash = $null
@@ -429,6 +431,17 @@ function New-PreToolAsk {
     }
 }
 
+function Test-IsDestructiveWriteCommand {
+    # Рекурсивные удаления и переписывание истории Git — деструктивны даже как «локальный write».
+    param([AllowNull()][string]$Command)
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    $gitHistory = '(?i)\bgit\s+(merge|rebase)\b'
+    $posixRecursive = '(?i)(?:^|[;&|]\s*|\s)rm(?:\.exe)?\s+[^\r\n]*-[a-z]*r'
+    $psRecursive = '(?i)\bRemove-Item\b[^\r\n]*(-Recurse|-Force)'
+    $winRecursive = '(?i)\b(rmdir|rd)\b[^\r\n]*/s|\bdel\b[^\r\n]*/[sq]'
+    $Command -match ($gitHistory + '|' + $posixRecursive + '|' + $psRecursive + '|' + $winRecursive)
+}
+
 function Get-AdvisoryHardDeny {
     # Даже без Task Lock производственные/деструктивные действия остаются заблокированными.
     param([Parameter(Mandatory)][hashtable]$Classification)
@@ -437,6 +450,9 @@ function Get-AdvisoryHardDeny {
     }
     if ($Classification.kind -eq 'external-write') {
         return New-PreToolDeny 'Advisory mode: external writes are still blocked without a production Task Lock, exact Entity Lock, and fresh confirmation.'
+    }
+    if ($Classification.kind -eq 'write' -and (Test-IsDestructiveWriteCommand ([string]$Classification.command))) {
+        return New-PreToolDeny 'Advisory mode: destructive shell mutations (git merge/rebase, recursive/forced deletes) are blocked without a Task Lock. Use scoped file tools or create a Task Lock first.'
     }
     $null
 }
@@ -949,15 +965,20 @@ function Get-ToolSuccess {
 function Invoke-SessionStart {
     param([Parameter(Mandatory)][hashtable]$HookData, [Parameter(Mandatory)][string]$Root)
     $id = [string]$HookData.session_id
+    $corruptBox = @{ value = $false }
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
+        if (-not $state -and (Test-Path -LiteralPath $path)) { $corruptBox.value = $true; return }
         if (-not $state) { $state = New-State $HookData }
         if ($HookData.ContainsKey('turn_id')) { $state.turnId = [string]$HookData.turn_id }
         $state.model = [string]$HookData.model
         $state.cwd = [string]$HookData.cwd
         Write-State -Path $path -State $state
         Set-CurrentSessionIndex -Root $Root -State $state
+    }
+    if ($corruptBox.value) {
+        return @{ systemMessage = 'First-pass quality: the session state file exists but cannot be read; failing closed. Repair or remove the corrupt state file (tools stay denied until then).' }
     }
     @{
         hookSpecificOutput = @{
@@ -975,6 +996,10 @@ function Invoke-UserPromptSubmit {
     Invoke-WithSessionLock -Id $id -Operation {
         $path = Get-StatePath -Root $Root -Id $id
         $state = Read-State $path
+        if (-not $state -and (Test-Path -LiteralPath $path)) {
+            $outputBox.value = @{ systemMessage = 'First-pass quality: the session state file exists but cannot be read; failing closed. Repair or remove the corrupt state file (tools stay denied until then).' }
+            return
+        }
         if (-not $state) { $state = New-State $HookData }
         if ([string]$state.status -in @('ready', 'partial', 'blocked', 'unknown')) {
             $previous = $state
@@ -1267,14 +1292,18 @@ function Invoke-PostToolUse {
         if ($classification.kind -in $mutationKinds) {
             $state.tools.writes = [int]$state.tools.writes + 1
             if (-not $success) { $state.failedWritePending = $true }
+            if ([string]$state.status -ne 'active') { $state.postTerminalActivity = $true }
         }
         if ($classification.kind -in @('write', 'unclassified-shell', 'external-write', 'production-shell')) {
             $state.lastWriteToolUseId = [string]$HookData.tool_use_id
             $state.lastWriteAt = Get-UtcNow
-            $state.gates.publish = if ($state.task -and $state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
-            $state.gates.acceptance = 'pending'
-            $state.gates.selfReview = 'pending'
-            if ($state.task -and $state.task.reviewRequired) { $state.gates.review = 'pending' }
+            if ([string]$state.status -eq 'active') {
+                # Гейты пересбрасываются только у живого замка; advisory-активность после terminal его не трогает.
+                $state.gates.publish = if ($state.task -and $state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }
+                $state.gates.acceptance = 'pending'
+                $state.gates.selfReview = 'pending'
+                if ($state.task -and $state.task.reviewRequired) { $state.gates.review = 'pending' }
+            }
             if ($success -and $toolName -match '^(apply_patch|Edit|Write)$') {
                 $workdir = Get-ToolWorkdir -ToolInput $HookData.tool_input -Fallback ([string]$HookData.cwd)
                 foreach ($file in @(Get-ApplyPatchFiles -ToolInput $HookData.tool_input -Cwd $workdir)) {
@@ -1282,7 +1311,7 @@ function Invoke-PostToolUse {
                 }
             }
         }
-        if ($success -and $classification.kind -eq 'push' -and $state.task -and $state.task.reviewRequired) {
+        if ($success -and [string]$state.status -eq 'active' -and $classification.kind -eq 'push' -and $state.task -and $state.task.reviewRequired) {
             $state.gates.review = 'pending'
         }
         if ($classification.kind -eq 'delegation' -and $state.delegation) {
@@ -1431,7 +1460,9 @@ function Invoke-Stop {
         }
         if (-not $state.task) { return }
         if ($state.status -eq 'active') { $outputBox.value = New-StopBlock 'Set an explicit terminal quality status: ready, partial, blocked, or unknown. Active is not a final status.'; return }
-        if ($state.status -eq 'ready') {
+        if ($state.status -eq 'ready' -and -not $state.postTerminalActivity) {
+            # Пост-терминальная advisory-активность не ре-валидирует уже закрытый замок:
+            # ready был проверен в SetStatus; строгая повторная проверка касается только strict-хода.
             $problems = @(Get-ReadinessProblems $state)
             if ($problems.Count -gt 0) { $outputBox.value = New-StopBlock ('Ready is not supported by evidence: ' + ($problems -join ' ')); return }
         }

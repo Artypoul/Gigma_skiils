@@ -370,6 +370,10 @@ try {
     Assert-True ($null -eq (Invoke-HookCase $preTest)) 'After a terminal status tools fall back to advisory mode.'
     $terminalProd = New-BaseEvent $session 't3' 'PreToolUse'; $terminalProd.tool_name = 'Bash'; $terminalProd.tool_input = @{ command = 'gh pr merge 7 --merge'; workdir = $workspace }; $terminalProd.tool_use_id = 'terminal-prod'
     Assert-True ((Invoke-HookCase $terminalProd).hookSpecificOutput.permissionDecision -eq 'deny') 'Production shell must stay blocked in advisory mode after terminal status.'
+    $termWrite = New-BaseEvent $session 't3' 'PostToolUse'; $termWrite.tool_name = 'apply_patch'; $termWrite.tool_input = @{ patch = 'noop' }; $termWrite.tool_response = @{ exit_code = 0 }; $termWrite.tool_use_id = 'terminal-write'
+    $null = Invoke-HookCase $termWrite
+    $termStop = New-BaseEvent $session 't3' 'Stop'; $termStop.stop_hook_active = $false; $termStop.last_assistant_message = 'Дописал заметку после готовности.'
+    Assert-True ($null -eq (Invoke-HookCase $termStop)) 'Post-terminal advisory writes must not re-trigger strict readiness blocks.'
 
     $incomplete = 'contract-incomplete'
     Initialize-ClarifiedSession $incomplete
@@ -877,8 +881,17 @@ try {
     Assert-True ((Invoke-HookCase $corruptPre).hookSpecificOutput.permissionDecision -eq 'deny') 'Corrupt state must fail closed, not fall back to advisory.'
     $corruptStop = New-BaseEvent 'contract-corrupt-state' 't1' 'Stop'; $corruptStop.stop_hook_active = $false; $corruptStop.last_assistant_message = 'Готово.'
     Assert-True ((Invoke-HookCase $corruptStop).decision -eq 'block') 'Stop must also fail closed on a corrupt state file.'
+    $corruptPrompt = New-BaseEvent 'contract-corrupt-state' 't2' 'UserPromptSubmit'; $corruptPrompt.prompt = 'Продолжи работу.'
+    $corruptUps = Invoke-HookCase $corruptPrompt
+    Assert-True ([string]$corruptUps.systemMessage -match 'cannot be read') 'UserPromptSubmit must not recreate state over a corrupt file.'
+    $corruptPre2 = New-BaseEvent 'contract-corrupt-state' 't2' 'PreToolUse'; $corruptPre2.tool_name = 'Bash'; $corruptPre2.tool_input = @{ command = 'Get-Content README.md'; workdir = $workspace }; $corruptPre2.tool_use_id = 'corrupt-read-2'
+    Assert-True ((Invoke-HookCase $corruptPre2).hookSpecificOutput.permissionDecision -eq 'deny') 'Tools must stay denied after a prompt on a corrupt state.'
     $advisoryChained = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryChained.tool_name = 'Bash'; $advisoryChained.tool_input = @{ command = 'git status; python -c "import urllib.request"'; workdir = $workspace }; $advisoryChained.tool_use_id = 'advisory-chained'
     Assert-True ((Invoke-HookCase $advisoryChained).hookSpecificOutput.permissionDecision -eq 'ask') 'A read-prefixed chained command must escalate to ask in advisory mode.'
+    $advisoryMerge = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryMerge.tool_name = 'Bash'; $advisoryMerge.tool_input = @{ command = 'git merge feature-x'; workdir = $workspace }; $advisoryMerge.tool_use_id = 'advisory-merge'
+    Assert-True ((Invoke-HookCase $advisoryMerge).hookSpecificOutput.permissionDecision -eq 'deny') 'git merge must stay denied in advisory mode.'
+    $advisoryRmrf = New-BaseEvent $advisory 't1' 'PreToolUse'; $advisoryRmrf.tool_name = 'Bash'; $advisoryRmrf.tool_input = @{ command = 'rm -rf build'; workdir = $workspace }; $advisoryRmrf.tool_use_id = 'advisory-rmrf'
+    Assert-True ((Invoke-HookCase $advisoryRmrf).hookSpecificOutput.permissionDecision -eq 'deny') 'Recursive delete must stay denied in advisory mode.'
     $advisoryStop = New-BaseEvent $advisory 't1' 'Stop'; $advisoryStop.stop_hook_active = $false; $advisoryStop.last_assistant_message = 'Готово.'
     Assert-True ($null -eq (Invoke-HookCase $advisoryStop)) 'Stop must not block when state is missing.'
 

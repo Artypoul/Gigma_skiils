@@ -27,6 +27,14 @@ In a plugin runtime, use the real plugin root. In the Codex agent shell the plug
 pwsh -NoProfile -File "$PLUGIN_ROOT/skills/first-pass-quality-gate/scripts/quality-control.ps1" -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -WriteScope "<absolute writable scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -WorkflowStage none -AllowedActions "read~~write~~execute~~validate" -DoneWhen "criterion 1~~criterion 2"
 ```
 
+In the Codex agent shell the plugin env variables are usually unset too, so the `$PLUGIN_ROOT` example above will NOT resolve there. Call the controller by its literal absolute path — the same plugin root this skill was loaded from:
+
+```powershell
+& '<plugin-root>/skills/first-pass-quality-gate/scripts/quality-control.ps1' -Action StartTask -Outcome "<expected result>" -Scope "<absolute scope>" -Mode local-change -Risk medium -CompletionPolicy deliver-current-state -Workflow none -DoneWhen "criterion 1"
+```
+
+The hook accepts the literal form only when the path points exactly at this plugin's controller.
+
 In a standalone `.codex/skills` mirror there is no plugin-root environment variable. Resolve the absolute directory containing this loaded `SKILL.md` from the skill catalog, and invoke its controller directly. Replace the placeholder with that existing directory; do not create an alias, symlink, copy, or alternate route:
 
 ```powershell
