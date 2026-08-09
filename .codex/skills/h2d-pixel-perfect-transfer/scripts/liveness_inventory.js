@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Detect motion without creating canvas contexts or silently truncating the DOM. */
-const fs = require('fs'); const path = require('path');
+const fs = require('fs'); const path = require('path'); const crypto = require('crypto');
 const { launchChromium, contextOptions, installNetworkSandbox, installRuntimeInstrumentation } = require('./browser');
 function arg(name, fallback = null) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : fallback; }
 function toUrl(value) { if (/^https?:\/\//.test(value) || /^file:/.test(value)) return value; return 'file://' + path.resolve(value).replace(/\\/g, '/'); }
@@ -32,7 +32,8 @@ async function main() {
   await browser.close();
   const unobserved = data.surfaces.filter(row => row.kind === 'canvas-unobserved');
   const result = data.truncated || unobserved.length ? 'fail' : (data.surfaces.length ? 'pass' : 'not-tested');
-  const report = { result, coverage_complete: result !== 'fail', truncated:data.truncated, discovered_elements:data.discovered, liveness_required:data.surfaces.length>0, url, viewports:[viewport.width], profile_id:profile.id, raf:data.raf, surfaces:data.surfaces, issues:unobserved.map(row=>({type:'canvas-context-unobserved',surface_id:row.surface_id})) };
+  const generator_sha256=crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex');
+  const report = { result, coverage_complete: result !== 'fail', generator_sha256, truncated:data.truncated, discovered_elements:data.discovered, liveness_required:data.surfaces.length>0, url, viewports:[viewport.width], profile_id:profile.id, raf:data.raf, surfaces:data.surfaces, issues:unobserved.map(row=>({type:'canvas-context-unobserved',surface_id:row.surface_id})) };
   fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));
   const hasWebgl=data.surfaces.some(row=>row.kind.includes('webgl'));fs.writeFileSync(path.join(path.dirname(out),'webgl_capture_report.json'),JSON.stringify({result:unobserved.length?'fail':(hasWebgl?'partial':'not-present'),contexts:data.surfaces.filter(row=>['canvas-2d','webgl','webgl2'].includes(row.kind)).map(row=>({canvas_selector:row.selector,context_type:row.kind==='canvas-2d'?'2d':row.kind,frame_hashes:[],pixels_change_over_time:false,non_blank_samples:0})),issues:[...report.issues,...(hasWebgl?[{type:'webgl-runtime-capture-required'}]:[])]},null,2));
   console.log(`result=${result} surfaces=${data.surfaces.length} truncated=${data.truncated} out=${out}`);if(result==='fail')process.exitCode=2;

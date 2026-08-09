@@ -220,6 +220,81 @@ def required_dynamic_roles(classification: dict[str, Any]) -> set[str]:
     return roles
 
 
+DYNAMIC_ROLE_GENERATORS = {
+    "behavior-inventory": "behavior_inventory.js",
+    "interaction-matrix": "behavior_matrix_generate.js",
+    "event-listener-inventory": "behavior_inventory.js",
+    "behavior-state-targets": "behavior_build_state_targets.py",
+    "original-behavior-traces": "behavior_capture_trace.js",
+    "behavior-state-screenshot": "behavior_capture_trace.js",
+    "liveness-inventory": "liveness_inventory.js",
+    "original-animation-traces": "liveness_capture_trace.js",
+    "liveness-screenshot": "liveness_capture_trace.js",
+    "webgl-capture": "webgl_capture.js",
+}
+
+
+def validate_dynamic_artifact_source(kind: str, source: Path) -> dict[str, Any]:
+    """Parse a role-specific artifact and bind it to the bundled generator."""
+    generator_name = DYNAMIC_ROLE_GENERATORS.get(kind)
+    if not generator_name:
+        raise EvidenceError(f"unsupported dynamic artifact role: {kind}")
+    generator = Path(__file__).resolve().parent / generator_name
+    expected_generator = sha256_file(generator)
+    evidence: dict[str, Any] = {"generator_sha256": expected_generator, "referenced_screenshots": set()}
+    if kind in {"behavior-state-screenshot", "liveness-screenshot"}:
+        data = source.read_bytes()
+        if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR" or int.from_bytes(data[16:20], "big") < 1 or int.from_bytes(data[20:24], "big") < 1:
+            raise EvidenceError(f"{kind} must be a non-empty PNG with a valid IHDR: {source}")
+        return evidence
+    if kind in {"original-behavior-traces", "original-animation-traces"}:
+        try:
+            rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise EvidenceError(f"{kind} must be valid JSONL: {source}") from exc
+        if not rows or any(not isinstance(row, dict) or row.get("generator_sha256") != expected_generator or row.get("side") != "original" or row.get("errors") or row.get("runtime_errors") for row in rows):
+            raise EvidenceError(f"{kind} must contain generated, error-free original traces")
+        if kind == "original-behavior-traces":
+            if any(not row.get("interaction_id") or not isinstance(row.get("before"), dict) or not isinstance(row.get("after"), dict) or not is_sha256(row.get("screenshot_sha256")) for row in rows):
+                raise EvidenceError("original behavior traces are incomplete")
+            evidence["referenced_screenshots"] = {row["screenshot_sha256"] for row in rows}
+        else:
+            samples = [sample for row in rows for sample in (row.get("samples") or [])]
+            if any(not row.get("trace_id") or len(row.get("samples") or []) < 3 for row in rows) or any(not is_sha256(sample.get("frame_hash")) for sample in samples):
+                raise EvidenceError("original animation traces are incomplete")
+            evidence["referenced_screenshots"] = {sample["frame_hash"] for sample in samples}
+        return evidence
+    try:
+        report = json.loads(source.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"{kind} must be valid JSON: {source}") from exc
+    if not isinstance(report, dict) or report.get("generator_sha256") != expected_generator:
+        raise EvidenceError(f"{kind} is missing trusted bundled-generator provenance")
+    if kind == "behavior-inventory" and not (report.get("result") == "pass" and report.get("coverage_complete") is True and isinstance(report.get("components"), list) and report["components"]):
+        raise EvidenceError("behavior inventory is incomplete")
+    if kind == "interaction-matrix" and not (report.get("result") == "pass" and report.get("coverage_complete") is True and isinstance(report.get("interactions"), list) and report["interactions"]):
+        raise EvidenceError("interaction matrix is incomplete")
+    if kind == "event-listener-inventory" and not (report.get("result") == "pass" and report.get("coverage_complete") is True and isinstance(report.get("listeners"), list)):
+        raise EvidenceError("event listener inventory is incomplete")
+    if kind == "behavior-state-targets" and not (report.get("result") == "pass" and isinstance(report.get("targets"), list) and report["targets"]):
+        raise EvidenceError("behavior state targets are incomplete")
+    if kind == "liveness-inventory" and not (report.get("result") == "pass" and report.get("coverage_complete") is True and isinstance(report.get("surfaces"), list) and report["surfaces"]):
+        raise EvidenceError("liveness inventory is incomplete")
+    if kind == "webgl-capture":
+        contexts = report.get("contexts") or []
+        if report.get("result") != "pass" or report.get("coverage_complete") is not True or not contexts or any(len(row.get("frame_hashes") or []) < 3 or int(row.get("non_blank_samples") or 0) < 1 for row in contexts if isinstance(row, dict)):
+            raise EvidenceError("WebGL capture is incomplete")
+    return evidence
+
+
+def validate_dynamic_artifact_links(validated: list[tuple[str, Path, dict[str, Any]]]) -> None:
+    for trace_kind, screenshot_kind in (("original-behavior-traces", "behavior-state-screenshot"), ("original-animation-traces", "liveness-screenshot")):
+        referenced = {value for kind, _, evidence in validated if kind == trace_kind for value in evidence.get("referenced_screenshots") or set()}
+        screenshots = {sha256_file(path) for kind, path, _ in validated if kind == screenshot_kind}
+        if referenced != screenshots:
+            raise EvidenceError(f"{screenshot_kind} files must exactly match screenshots referenced by {trace_kind}")
+
+
 def validate_dynamic_manifest(
     dynamic: dict[str, Any],
     classification: dict[str, Any],
@@ -244,6 +319,7 @@ def validate_dynamic_manifest(
     if sorted(dynamic.get("required_roles") or []) != sorted(required):
         raise EvidenceError("dynamic reference required roles differ from generated classification")
     seen: set[tuple[str, str]] = set()
+    validated: list[tuple[str, Path, dict[str, Any]]] = []
     for index, item in enumerate(artifacts):
         if not isinstance(item, dict):
             raise EvidenceError(f"dynamic artifact[{index}] must be an object")
@@ -265,6 +341,10 @@ def validate_dynamic_manifest(
             target = resolve_inside(artifact_base, path, f"dynamic artifact[{index}]")
             if not target.is_file() or target.stat().st_size == 0 or sha256_file(target) != item["sha256"]:
                 raise EvidenceError(f"dynamic artifact is missing, empty, or changed: {path}")
+            evidence = validate_dynamic_artifact_source(kind, target)
+            if item.get("generator_sha256") != evidence["generator_sha256"]:
+                raise EvidenceError(f"dynamic artifact[{index}] generator provenance differs")
+            validated.append((kind, target, evidence))
     for role in required:
         covered = {
             key
@@ -274,6 +354,8 @@ def validate_dynamic_manifest(
         }
         if covered != set(expected_matrix):
             raise EvidenceError(f"dynamic reference role {role} does not cover the complete matrix")
+    if artifact_base is not None:
+        validate_dynamic_artifact_links(validated)
 
 
 def matrix_keys(contract: dict[str, Any]) -> list[str]:

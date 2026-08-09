@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Build applicable action sequences; do not invent state transitions for every control. */
-const fs = require('fs'); const path = require('path');
+const fs = require('fs'); const path = require('path'); const crypto = require('crypto');
 function arg(name, fallback = null) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : fallback; }
 function action(kind, selector, value = null) { return { action: kind, selector, value }; }
 function main() {
@@ -39,7 +39,7 @@ function main() {
       push('tab-sequence', [action('focus', component.selector), action('tab', component.selector), action('shift-tab', component.selector)], false, 'focus-order');
     }
   }
-  const report = { result: interactions.length ? 'pass' : 'not-tested', coverage_complete: true, interactions };
+  const report = { result: interactions.length ? 'pass' : 'not-tested', coverage_complete: true, generator_sha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'), interactions };
   fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify(report, null, 2));
   console.log(`interactions=${interactions.length} out=${out}`);
 }

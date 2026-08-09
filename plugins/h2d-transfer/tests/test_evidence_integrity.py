@@ -192,6 +192,18 @@ class EvidenceIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(EvidenceError, "has no artifacts"):
             validate_dynamic_manifest(dynamic, classification, ["390x844@mobile"])
 
+    def test_dynamic_finalizer_rejects_role_labeled_binary_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); artifact = root / "fake.bin"; classification = root / "classification.json"; out = root / "dynamic.json"
+            artifact.write_bytes(b"x")
+            classification.write_text(json.dumps({"result":"pass","coverage_complete":True,"donor_identity":"sha256:" + "0" * 64,"matrix_keys":["390x844@mobile"],"behavior_required":True,"liveness_required":False}), encoding="utf-8")
+            command = [sys.executable, str(SKILL / "scripts" / "finalize_dynamic_reference.py"), "--classification", str(classification), "--out", str(out)]
+            for role in ["behavior-inventory","behavior-state-screenshot","behavior-state-targets","event-listener-inventory","interaction-matrix","original-behavior-traces"]:
+                command.extend(["--artifact", f"{role}@*={artifact}"])
+            completed = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("valid JSON", completed.stdout)
+
     def test_command_executable_resolution_is_bound_to_lifecycle_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             lifecycle_cwd = Path(temp) / "candidate" / "app"

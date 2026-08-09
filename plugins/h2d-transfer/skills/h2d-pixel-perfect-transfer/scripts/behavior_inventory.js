@@ -114,9 +114,10 @@ async function main() {
   const unsupported = data.boundaries.some(item => ['cross-origin-frame','delegated-listener','delegated-property-handler'].includes(item.type));
   const complete = Boolean(classificationRow) && !unresolved.length && !truncated && !unsupported;
   const result = unresolved.length || truncated || unsupported ? 'fail' : (data.rows.length ? (complete ? 'pass' : 'partial') : 'not-tested');
-  const report = { result, coverage_complete: complete, reachable_states_complete: complete, classification_sha256: classificationPath ? sha(fs.readFileSync(classificationPath)) : null, truncated, url, viewports: [viewport.width], profile_id: profile.id, components: data.rows, boundaries: data.boundaries, issues: unresolved.map(row => ({ type: 'selector-not-unique', component_id: row.component_id, count: row.selector_count })), blocked_requests: network.filter(row => row.action === 'blocked').length };
+  const generator_sha256 = sha(fs.readFileSync(__filename));
+  const report = { result, coverage_complete: complete, reachable_states_complete: complete, generator_sha256, classification_sha256: classificationPath ? sha(fs.readFileSync(classificationPath)) : null, truncated, url, viewports: [viewport.width], profile_id: profile.id, components: data.rows, boundaries: data.boundaries, issues: unresolved.map(row => ({ type: 'selector-not-unique', component_id: row.component_id, count: row.selector_count })), blocked_requests: network.filter(row => row.action === 'blocked').length };
   fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify(report, null, 2));
-  fs.writeFileSync(path.join(path.dirname(out), 'event_listener_inventory.json'), JSON.stringify({ result, coverage_complete: report.coverage_complete, listeners: data.rows.map(row => ({ component_id: row.component_id, selector: row.selector, events: row.listeners })) }, null, 2));
+  fs.writeFileSync(path.join(path.dirname(out), 'event_listener_inventory.json'), JSON.stringify({ result, coverage_complete: report.coverage_complete, generator_sha256, listeners: data.rows.map(row => ({ component_id: row.component_id, selector: row.selector, events: row.listeners })) }, null, 2));
   console.log(`result=${result} components=${data.rows.length} boundaries=${data.boundaries.length} out=${out}`);
   if (result === 'fail') process.exitCode = 2;
 }

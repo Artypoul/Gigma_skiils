@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evidence_integrity import EvidenceError, canonical_json_sha256, required_dynamic_roles, sha256_file
+from evidence_integrity import EvidenceError, canonical_json_sha256, required_dynamic_roles, sha256_file, validate_dynamic_artifact_links, validate_dynamic_artifact_source
 
 
 SCRIPT = Path(__file__).resolve()
@@ -26,6 +26,7 @@ def main() -> int:
     if not matrix:
         raise EvidenceError("classification matrix is empty")
     artifacts = []
+    validated = []
     for raw in args.artifact:
         spec, separator, raw_path = raw.partition("=")
         kind, marker, matrix_key = spec.partition("@")
@@ -37,7 +38,10 @@ def main() -> int:
         source = Path(raw_path).resolve()
         if not source.is_file() or source.stat().st_size == 0:
             raise EvidenceError(f"dynamic artifact is missing or empty: {source}")
-        artifacts.append({"kind": kind, "path": source.name, "sha256": sha256_file(source), "matrix_keys": keys, "source_path": str(source)})
+        evidence = validate_dynamic_artifact_source(kind, source)
+        artifacts.append({"kind": kind, "path": source.name, "sha256": sha256_file(source), "generator_sha256": evidence["generator_sha256"], "matrix_keys": keys, "source_path": str(source)})
+        validated.append((kind, source, evidence))
+    validate_dynamic_artifact_links(validated)
     required = required_dynamic_roles(classification)
     for role in required:
         covered = {key for item in artifacts if item["kind"] == role for key in item["matrix_keys"]}
