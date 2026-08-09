@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evidence_integrity import EvidenceError, candidate_closure, load_json, sha256_file
+from evidence_integrity import EvidenceError, candidate_closure, command_executable_records, load_json, sha256_file, verify_contract
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +46,12 @@ def responsive_matrix(widths: list[int], heights: dict[str, int], breakpoints: l
     for width in decoded:
         rows[width] = {"width": width, "height": int(heights.get(str(width), default_height)), "kind": "decoded"}
     boundaries = sorted(set(int(value) for value in breakpoints if int(value) > 1))
+    if len(decoded) > 1:
+        if not boundaries:
+            raise EvidenceError("multiple decoded widths require a complete pinned --breakpoints list")
+        uncovered = [(left, right) for left, right in zip(decoded, decoded[1:]) if right - left > 2 and not any(left < point <= right for point in boundaries)]
+        if uncovered:
+            raise EvidenceError(f"breakpoints do not cover decoded intervals: {uncovered}")
     for point in boundaries:
         for width in (point - 1, point, point + 1):
             rows.setdefault(width, {"width": width, "height": int(heights.get(str(width), default_height)), "kind": "breakpoint-boundary"})
@@ -66,7 +72,7 @@ def main() -> int:
     parser.add_argument("--candidate-lifecycle", type=Path)
     parser.add_argument("--profiles", type=Path, required=True)
     parser.add_argument("--height-map", type=Path, required=True)
-    parser.add_argument("--breakpoints", default="")
+    parser.add_argument("--breakpoints", default="", help="Comma-separated donor breakpoint boundaries; mandatory and interval-complete when H2D has multiple decoded widths")
     parser.add_argument("--reference-bundle", type=Path, required=True)
     parser.add_argument("--sidecar", action="append", default=[], help="role=path")
     parser.add_argument("--approval", action="append", type=Path, default=[])
@@ -116,9 +122,15 @@ def main() -> int:
         if not isinstance(command, list) or not command or any(not isinstance(item, str) or not item for item in command):
             raise EvidenceError("--current-command must be a non-empty JSON string array")
         commands.append(command)
+    if not commands:
+        raise EvidenceError("at least one --current-command is required")
     lifecycle = load_json(args.candidate_lifecycle.resolve()) if args.candidate_lifecycle else None
     if args.candidate_mode == "managed-url" and not lifecycle:
         raise EvidenceError("managed-url candidate requires --candidate-lifecycle")
+    all_commands = list(commands)
+    for key in ("build", "start", "teardown"):
+        if lifecycle and lifecycle.get(key):
+            all_commands.append(lifecycle[key])
     contract = {
         "schema_version": "2.0", "created_at": datetime.now(timezone.utc).isoformat(),
         "workspace_root": str(workspace),
@@ -136,10 +148,12 @@ def main() -> int:
         "classification": bundle.get("classification") or {"behavior_required": False, "liveness_required": False, "coverage_complete": True},
         "reference_bundle": {"path": rel(contract_dir, bundle_path, "reference bundle"), "sha256": sha256_file(bundle_path)},
         "sidecars": sidecars, "approvals": approvals, "current_commands": commands,
+        "command_executables": command_executable_records(all_commands),
         "expected_reports": args.expected_report,
         "matrix_keys": expected_keys,
     }
     args.out.write_text(json.dumps(contract, indent=2, ensure_ascii=False), encoding="utf-8")
+    verify_contract(args.out, contract_dir.parent)
     print(f"result=pass viewports={len(matrix)} profiles={len(profiles)} matrix={len(expected_keys)} out={args.out}")
     return 0
 

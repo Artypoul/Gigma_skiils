@@ -15,5 +15,6 @@
   "sidecars": [],
   "approvals": [],
   "current_commands": [["python", "scripts/generate-current-evidence.py"]],
-  "expected_reports": ["reports/matrix_coverage.json", "reports/node_validation.json"]
+  "command_executables": [{"command": "python", "resolved_path": "/absolute/path/to/python", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}],
+  "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"]
 }

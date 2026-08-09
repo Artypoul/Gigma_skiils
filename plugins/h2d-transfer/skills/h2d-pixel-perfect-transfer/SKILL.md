@@ -63,10 +63,10 @@ Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder,
 
 Before implementation, freeze the runnable donor and finalize one contract. Do not type viewport lists from the filename or memory.
 
-1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, captures every explicit viewport/profile under a deny-by-default network sandbox, and binds visual and dynamic evidence to one donor identity. A live URL is not a frozen reference.
-2. `create_transfer_contract.py` decodes the `.h2d` again with the bundled decoder, derives all decoded widths plus breakpoint/interval probes, pins browser capabilities, candidate build inputs, sidecars, expected reports and gate commands.
+1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, hashes the transitive local resource closure, captures every explicit viewport/profile under a deny-by-default network sandbox, and runs the bundled reachable-state classifier. Visual, classification and dynamic evidence must share that donor identity. A live URL is not a frozen reference.
+2. `create_transfer_contract.py` decodes the `.h2d` again with the bundled decoder, derives all decoded widths plus breakpoint/interval probes, pins browser capabilities, candidate build inputs, sidecars, expected reports and gate commands. Multiple decoded widths require an interval-complete donor breakpoint list; a midpoint alone is insufficient.
 3. Every approved deviation/fallback/substitution needs a verified owner-signed or trusted owner-event receipt. A locally authored `approved: true` is invalid.
-4. `run_current_gates.py` runs the pinned commands, manages the candidate lifecycle, proves the complete matrix, and re-hashes the candidate closure after report generation. The evidence directory is the only allowed self-exclusion.
+4. `run_current_gates.py` pins executable binaries and file inputs, quarantines earlier reports, runs the commands, binds the final `source/` copies to the immutable `.h2d`/decode artifacts, and derives matrix completion from the current visual/geometry/typography/behavior/liveness artifacts. Managed URL mode requires an unused loopback origin, a live child process and JSON build identity bound to the current candidate/source closure. The candidate closure is re-hashed after generation; the evidence directory is the only allowed self-exclusion.
 5. Missing behavior/liveness classification, truncated discovery, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Never infer static scope from a missing report.
 
 The same matrix is mandatory after feedback. A generic Playwright screenshot, one desktop width, one mobile width, or "viewport plus neighbor" is diagnostic only.

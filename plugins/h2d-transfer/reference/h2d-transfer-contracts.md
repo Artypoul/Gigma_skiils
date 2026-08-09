@@ -11,13 +11,13 @@ Interactive scope requires full behavior artifacts. Requiredness comes only from
 `transfer_contract.json` pins:
 
 - the H2D bytes, bundled decoder identity and freshly regenerated decoded/tree artifacts;
-- decoded widths plus derived breakpoint-boundary and interval probes;
+- decoded widths plus derived breakpoint-boundary and interval probes; for a sparse multi-width source the donor breakpoint list is mandatory and must cover every decoded interval;
 - complete browser profiles, including DPR, touch/mobile input, locale, timezone and reduced motion;
-- exact candidate include closure, managed build/start/health/teardown and public toolchain/environment identity;
+- exact candidate include closure, every command executable/file input, managed build/start/health/teardown and public toolchain/environment identity. Managed URL mode starts only on an unused loopback origin and serves JSON whose source/candidate digests match the current contract;
 - classification, sidecars, verified owner approvals, expected reports and regeneration commands. An approval only verifies against an external trust anchor: Ed25519 keys come from `H2D_OWNER_PUBLIC_KEYS_JSON`, while connector receipts come from `H2D_TRUSTED_OWNER_EVENTS_JSON`; a `verified: true` field inside the contract is never sufficient;
-- one `reference_bundle.json` whose static and dynamic artifacts share a donor identity and complete matrix.
+- one `reference_bundle.json` whose visual, generated reachable-state classification and dynamic artifacts share a donor identity computed from the transitive local runnable closure, not just the entry HTML. Donor resources are checked throughout visual capture and re-hashed before classification, so the phases cannot silently describe different bytes. Rendering/GL fingerprints are pinned per browser profile.
 
-`current_evidence.json` is generated only by `run_current_gates.py`. It binds the current contract, runner, candidate digest before/after, complete matrix and hashes of every regenerated report. `run_all_gates.py --output` requires and independently verifies it, including a fresh candidate closure digest.
+`current_evidence.json` is generated only by `run_current_gates.py`. Before commands run, every expected report (including `review.md`) plus prior current/final evidence is moved out of the active paths. The runner verifies that final `source/` copies match the pinned `.h2d` and both decoded artifacts. Matrix completion is derived from freshly hashed visual, geometry, typography and required behavior/liveness artifacts rather than trusted from `matrix_coverage.json` alone; each JSON artifact must expose passing `matrix_results`/rows for every exact key. `run_all_gates.py --output` independently verifies this evidence, including source-artifact hashes and a fresh candidate closure digest.
 
 The evidence output/cache is narrowly excluded from the candidate digest so generation does not invalidate itself. All real source, config, dependency and build inputs must be explicit includes. A changed include, sidecar, source, decoder, reference artifact or contract makes the old run stale.
 

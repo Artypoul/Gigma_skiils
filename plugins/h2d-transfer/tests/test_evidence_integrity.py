@@ -15,12 +15,16 @@ sys.path.insert(0, str(SKILL / "scripts"))
 from evidence_integrity import (  # noqa: E402
     EvidenceError,
     candidate_closure,
+    canonical_json_sha256,
+    command_executable_records,
     sha256_file,
     verify_approval_records,
     verify_contract,
     verify_current_evidence,
     require_local_candidate_urls,
 )
+from create_transfer_contract import responsive_matrix  # noqa: E402
+from freeze_reference_bundle import resolve_artifact_path  # noqa: E402
 
 
 class EvidenceIntegrityTests(unittest.TestCase):
@@ -44,19 +48,32 @@ class EvidenceIntegrityTests(unittest.TestCase):
         reference_dir.mkdir(parents=True)
         (reference_dir / "reference.png").write_bytes(b"png-evidence")
         source_sha = sha256_file(source_dir / "input.h2d")
+        donor_closure = [{"path": "donor.html", "sha256": "0" * 64, "size": 0}]
+        donor_identity = f"sha256:{canonical_json_sha256(donor_closure)}"
+        classification = {"result": "pass", "generator_sha256": sha256_file(SKILL / "scripts" / "classify_reference.js"), "behavior_required": False, "liveness_required": False, "coverage_complete": True, "source_sha256": source_sha, "donor_identity": donor_identity, "matrix_keys": ["390x844@mobile"]}
         bundle = {
             "schema_version": "2.0", "result": "pass", "coverage_complete": True,
-            "source_sha256": source_sha, "donor_identity": "sha256:donor",
+            "source_sha256": source_sha, "donor_identity": donor_identity, "donor_closure": donor_closure,
+            "environment_by_profile": {"mobile": "0" * 64},
             "matrix_keys": ["390x844@mobile"],
-            "visual": {"donor_identity": "sha256:donor"},
+            "visual": {"donor_identity": donor_identity},
             "dynamic": {"donor_identity": None},
             "artifacts": [{"path": "reference.png", "sha256": sha256_file(reference_dir / "reference.png")}],
-            "classification": {"behavior_required": False, "liveness_required": False, "coverage_complete": True},
+            "classification": classification,
         }
         bundle_path = reference_dir / "reference_bundle.json"
         self.write_json(bundle_path, bundle)
-        report = reports / "node_validation.json"
-        self.write_json(report, {"result": "pass", "matrix_keys": ["390x844@mobile"]})
+        report_names = ["diff_summary.json", "node_validation.json", "font_manifest.json", "matrix_coverage.json"]
+        for name in report_names:
+            self.write_json(reports / name, {"result": "pass", "matrix_keys": ["390x844@mobile"]})
+        (reports / "review.md").write_text("Current fixture review", encoding="utf-8")
+        output_source = output / "source"
+        output_source.mkdir(parents=True)
+        (output_source / "input.original").write_bytes((source_dir / "input.h2d").read_bytes())
+        (output_source / "input.h2d").write_bytes((source_dir / "input.h2d").read_bytes())
+        for name in ("h2d_decoded.json", "h2d_tree_index.json"):
+            (output_source / name).write_bytes((source_dir / name).read_bytes())
+        (output_source / "input.sha256").write_text(f"{source_sha}  input.original\n", encoding="utf-8")
         closure = candidate_closure(candidate, ["index.html"], output)
         decoder = SKILL / "scripts" / "h2d_unpack_source.py"
         contract = {
@@ -72,7 +89,9 @@ class EvidenceIntegrityTests(unittest.TestCase):
             "candidate": {"mode": "entry", "project_root": "candidate", "include": ["index.html"], "closure_sha256": closure["digest"]},
             "classification": bundle["classification"],
             "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": sha256_file(bundle_path)},
-            "sidecars": [], "approvals": [], "current_commands": [["true"]], "expected_reports": ["reports/node_validation.json"],
+            "sidecars": [], "approvals": [], "current_commands": [[sys.executable, "-c", "pass"]],
+            "command_executables": command_executable_records([[sys.executable, "-c", "pass"]]),
+            "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"],
         }
         contract_path = contract_dir / "transfer_contract.json"
         self.write_json(contract_path, contract)
@@ -81,7 +100,14 @@ class EvidenceIntegrityTests(unittest.TestCase):
             "contract_path": "contract/transfer_contract.json", "contract_sha256": sha256_file(contract_path),
             "runner_sha256": sha256_file(SKILL / "scripts" / "run_current_gates.py"), "candidate_digest_before": closure["digest"], "candidate_digest_after": closure["digest"],
             "matrix_completed": ["390x844@mobile"],
-            "reports": [{"path": "reports/node_validation.json", "sha256": sha256_file(report)}],
+            "source_artifacts": [
+                {"path": f"source/{name}", "sha256": sha256_file(output_source / name)}
+                for name in ("input.original", "input.h2d", "input.sha256", "h2d_decoded.json", "h2d_tree_index.json")
+            ],
+            "reports": [
+                {"path": f"reports/{name}", "sha256": sha256_file(reports / name)}
+                for name in report_names + ["review.md"]
+            ],
         }
         evidence_path = reports / "current_evidence.json"
         self.write_json(evidence_path, evidence)
@@ -111,6 +137,33 @@ class EvidenceIntegrityTests(unittest.TestCase):
             artifact.write_bytes(b"mutated")
             with self.assertRaisesRegex(EvidenceError, "reference artifacts.*changed"):
                 verify_current_evidence(evidence)
+
+    def test_current_evidence_rejects_output_source_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, _ = self.fixture(Path(temp))
+            source = evidence.parents[1] / "source" / "h2d_tree_index.json"
+            source.write_text('[{"stale":true}]', encoding="utf-8")
+            with self.assertRaisesRegex(EvidenceError, "current source artifacts.*changed"):
+                verify_current_evidence(evidence)
+
+    def test_current_evidence_rejects_omitted_expected_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, _ = self.fixture(Path(temp))
+            data = json.loads(evidence.read_text(encoding="utf-8"))
+            data["reports"] = [row for row in data["reports"] if row["path"] != "reports/review.md"]
+            self.write_json(evidence, data)
+            with self.assertRaisesRegex(EvidenceError, "reports are missing"):
+                verify_current_evidence(evidence)
+
+    def test_contract_rejects_expected_report_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, _ = self.fixture(Path(temp))
+            contract_path = evidence.parents[1] / "contract" / "transfer_contract.json"
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            contract["expected_reports"].append("reports/../source/input.h2d")
+            self.write_json(contract_path, contract)
+            with self.assertRaisesRegex(EvidenceError, "expected report escapes"):
+                verify_contract(contract_path, evidence.parents[1])
 
     def test_self_authored_approval_is_rejected(self) -> None:
         with self.assertRaisesRegex(EvidenceError, "trusted verification"):
@@ -159,6 +212,31 @@ class EvidenceIntegrityTests(unittest.TestCase):
             rogue.write_text("print('not covered')\n", encoding="utf-8")
             contract = json.loads(contract_path.read_text(encoding="utf-8"))
             contract["current_commands"] = [[sys.executable, str(rogue)]]
+            contract["command_executables"] = command_executable_records(contract["current_commands"])
+            self.write_json(contract_path, contract)
+            with self.assertRaisesRegex(EvidenceError, "outside candidate closure/hashed sidecars"):
+                verify_contract(contract_path, evidence.parents[1])
+
+    def test_contract_pins_direct_executable_and_all_existing_data_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            evidence, candidate = self.fixture(root)
+            contract_path = evidence.parents[1] / "contract" / "transfer_contract.json"
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            wrapper = root / "external-gate-wrapper"
+            wrapper.write_text("version one\n", encoding="utf-8")
+            contract["current_commands"] = [[str(wrapper)]]
+            contract["command_executables"] = command_executable_records(contract["current_commands"])
+            self.write_json(contract_path, contract)
+            verify_contract(contract_path, evidence.parents[1])
+            wrapper.write_text("version two\n", encoding="utf-8")
+            with self.assertRaisesRegex(EvidenceError, "executable identities"):
+                verify_contract(contract_path, evidence.parents[1])
+
+            selector_map = candidate.parent / "external-selectors.json"
+            selector_map.write_text("{}", encoding="utf-8")
+            contract["current_commands"] = [[sys.executable, "-c", "pass", str(selector_map)]]
+            contract["command_executables"] = command_executable_records(contract["current_commands"])
             self.write_json(contract_path, contract)
             with self.assertRaisesRegex(EvidenceError, "outside candidate closure/hashed sidecars"):
                 verify_contract(contract_path, evidence.parents[1])
@@ -169,6 +247,18 @@ class EvidenceIntegrityTests(unittest.TestCase):
             require_local_candidate_urls("http://example.com/health", "http://example.com/build-id")
         with self.assertRaisesRegex(EvidenceError, "same local origin"):
             require_local_candidate_urls("http://127.0.0.1:5005/health", "http://127.0.0.1:5006/build-id")
+
+    def test_sparse_responsive_contract_requires_interval_breakpoints(self) -> None:
+        with self.assertRaisesRegex(EvidenceError, "complete pinned --breakpoints"):
+            responsive_matrix([390, 1440], {"390": 844, "1440": 900}, [])
+        rows = responsive_matrix([390, 1440], {"390": 844, "1440": 900}, [768])
+        self.assertTrue({767, 768, 769, 915}.issubset({row["width"] for row in rows}))
+
+    def test_dynamic_artifact_destination_cannot_escape_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(EvidenceError, "escapes"):
+                resolve_artifact_path(root / "dynamic", "../../victim.txt", "dynamic destination artifact")
 
 
 if __name__ == "__main__":

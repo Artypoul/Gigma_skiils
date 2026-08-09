@@ -67,7 +67,9 @@ function executableFromArgv(argv = process.argv) {
 async function launchChromium(options = {}) {
   const projectRoot = options.projectRoot || null;
   const { chromium, pkg } = resolveChromium(projectRoot);
+  const deterministicGraphicsArgs = ['--use-angle=swiftshader', '--use-gl=angle'];
   const launchOptions = { headless: true, ...options };
+  launchOptions.args = [...deterministicGraphicsArgs, ...(options.args || []).filter(value => !deterministicGraphicsArgs.includes(value))];
   delete launchOptions.projectRoot;
   // An explicit override wins whichever package resolved: the full playwright
   // can also be present without its downloaded Chromium, and ignoring
@@ -228,15 +230,27 @@ function stableSelectorScript() {
 
 async function environmentFingerprint(browser, context, page) {
   const browserVersion = browser.version();
-  const values = await page.evaluate(() => ({
-    userAgent: navigator.userAgent,
-    platform: navigator.platform,
-    language: navigator.language,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    dpr: devicePixelRatio,
-    fonts: [...document.fonts].map(f => `${f.family}|${f.style}|${f.weight}|${f.status}`).sort(),
-  }));
-  return { browser: 'chromium', browser_version: browserVersion, node: process.version, os: `${process.platform}-${process.arch}`, ...values };
+  const values = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    const debug = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    const graphics = gl ? {
+      vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+      renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      version: gl.getParameter(gl.VERSION),
+      shading_language_version: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+    } : { vendor: null, renderer: null, version: null, shading_language_version: null };
+    return {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      dpr: devicePixelRatio,
+      fonts: [...document.fonts].map(f => `${f.family}|${f.style}|${f.weight}|${f.status}`).sort(),
+      graphics,
+    };
+  });
+  return { browser: 'chromium', browser_version: browserVersion, node: process.version, os: `${process.platform}-${process.arch}`, graphics_launch_flags: ['--use-angle=swiftshader', '--use-gl=angle'], ...values };
 }
 
 module.exports = {

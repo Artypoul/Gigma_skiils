@@ -5,14 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
 import urllib.request
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evidence_integrity import EvidenceError, matrix_keys, sha256_bytes, sha256_file, verify_contract
+from evidence_integrity import EvidenceError, matrix_keys, resolve_inside, sha256_bytes, sha256_file, verify_contract
 
 
 SCRIPT = Path(__file__).resolve()
@@ -32,10 +34,12 @@ def run_checked(command: list[str], cwd: Path, env: dict[str, str]) -> None:
     subprocess.run(command, cwd=cwd, env=env, check=True)
 
 
-def fetch_bounded(url: str, timeout_seconds: float) -> bytes:
+def fetch_bounded(url: str, timeout_seconds: float, process: subprocess.Popen[str] | None = None) -> bytes:
     deadline = time.monotonic() + timeout_seconds
     last_error: Exception | None = None
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise EvidenceError(f"candidate server exited before owning the configured origin (exit={process.returncode})")
         try:
             with urllib.request.urlopen(url, timeout=min(2.0, timeout_seconds)) as response:
                 if 200 <= response.status < 400:
@@ -44,6 +48,110 @@ def fetch_bounded(url: str, timeout_seconds: float) -> bytes:
             last_error = error
         time.sleep(0.25)
     raise EvidenceError(f"candidate health check failed for {url}: {last_error}")
+
+
+def require_unoccupied_origin(url: str) -> None:
+    parsed = urlparse(url)
+    port = parsed.port or 80
+    try:
+        with socket.create_connection((parsed.hostname or "", port), timeout=0.35):
+            raise EvidenceError(f"candidate origin is already occupied before start: {parsed.hostname}:{port}")
+    except EvidenceError:
+        raise
+    except OSError:
+        return
+
+
+def quarantine_previous_reports(output: Path, expected_reports: list[str]) -> None:
+    reports_root = (output / "reports").resolve()
+    reports_root.mkdir(parents=True, exist_ok=True)
+    backup_root = reports_root / ".previous-current" / str(time.time_ns())
+    values = list(expected_reports) + ["reports/current_evidence.json", "reports/validation_run.json"]
+    for value in values:
+        path = (output / value).resolve()
+        try:
+            relative = path.relative_to(reports_root)
+        except ValueError as exc:
+            raise EvidenceError(f"expected report must stay under reports/: {value}") from exc
+        if path.is_file():
+            target = backup_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            path.replace(target)
+
+
+def extract_matrix_keys(report: object) -> list[str]:
+    if not isinstance(report, dict):
+        return []
+    found: set[str] = set()
+    for field in ("matrix_results", "rows", "viewports", "results", "entries"):
+        values = report.get(field)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            verdict = item.get("result", item.get("verdict")) if isinstance(item, dict) else None
+            if isinstance(item, dict) and isinstance(item.get("matrix_key"), str) and verdict in {"pass", "font-exact", "font-substituted", "static-scope", "not-tested"}:
+                found.add(item["matrix_key"])
+    return sorted(found)
+
+
+def verify_matrix_artifacts(output: Path, coverage: dict, classification: dict, expected_matrix: list[str]) -> None:
+    role_paths = {
+        "visual": "reports/diff_summary.json",
+        "geometry": "reports/node_validation.json",
+        "typography": "reports/font_manifest.json",
+    }
+    if classification.get("behavior_required"):
+        role_paths["behavior"] = "reports/behavior_validation.json"
+    if classification.get("liveness_required"):
+        role_paths["liveness"] = "reports/liveness_validation.json"
+    rows = coverage.get("artifacts")
+    if not isinstance(rows, list):
+        raise EvidenceError("matrix coverage must cite the individual gate artifacts")
+    by_role = {row.get("role"): row for row in rows if isinstance(row, dict) and isinstance(row.get("role"), str)}
+    if set(by_role) != set(role_paths):
+        raise EvidenceError(f"matrix coverage artifact roles differ: expected {sorted(role_paths)}, got {sorted(by_role)}")
+    for role, relative in role_paths.items():
+        row = by_role[role]
+        if row.get("path") != relative or sorted(row.get("matrix_completed") or []) != expected_matrix:
+            raise EvidenceError(f"matrix coverage for {role} is missing or incomplete")
+        path = (output / relative).resolve()
+        path.relative_to(output)
+        if not path.is_file() or row.get("sha256") != sha256_file(path):
+            raise EvidenceError(f"matrix coverage for {role} is not bound to the current artifact")
+        artifact_keys = extract_matrix_keys(json.loads(path.read_text(encoding="utf-8")))
+        if artifact_keys != expected_matrix:
+            raise EvidenceError(f"{relative} does not contain the complete matrix")
+
+
+def verify_output_source(output: Path, contract_path: Path, contract: dict) -> list[dict[str, str]]:
+    """Bind the legacy final gate's source directory to this exact immutable contract."""
+    contract_root = contract_path.parent.resolve()
+    source_root = (output / "source").resolve()
+    expected_source_sha = contract["source"]["sha256"]
+    required = {
+        "input.original": expected_source_sha,
+        "input.h2d": expected_source_sha,
+    }
+    decoded_names: set[str] = set()
+    for index, entry in enumerate(contract.get("decoded_artifacts") or []):
+        source_path = resolve_inside(contract_root, entry["path"], f"decoded_artifacts[{index}]")
+        name = source_path.name
+        if name in decoded_names or name in required:
+            raise EvidenceError(f"decoded artifact output name is ambiguous: {name}")
+        decoded_names.add(name)
+        required[name] = entry["sha256"]
+    artifacts: list[dict[str, str]] = []
+    for name, expected in sorted(required.items()):
+        path = resolve_inside(source_root, name, f"current source artifact {name}")
+        if not path.is_file() or sha256_file(path) != expected:
+            raise EvidenceError(f"current source artifact is missing or differs from the contract: source/{name}")
+        artifacts.append({"path": f"source/{name}", "sha256": expected})
+    checksum = resolve_inside(source_root, "input.sha256", "current source checksum")
+    expected_checksum = f"{expected_source_sha}  input.original\n"
+    if not checksum.is_file() or checksum.read_text(encoding="utf-8") != expected_checksum:
+        raise EvidenceError("source/input.sha256 is missing or not bound to the contract source")
+    artifacts.append({"path": "source/input.sha256", "sha256": sha256_file(checksum)})
+    return artifacts
 
 
 def verify_lifecycle_environment(lifecycle: dict, env: dict[str, str]) -> None:
@@ -88,6 +196,7 @@ def main() -> int:
     candidate_root = verified["candidate_root"]
     lifecycle = (contract.get("candidate") or {}).get("lifecycle") or {}
     server: subprocess.Popen[str] | None = None
+    quarantine_previous_reports(output, expected_reports)
     try:
         if lifecycle:
             verify_lifecycle_environment(lifecycle, env)
@@ -98,14 +207,22 @@ def main() -> int:
         if start:
             if not isinstance(start, list) or not start:
                 raise EvidenceError("candidate lifecycle start must be a non-empty array")
-            server = subprocess.Popen(start, cwd=bounded_cwd(candidate_root, lifecycle.get("cwd")), env=env, text=True)
             health = lifecycle.get("health_url")
             if not isinstance(health, str) or not health:
                 raise EvidenceError("managed candidate lifecycle needs health_url")
-            fetch_bounded(health, float(lifecycle.get("health_timeout_seconds", 30)))
-            identity = fetch_bounded(lifecycle["build_identity_url"], float(lifecycle.get("health_timeout_seconds", 30)))
+            require_unoccupied_origin(health)
+            server = subprocess.Popen(start, cwd=bounded_cwd(candidate_root, lifecycle.get("cwd")), env=env, text=True)
+            fetch_bounded(health, float(lifecycle.get("health_timeout_seconds", 30)), server)
+            identity = fetch_bounded(lifecycle["build_identity_url"], float(lifecycle.get("health_timeout_seconds", 30)), server)
             if sha256_bytes(identity) != lifecycle["build_identity_sha256"]:
                 raise EvidenceError("managed candidate served a stale or different build identity")
+            try:
+                identity_data = json.loads(identity.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise EvidenceError("managed candidate build identity must be canonical JSON") from exc
+            required_identity = {"schema_version": "2.0", "candidate_closure_sha256": before, "source_sha256": contract["source"]["sha256"]}
+            if identity_data != required_identity:
+                raise EvidenceError("managed candidate build identity is not bound to the current candidate/source closure")
         for command in commands:
             run_checked(command, candidate_root, env)
     finally:
@@ -123,6 +240,7 @@ def main() -> int:
     after = after_verified["closure"]["digest"]
     if before != after:
         raise EvidenceError("candidate changed while current gates were running")
+    source_artifacts = verify_output_source(output, contract_path, contract)
     coverage_path = output / "reports" / "matrix_coverage.json"
     if not coverage_path.is_file():
         raise EvidenceError("current commands did not generate reports/matrix_coverage.json")
@@ -130,6 +248,7 @@ def main() -> int:
     completed = sorted(coverage.get("matrix_completed") or [])
     if coverage.get("result") != "pass" or completed != expected_matrix:
         raise EvidenceError("matrix coverage report is non-pass or incomplete")
+    verify_matrix_artifacts(output, coverage, contract.get("classification") or {}, expected_matrix)
     report_entries = []
     for value in expected_reports:
         report = (output / value).resolve()
@@ -144,7 +263,8 @@ def main() -> int:
         "contract_path": contract_path.relative_to(output).as_posix(),
         "contract_sha256": sha256_file(contract_path), "runner_sha256": sha256_file(SCRIPT),
         "candidate_digest_before": before, "candidate_digest_after": after,
-        "matrix_completed": completed, "reports": sorted(report_entries, key=lambda item: item["path"]),
+        "matrix_completed": completed, "source_artifacts": source_artifacts,
+        "reports": sorted(report_entries, key=lambda item: item["path"]),
     }
     evidence_path = output / "reports" / "current_evidence.json"
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
