@@ -109,13 +109,13 @@ When the failure came from a broad dirty worktree, isolate the current-task file
 
 Choose verification that matches the complaint:
 
-- visual issue: compare the complained-about width plus at least one adjacent breakpoint;
+- visual issue: generic minimum is the complained-about width plus one adjacent breakpoint; when the active design-transfer skill defines a mandatory viewport/profile matrix, re-enter that workflow and run the complete matrix instead of substituting this minimum;
 - behavior issue: prove the state actually changes, not just the markup;
 - asset issue: prove provenance or file identity, not visual similarity alone;
 - PR/review issue: re-read comments, CI state, and latest branch evidence after the patch;
 - copy/content issue: compare exact strings against the approved source.
 
-If the proof is incomplete, use an honest status such as `needs-polish`, `local-fix-only`, `manual-check-needed`, or `blocked`.
+If the proof is incomplete, use the exact status vocabulary required by the active project or specialist skill. Only when it defines none, fall back to `partial`, `blocked`, or `unknown`; never invent a softer status that can be mistaken for readiness.
 
 ## Final Recovery Report
 

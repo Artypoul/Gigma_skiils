@@ -19,8 +19,11 @@
         "type": "object",
         "required": [
           "interaction_id",
-          "component_id",
-          "action"
+          "component_id"
+        ],
+        "anyOf": [
+          {"required": ["action"]},
+          {"required": ["sequence"]}
         ],
         "properties": {
           "interaction_id": {
@@ -47,6 +50,20 @@
               "input"
             ]
           },
+          "sequence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["action", "selector"],
+              "properties": {
+                "action": {"type": "string"},
+                "selector": {"type": "string"}
+              },
+              "additionalProperties": true
+            }
+          },
+          "expected_transition": {"type": "boolean"},
           "criticality": {
             "type": "string",
             "enum": [

@@ -1,53 +1,41 @@
 #!/usr/bin/env node
-/* Detect dynamic runtime surfaces: CSS motion, requestAnimationFrame evidence, canvas/WebGL, video and common animation libs. */
-const fs=require('fs'); const path=require('path');
-function arg(n,d=null){const i=process.argv.indexOf(`--${n}`); return i>=0?process.argv[i+1]:d;}
-function toUrl(p){if(/^https?:\/\//.test(p)||/^file:/.test(p))return p; return 'file://' + path.resolve(p);}
-async function main(){
-  const url=arg('url'); const out=arg('out','reports/liveness_inventory.json'); const viewport=Number(arg('viewport','390'));
-  if(!url) throw new Error('Usage: --url original --out reports/liveness_inventory.json');
-  const {launchChromium}=require('./browser');
-  const browser=await launchChromium();
-  const page=await browser.newPage({viewport:{width:viewport,height:Number(arg('height','1400'))}, deviceScaleFactor:Number(arg('dpr','1'))});
-  await page.addInitScript(()=>{
-    window.__h2d_liveness={raf_count:0, raf_callbacks:0};
-    const origRAF=window.requestAnimationFrame;
-    window.requestAnimationFrame=function(cb){ window.__h2d_liveness.raf_callbacks++; return origRAF.call(window,function(ts){ window.__h2d_liveness.raf_count++; return cb(ts); }); };
-  });
-  await page.goto(toUrl(url),{waitUntil:'networkidle'});
-  await page.waitForTimeout(Number(arg('settle-ms','600')));
-  const data=await page.evaluate((viewport)=>{
-    const surfaces=[];
-    function vis(el){const r=el.getBoundingClientRect(); const cs=getComputedStyle(el); return r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0.001;}
-    function selector(el,i){return el.id ? `#${CSS.escape(el.id)}` : (el.getAttribute('data-h2d-path') ? `[data-h2d-path="${el.getAttribute('data-h2d-path')}"]` : `${el.tagName.toLowerCase()}:nth-of-type(${i+1})`);}
-    [...document.querySelectorAll('*')].slice(0,1500).forEach((el,i)=>{
-      if(!vis(el)) return;
-      const cs=getComputedStyle(el);
-      const anim=cs.animationName && cs.animationName !== 'none';
-      const trans=cs.transitionProperty && cs.transitionProperty !== 'all 0s ease 0s' && cs.transitionDuration !== '0s';
-      if(anim || trans){
-        surfaces.push({surface_id:`${viewport}:${anim?'css-animation':'css-transition'}:${i}`, kind:anim?'css-animation':'css-transition', selector:selector(el,i), criticality:'normal', triggers:['load','state-change'], evidence_required:['computed_styles','start_mid_end_screenshots'], timing:{animationName:cs.animationName, animationDuration:cs.animationDuration, transitionProperty:cs.transitionProperty, transitionDuration:cs.transitionDuration}});
-      }
-    });
-    [...document.querySelectorAll('canvas')].forEach((el,i)=>{
-      if(!vis(el)) return;
-      let kind='canvas-2d'; let attrs={};
-      try { const gl=el.getContext('webgl2') || el.getContext('webgl'); if(gl){kind=gl instanceof WebGL2RenderingContext?'webgl2':'webgl'; attrs=gl.getContextAttributes()||{};} }
-      catch(e){}
-      surfaces.push({surface_id:`${viewport}:${kind}:${i}`, kind, selector:selector(el,i), criticality:'critical', triggers:['load','resize'], evidence_required:['context','frame_hashes','non_blank_pixels'], context_attributes:attrs});
-    });
-    [...document.querySelectorAll('video')].forEach((el,i)=>{ if(vis(el)) surfaces.push({surface_id:`${viewport}:video:${i}`, kind:'video', selector:selector(el,i), criticality:'normal', triggers:['load','playback'], evidence_required:['poster','playback_state','frame_samples'], autoplay:el.autoplay, muted:el.muted, loop:el.loop, controls:el.controls}); });
-    const libs=[]; const text=[...document.scripts].map(s=>s.src||'').join(' ').toLowerCase();
-    for(const lib of ['three','pixi','gsap','lottie','rive','spline','swiper','framer-motion','anime']) if(text.includes(lib)) libs.push(lib);
-    const raf=window.__h2d_liveness||{};
-    if((raf.raf_count||0)>0){surfaces.push({surface_id:`${viewport}:requestAnimationFrame:document`, kind:'requestAnimationFrame', selector:'document', criticality:'normal', triggers:['load'], evidence_required:['raf_count','frame_samples'], raf_count:raf.raf_count, raf_callbacks:raf.raf_callbacks});}
-    return {surfaces, libs, raf};
-  }, viewport);
+/* Detect motion without creating canvas contexts or silently truncating the DOM. */
+const fs = require('fs'); const path = require('path'); const crypto = require('crypto');
+const { launchChromium, contextOptions, installNetworkSandbox, installRuntimeInstrumentation } = require('./browser');
+function arg(name, fallback = null) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : fallback; }
+function toUrl(value) { if (/^https?:\/\//.test(value) || /^file:/.test(value)) return value; return 'file://' + path.resolve(value).replace(/\\/g, '/'); }
+function loadJson(value, fallback) { return value ? JSON.parse(fs.readFileSync(value, 'utf8')) : fallback; }
+async function main() {
+  const url = arg('url'), out = arg('out', 'reports/liveness_inventory.json'); if (!url) throw new Error('Usage: --url original --out report.json');
+  const viewport = { width:Number(arg('viewport','390')), height:Number(arg('height','1400')) };
+  const profile = loadJson(arg('profile'), { id:'default', headless:true, device_scale_factor:Number(arg('dpr','1')), is_mobile:false, has_touch:false, locale:'en-US', timezone:'UTC', reduced_motion:'reduce' });
+  const maxElements = Number(arg('max-elements','5000'));
+  const browser = await launchChromium({ headless: profile.headless !== false, projectRoot: arg('project-root') || process.cwd() });
+  const context = await browser.newContext(contextOptions(profile, viewport)); await installNetworkSandbox(context, loadJson(arg('request-allowlist'), [])); await installRuntimeInstrumentation(context);
+  const page = await context.newPage(); await page.addInitScript(() => { window.__h2dRaf = { requested:0, fired:0 }; const native = requestAnimationFrame; window.requestAnimationFrame = function(cb){ window.__h2dRaf.requested++; return native.call(window, ts => { window.__h2dRaf.fired++; return cb(ts); }); }; });
+  await page.goto(toUrl(url), { waitUntil:'networkidle' }); await page.waitForTimeout(Number(arg('settle-ms','600')));
+  const data = await page.evaluate(({ maxElements, viewportWidth }) => {
+    function visible(el) { const r=el.getBoundingClientRect(); const cs=getComputedStyle(el); return r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0.001; }
+    function stable(el) { if(el.id) return '#'+CSS.escape(el.id); for(const name of ['data-h2d-path','data-behavior-id']){const value=el.getAttribute(name);if(value)return `[${name}=${JSON.stringify(value)}]`;} const parts=[];let node=el;while(node&&node.nodeType===1&&node!==document.documentElement){let part=node.tagName.toLowerCase();const siblings=node.parentElement?[...node.parentElement.children].filter(item=>item.tagName===node.tagName):[];if(siblings.length>1)part+=`:nth-of-type(${siblings.indexOf(node)+1})`;parts.unshift(part);node=node.parentElement;}return 'html > '+parts.join(' > '); }
+    function triggers(el, cs) { const result=['load']; if(cs.transitionDuration && cs.transitionDuration!=='0s'){result.push('hover','focus'); if(el.matches('input[type="checkbox"],input[type="radio"]'))result.push('checked');} return [...new Set(result)]; }
+    const all=[...document.querySelectorAll('*')]; const truncated=all.length>maxElements; const surfaces=[];
+    for(const [index,el] of all.slice(0,maxElements).entries()){
+      if(!visible(el))continue;const cs=getComputedStyle(el);const animated=cs.animationName&&cs.animationName!=='none'&&cs.animationDuration!=='0s';const transitioned=cs.transitionProperty&&cs.transitionDuration&&cs.transitionDuration!=='0s';
+      if(animated||transitioned)surfaces.push({surface_id:`${viewportWidth}:${animated?'css-animation':'css-transition'}:${index}`,kind:animated?'css-animation':'css-transition',selector:stable(el),criticality:'critical',triggers:triggers(el,cs),timing:{animationName:cs.animationName,animationDuration:cs.animationDuration,animationDelay:cs.animationDelay,transitionProperty:cs.transitionProperty,transitionDuration:cs.transitionDuration,transitionDelay:cs.transitionDelay}});
+      if(el instanceof HTMLCanvasElement){const actual=el.getAttribute('data-h2d-canvas-context');const kind=actual==='2d'?'canvas-2d':actual==='webgl'?'webgl':actual==='webgl2'?'webgl2':'canvas-unobserved';surfaces.push({surface_id:`${viewportWidth}:canvas:${index}`,kind,selector:stable(el),criticality:'critical',triggers:['load','resize'],context_observed:actual||null});}
+      if(el instanceof HTMLVideoElement)surfaces.push({surface_id:`${viewportWidth}:video:${index}`,kind:'video',selector:stable(el),criticality:'critical',triggers:['load','playback'],autoplay:el.autoplay,muted:el.muted,loop:el.loop});
+    }
+    if((window.__h2dRaf||{}).fired>0)surfaces.push({surface_id:`${viewportWidth}:requestAnimationFrame:document`,kind:'requestAnimationFrame',selector:'html',criticality:'critical',triggers:['load'],raf:window.__h2dRaf});
+    const timers=(window.__h2dRuntime||{}).timers||[];if(timers.length)surfaces.push({surface_id:`${viewportWidth}:timer:document`,kind:'unknown-runtime',selector:'html',criticality:'critical',triggers:['load'],timer_registrations:timers.slice(0,200)});
+    return { surfaces, truncated, discovered:all.length, raf:window.__h2dRaf||{} };
+  }, { maxElements, viewportWidth:viewport.width });
   await browser.close();
-  const report={result:data.surfaces.length?'pass':'not-tested', liveness_required:data.surfaces.some(s=>s.criticality==='critical'||['webgl','webgl2','canvas-2d','video','requestAnimationFrame'].includes(s.kind)), url, viewports:[viewport], detected_libraries:data.libs, raf:data.raf, surfaces:data.surfaces};
-  fs.mkdirSync(path.dirname(out),{recursive:true}); fs.writeFileSync(out,JSON.stringify(report,null,2));
-  const webgl={result:data.surfaces.some(s=>['webgl','webgl2'].includes(s.kind))?'pass':'not-present', contexts:data.surfaces.filter(s=>['webgl','webgl2','canvas-2d'].includes(s.kind)).map(s=>({canvas_selector:s.selector, context_type:s.kind==='canvas-2d'?'2d':s.kind, context_attributes:s.context_attributes||{}, frame_hashes:[], pixels_change_over_time:false, non_blank_samples:0})), issues:[]};
-  fs.writeFileSync(path.join(path.dirname(out),'webgl_capture_report.json'), JSON.stringify(webgl,null,2));
-  console.log(`surfaces=${report.surfaces.length} liveness_required=${report.liveness_required} out=${out}`);
+  const unobserved = data.surfaces.filter(row => row.kind === 'canvas-unobserved');
+  const result = data.truncated || unobserved.length ? 'fail' : (data.surfaces.length ? 'pass' : 'not-tested');
+  const generator_sha256=crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex');
+  const report = { result, coverage_complete: result !== 'fail', generator_sha256, truncated:data.truncated, discovered_elements:data.discovered, liveness_required:data.surfaces.length>0, url, viewports:[viewport.width], profile_id:profile.id, raf:data.raf, surfaces:data.surfaces, issues:unobserved.map(row=>({type:'canvas-context-unobserved',surface_id:row.surface_id})) };
+  fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(report,null,2));
+  const hasWebgl=data.surfaces.some(row=>row.kind.includes('webgl'));fs.writeFileSync(path.join(path.dirname(out),'webgl_capture_report.json'),JSON.stringify({result:unobserved.length?'fail':(hasWebgl?'partial':'not-present'),contexts:data.surfaces.filter(row=>['canvas-2d','webgl','webgl2'].includes(row.kind)).map(row=>({canvas_selector:row.selector,context_type:row.kind==='canvas-2d'?'2d':row.kind,frame_hashes:[],pixels_change_over_time:false,non_blank_samples:0})),issues:[...report.issues,...(hasWebgl?[{type:'webgl-runtime-capture-required'}]:[])]},null,2));
+  console.log(`result=${result} surfaces=${data.surfaces.length} truncated=${data.truncated} out=${out}`);if(result==='fail')process.exitCode=2;
 }
-main().catch(e=>{console.error(e.stack||e);process.exit(1);});
+main().catch(error=>{console.error(error.stack||error);process.exit(1);});

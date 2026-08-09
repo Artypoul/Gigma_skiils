@@ -13,6 +13,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const TEXT_METRIC_PROPS = ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'color'];
 // margin belongs here: a candidate can drop the donor's margin and push the
@@ -324,6 +325,7 @@ async function main() {
 
   const overall = {
     result: results.every((r) => r.result === 'pass') ? 'pass' : 'fail',
+    generator_sha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
     threshold_px: threshold,
     style_threshold_px: styleThreshold,
     strict_font_family: strictFontFamily,
@@ -334,6 +336,11 @@ async function main() {
     warnings: results.flatMap((r) => r.warnings.map((w) => ({ ...w, viewport: r.viewport }))),
     accepted_deviations: results.flatMap((r) => r.accepted_deviations.map((a) => ({ ...a, viewport: r.viewport })))
   };
+  const expectedMatrix = JSON.parse(process.env.H2D_MATRIX_KEYS || '[]');
+  overall.matrix_results = expectedMatrix.map((matrixKey) => {
+    const viewport = Number(String(matrixKey).split('x')[0]); const observed = results.find((row) => row.viewport === viewport);
+    return { matrix_key: matrixKey, result: observed && observed.result === 'pass' ? 'pass' : 'fail' };
+  });
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(overall, null, 2));
   console.log(`result=${overall.result} global_max_delta=${globalMax} warnings=${overall.warnings.length} accepted=${overall.accepted_deviations.length} out=${outPath}`);

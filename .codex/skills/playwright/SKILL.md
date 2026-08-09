@@ -143,5 +143,6 @@ Open only what you need:
 - Prefer explicit commands over `eval` and `run-code` unless needed.
 - When you do not have a fresh snapshot, use placeholder refs like `eX` and say why; do not bypass refs with `run-code`.
 - Use `--headed` when a visual check will help.
+- A generic Playwright screenshot or headed inspection is diagnostic evidence, not proof of pixel-perfect geometry, typography, assets, breakpoint coverage, interaction fidelity, or freshness. When a design-transfer skill defines frozen references and mandatory viewport/profile gates, run that specialist pipeline and do not replace it with an ad hoc screenshot.
 - When capturing artifacts in this repo, use `output/playwright/` and avoid introducing new top-level artifact folders.
 - Default to CLI commands and workflows, not Playwright test specs.

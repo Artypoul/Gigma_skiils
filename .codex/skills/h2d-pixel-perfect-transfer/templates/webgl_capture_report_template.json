@@ -20,7 +20,9 @@
       "vendor": "masked-or-unavailable",
       "renderer": "masked-or-unavailable",
       "frame_hashes": [
-        "sha256:example"
+        "sha256:start-example",
+        "sha256:mid-example",
+        "sha256:end-example"
       ],
       "pixels_change_over_time": true,
       "non_blank_samples": 3

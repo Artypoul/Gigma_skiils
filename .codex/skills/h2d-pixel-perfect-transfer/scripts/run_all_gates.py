@@ -11,6 +11,8 @@ try:
 except Exception:  # pragma: no cover
     jsonschema = None
 
+from evidence_integrity import EvidenceError, verify_current_evidence
+
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_BY_TEMPLATE = {
     'source_intake_template.json':'source_intake.schema.json',
@@ -47,6 +49,9 @@ SCHEMA_BY_TEMPLATE = {
     'validation_run_template.json':'validation_run.schema.json',
     'font_manifest_template.json':'font_manifest.schema.json',
     'asset_provenance_template.json':'asset_provenance.schema.json',
+    'transfer_contract_template.json':'transfer_contract.schema.json',
+    'reference_bundle_template.json':'reference_bundle.schema.json',
+    'current_evidence_template.json':'current_evidence.schema.json',
 }
 
 
@@ -189,6 +194,19 @@ def add_font_consistency_check(checks: list[dict[str, str]], node_data: Any|None
     checks.append({'name': 'font_manifest_matches_measurement', 'result': 'pass', 'message': f'font_manifest.result={declared!r} consistent with {len(warnings)} measured family warning(s)'})
 
 
+def add_font_approval_check(checks: list[dict[str, str]], font_data: Any|None, current_verified: Any|None) -> None:
+    if not isinstance(font_data, dict) or font_data.get('result') != 'font-substituted':
+        checks.append({'name': 'font_substitution_owner_approval', 'result': 'pass', 'message': 'no font substitution declared'})
+        return
+    approvals = current_verified['contract'].get('approvals') if current_verified else []
+    approved = any(record.get('approved') and 'font.substitutions' in (record.get('scope') or []) for record in (approvals or []))
+    checks.append({
+        'name': 'font_substitution_owner_approval',
+        'result': 'pass' if approved else 'fail',
+        'message': 'externally verified contract approval covers font.substitutions' if approved else 'font-substituted requires an externally verified contract approval scoped to font.substitutions',
+    })
+
+
 def infer_behavior_required(out: Path, explicit: str) -> bool:
     if explicit in ('true','yes','1'): return True
     if explicit in ('false','no','0'): return False
@@ -215,8 +233,21 @@ def infer_liveness_required(out: Path, explicit: str) -> bool:
 
 def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: str='auto', accept_changed_source: bool=False) -> dict[str, Any]:
     checks=[]; issues=[]; reports=out/'reports'
-    behavior_required=infer_behavior_required(out, behavior_required_arg)
-    liveness_required=infer_liveness_required(out, liveness_required_arg)
+    current_verified = None
+    try:
+        current_verified = verify_current_evidence(reports/'current_evidence.json')
+        checks.append({'name':'current_evidence.json','result':'pass','message':'current candidate, contract, reference and complete matrix verified'})
+    except (EvidenceError, OSError, ValueError, json.JSONDecodeError) as error:
+        checks.append({'name':'current_evidence.json','result':'fail','message':str(error)[:500]})
+    if current_verified:
+        classification = current_verified['contract'].get('classification') or {}
+        behavior_required = bool(classification.get('behavior_required'))
+        liveness_required = bool(classification.get('liveness_required'))
+    else:
+        # Preserve diagnostic detail for old outputs, but never allow it to
+        # compensate for a missing current-evidence pass above.
+        behavior_required=infer_behavior_required(out, behavior_required_arg)
+        liveness_required=infer_liveness_required(out, liveness_required_arg)
     diff_allowed={'pass','changed-source'} if accept_changed_source else {'pass'}
     required=[
         ('source_intake.json','source_intake.schema.json',None),
@@ -241,18 +272,18 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
     ]
     if behavior_required:
         required += [
-            ('behavior_inventory.json','behavior_inventory.schema.json',{'pass','partial'}),
-            ('interaction_matrix.json','interaction_matrix.schema.json',{'pass','partial'}),
-            ('event_listener_inventory.json','event_listener_inventory.schema.json',{'pass','partial'}),
-            ('behavior_state_targets.json','behavior_state_targets.schema.json',{'pass','partial'}),
-            ('behavior_implementation_map.json','behavior_implementation_map.schema.json',{'pass','partial'}),
+            ('behavior_inventory.json','behavior_inventory.schema.json',{'pass'}),
+            ('interaction_matrix.json','interaction_matrix.schema.json',{'pass'}),
+            ('event_listener_inventory.json','event_listener_inventory.schema.json',{'pass'}),
+            ('behavior_state_targets.json','behavior_state_targets.schema.json',{'pass'}),
+            ('behavior_implementation_map.json','behavior_implementation_map.schema.json',{'pass'}),
         ]
         for fn in ['original_behavior_traces.jsonl','candidate_behavior_traces.jsonl']:
             p=reports/fn; ok=p.exists() and p.stat().st_size>0; checks.append({'name':fn,'result':'pass' if ok else 'fail','message':'exists' if ok else 'missing or empty'})
     if liveness_required:
         required += [
-            ('liveness_inventory.json','liveness_inventory.schema.json',{'pass','partial'}),
-            ('webgl_capture_report.json','webgl_capture_report.schema.json',{'pass','partial','not-present','manual-review'}),
+            ('liveness_inventory.json','liveness_inventory.schema.json',{'pass'}),
+            ('webgl_capture_report.json','webgl_capture_report.schema.json',{'pass','not-present'}),
         ]
         for fn in ['original_animation_trace.jsonl','candidate_animation_trace.jsonl']:
             p=reports/fn; ok=p.exists() and p.stat().st_size>0; checks.append({'name':fn,'result':'pass' if ok else 'fail','message':'exists' if ok else 'missing or empty'})
@@ -263,6 +294,8 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
     unpack_data = None
     diff_data = None
     liveness_data = None
+    liveness_inventory_data = None
+    webgl_capture_data = None
     node_data = None
     font_data = None
     for fn, schema, allowed in required:
@@ -270,9 +303,27 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         if fn == 'h2d_unpack_report.json': unpack_data = d
         if fn == 'diff_summary.json': diff_data = d
         if fn == 'liveness_validation.json': liveness_data = d
+        if fn == 'liveness_inventory.json': liveness_inventory_data = d
+        if fn == 'webgl_capture_report.json': webgl_capture_data = d
         if fn == 'node_validation.json': node_data = d
         if fn == 'font_manifest.json': font_data = d
+    if liveness_required and liveness_inventory_data:
+        webgl_surfaces = [row for row in (liveness_inventory_data.get('surfaces') or []) if isinstance(row, dict) and 'webgl' in str(row.get('kind', '')).lower()]
+        has_webgl = bool(webgl_surfaces)
+        webgl_result = (webgl_capture_data or {}).get('result')
+        contexts = (webgl_capture_data or {}).get('contexts') or []
+        captured = {
+            row.get('canvas_selector')
+            for row in contexts
+            if isinstance(row, dict) and 'webgl' in str(row.get('context_type', '')).lower()
+            and isinstance(row.get('frame_hashes'), list) and len(row['frame_hashes']) >= 3
+            and isinstance(row.get('non_blank_samples'), int) and row['non_blank_samples'] >= 1
+        }
+        expected_selectors = {row.get('selector') for row in webgl_surfaces}
+        ok = not has_webgl or (webgl_result == 'pass' and captured == expected_selectors)
+        checks.append({'name':'webgl_inventory_consistency','result':'pass' if ok else 'fail','message':'WebGL capture matches complete inventory' if ok else 'WebGL is inventoried but a pass capture with three frame hashes and non-blank samples for every canvas is missing'})
     add_font_consistency_check(checks, node_data, font_data)
+    add_font_approval_check(checks, font_data, current_verified)
     add_h2d_unpack_strict_checks(checks, unpack_data)
     add_live_comparison_strict_check(checks, diff_data, accept_changed_source)
     add_liveness_strict_check(checks, liveness_data, liveness_required)

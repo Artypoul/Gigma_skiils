@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, json
+import argparse, hashlib, json
 from pathlib import Path
 
 
@@ -20,6 +20,6 @@ def main():
             'body_overflow': after.get('body_overflow'),
             'active': after.get('active')
         }})
-    out={'result':'pass' if targets else 'not-tested','targets':targets}
+    out={'result':'pass' if targets else 'not-tested','generator_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'targets':targets}
     args.out.parent.mkdir(parents=True,exist_ok=True); args.out.write_text(json.dumps(out,indent=2,ensure_ascii=False),encoding='utf-8'); print(f'targets={len(targets)} out={args.out}')
 if __name__=='__main__': main()
