@@ -149,13 +149,13 @@ def require_specialist_command_suffix(commands: list[list[str]], roles: set[str]
 
 def verify_matrix_artifacts(output: Path, coverage: dict, classification: dict, expected_matrix: list[str], commands: list[list[str]] | None = None, candidate_root: Path | None = None, require_specialist: bool = True) -> None:
     role_paths = matrix_role_paths(classification)
+    rows = coverage.get("artifacts")
+    if not isinstance(rows, list):
+        raise EvidenceError("matrix coverage must cite the individual gate artifacts")
     if require_specialist:
         if not commands or candidate_root is None:
             raise EvidenceError("matrix artifacts require bundled specialist commands")
         require_specialist_command_suffix(commands, set(role_paths), candidate_root)
-    rows = coverage.get("artifacts")
-    if not isinstance(rows, list):
-        raise EvidenceError("matrix coverage must cite the individual gate artifacts")
     by_role = {row.get("role"): row for row in rows if isinstance(row, dict) and isinstance(row.get("role"), str)}
     if set(by_role) != set(role_paths):
         raise EvidenceError(f"matrix coverage artifact roles differ: expected {sorted(role_paths)}, got {sorted(by_role)}")
