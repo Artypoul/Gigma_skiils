@@ -50,24 +50,38 @@ async function main() {
   const rectTargetsPath = arg('rect-targets');
   const outPath = arg('out', 'reports/font_manifest.json');
   const selectorMapPath = arg('selector-map');
-  const viewports = String(arg('viewports') || arg('viewport') || '').split(',').filter(Boolean).map(Number);
-  if (!candidate || !rectTargetsPath || !viewports.length) {
-    throw new Error('Usage: --candidate <file|url> --rect-targets <file> --viewports 1440 --out <file> [--selector-map <file>]');
+  const substitutionsPath = arg('substitutions');
+  const readyTimeout = Number(arg('ready-timeout-ms', '10000'));
+  const waitMs = Number(arg('wait-ms', '0'));
+  const allowPartial = process.argv.includes('--allow-partial-viewports');
+  if (!candidate || !rectTargetsPath) {
+    throw new Error('Usage: --candidate <file|url> --rect-targets <file> --out <file> [--viewports 390,1440] [--selector-map <file>] [--substitutions <file>] [--ready-selector <css>] [--allow-partial-viewports]');
   }
 
   const { launchChromium } = require('./browser');
   const targets = readJson(rectTargetsPath);
   const selectorMap = selectorMapPath ? readJson(selectorMapPath) : null;
+  const substitutions = substitutionsPath ? readJson(substitutionsPath) : {};
   const byViewport = new Map(targets.viewports.map((v) => [Number(v.viewport), v]));
+  const recorded = [...byViewport.keys()];
+  // Typography is responsive: measuring one width and declaring the manifest
+  // done would leave the other breakpoints unproven, so the default is every
+  // recorded viewport and a narrower run has to be declared.
+  const requested = String(arg('viewports') || arg('viewport') || '').split(',').filter(Boolean).map(Number);
+  const viewports = requested.length ? requested : recorded;
   const unrecorded = viewports.filter((v) => !byViewport.has(v));
   if (unrecorded.length) {
-    throw new Error(`no rect targets recorded for viewport(s) ${unrecorded.join(', ')}; recorded: ${[...byViewport.keys()].join(', ')}`);
+    throw new Error(`no rect targets recorded for viewport(s) ${unrecorded.join(', ')}; recorded: ${recorded.join(', ')}`);
+  }
+  const skipped = recorded.filter((v) => !viewports.includes(v));
+  if (skipped.length && !allowPartial) {
+    throw new Error(`viewport(s) ${skipped.join(', ')} are recorded but not measured; run them too or pass --allow-partial-viewports to scope the manifest deliberately`);
   }
 
   const browser = await launchChromium();
   const fonts = [];
   const licensingNotes = [];
-  let unavailable = 0, substituted = 0, measured = 0;
+  let unavailable = 0, substituted = 0, measured = 0, unapproved = 0;
 
   for (const viewport of viewports) {
     const page = await browser.newPage({ viewport: { width: viewport, height: Number(arg('height', '1200')) }, deviceScaleFactor: 1 });
@@ -77,6 +91,18 @@ async function main() {
     const selectors = selectorsFor(selectorMap, viewport);
     const group = byViewport.get(viewport);
     const wanted = group.targets.filter((t) => t.text_style && t.text_style.fontFamily);
+    // A live project page may still be hydrating; probing too early would
+    // report its nodes as not-found and turn a valid transfer into
+    // manual-review.
+    if (selectors) {
+      const readySelector = arg('ready-selector');
+      if (readySelector) await page.waitForSelector(readySelector, { timeout: readyTimeout }).catch(() => {});
+      for (const target of wanted) {
+        const selector = selectors[target.data_h2d_path];
+        if (selector) await page.waitForSelector(selector, { timeout: readyTimeout }).catch(() => {});
+      }
+    }
+    if (waitMs) await page.waitForTimeout(waitMs);
 
     const probe = await page.evaluate(({ selectors, paths }) => {
       const pick = (h2dPath) => {
@@ -118,9 +144,21 @@ async function main() {
       measured += 1;
       const familyMatches = seen.primary_family.toLowerCase() === donorPrimary.toLowerCase();
       let entry_result = 'exact';
+      let approval = null;
       if (seen.available === false) { entry_result = 'renders-fallback'; unavailable += 1; }
-      else if (!familyMatches) { entry_result = 'substituted'; substituted += 1; }
+      else if (!familyMatches) {
+        substituted += 1;
+        // A substitution is a decision, not a measurement: without recorded
+        // approval an accidental fallback would earn the same green verdict as
+        // a deliberate one.
+        approval = substitutions[donorPrimary] || substitutions[`${donorPrimary} -> ${seen.primary_family}`] || null;
+        const approved = approval && approval.approved === true && typeof approval.reason === 'string' && approval.reason.trim().length >= 10;
+        entry_result = approved ? 'substituted' : 'substituted-unapproved';
+        if (!approved) unapproved += 1;
+      }
       fonts.push({
+        substitution_reason: approval && approval.reason ? approval.reason : null,
+        substitution_approved_by: approval && approval.approved_by ? approval.approved_by : null,
         viewport,
         data_h2d_path: target.data_h2d_path,
         selector: selectors ? selectors[target.data_h2d_path] || null : null,
@@ -145,21 +183,33 @@ async function main() {
   if (!measured) result = 'not-tested';
   else if (notFound.length) result = 'manual-review';
   else if (unavailable) result = 'font-mismatch-risk';
+  else if (unapproved) result = 'manual-review';
   else if (substituted) result = 'font-substituted';
   else result = 'font-exact';
 
   if (unavailable) {
     licensingNotes.push(`${unavailable} node(s) declare a family that cannot paint their text; the browser substitutes silently. Load the real face or declare the fallback deliberately.`);
   }
+  if (unapproved) {
+    licensingNotes.push(`${unapproved} substitution(s) have no recorded approval. Add them to --substitutions as {"<donor family>": {"approved": true, "reason": "...", "approved_by": "..."}} so an accidental fallback is not mistaken for a decision.`);
+  }
   if (substituted) {
     licensingNotes.push(`${substituted} node(s) use a different family than the donor. Record why — missing script coverage is a valid reason, an accidental fallback is not.`);
   }
   licensingNotes.push('Do not package proprietary font files without permission.');
 
-  const report = { result, measured_nodes: measured, fonts, licensing_notes: licensingNotes };
+  const report = {
+    result,
+    measured_nodes: measured,
+    measured_viewports: viewports,
+    recorded_viewports: recorded,
+    scoped_viewports: Boolean(skipped.length),
+    fonts,
+    licensing_notes: licensingNotes
+  };
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(report, null, 2));
-  console.log(`result=${result} measured=${measured} substituted=${substituted} renders_fallback=${unavailable} out=${outPath}`);
+  console.log(`result=${result} measured=${measured} viewports=${viewports.join('/')} substituted=${substituted} unapproved=${unapproved} renders_fallback=${unavailable} out=${outPath}`);
   process.exit(result === 'font-exact' || result === 'font-substituted' ? 0 : 2);
 }
 main().catch((err) => { console.error(err.stack || err); process.exit(1); });

@@ -33,15 +33,23 @@ function findLocalChrome() {
 }
 
 function resolveChromium() {
+  // An installed skill usually lives outside the project it is transferring
+  // into, so resolving only relative to this file would miss the project's own
+  // playwright — the very fallback the docs promise. Try the project first.
+  const { createRequire } = require('module');
+  const path = require('path');
+  const projectRequire = createRequire(path.join(process.cwd(), 'noop.js'));
   for (const name of ['playwright', 'playwright-core']) {
-    try {
-      return { chromium: require(name).chromium, pkg: name };
-    } catch (err) {
-      if (err.code !== 'MODULE_NOT_FOUND' || !String(err.message).includes(name)) throw err;
+    for (const load of [(n) => projectRequire(n), (n) => require(n)]) {
+      try {
+        return { chromium: load(name).chromium, pkg: name };
+      } catch (err) {
+        if (err.code !== 'MODULE_NOT_FOUND') throw err;
+      }
     }
   }
   throw new Error(
-    'Neither "playwright" nor "playwright-core" can be resolved.\n' +
+    'Neither "playwright" nor "playwright-core" can be resolved from this skill or from ' + process.cwd() + '.\n' +
     'Install one of them, e.g.:  npm install playwright && npx playwright install chromium\n' +
     'Then re-run scripts/preflight_env.py before claiming any gate result.'
   );

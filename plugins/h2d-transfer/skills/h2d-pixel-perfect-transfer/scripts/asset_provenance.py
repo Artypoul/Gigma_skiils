@@ -24,6 +24,11 @@ from typing import Any
 
 DEFAULT_THRESHOLD = 1024 * 1024
 DECISION_VALUES = {'approved-as-is', 'approved-as-placeholder', 'replace-before-publish', 'removed', 'pending'}
+ASSET_SUFFIXES = {
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.ico', '.bmp',
+    '.mp4', '.webm', '.mov', '.m4v', '.ogg', '.mp3', '.wav',
+    '.woff', '.woff2', '.ttf', '.otf', '.eot', '.json', '.lottie', '.riv', '.glb', '.gltf',
+}
 
 
 def sha256_file(path: Path) -> str:
@@ -80,6 +85,7 @@ def main() -> int:
     ap.add_argument('--decisions', type=Path, help='JSON map: {"<path>": {"third_party_brand": bool, "owner_decision": "...", ...}}')
     ap.add_argument('--threshold-bytes', type=int, default=DEFAULT_THRESHOLD)
     ap.add_argument('--allow-empty', action='store_true', help='The candidate genuinely ships no assets; without this an empty result is a failure, not a pass.')
+    ap.add_argument('--scan-root', type=Path, help='Directory the candidate actually ships (e.g. public/). Every asset found under it must appear in the report, so a partial --assets list cannot hide an unreviewed file.')
     ap.add_argument('--out', type=Path, required=True)
     args = ap.parse_args()
 
@@ -173,6 +179,21 @@ def main() -> int:
     # otherwise leave the real asset silently undeclared.
     for stale in sorted(set(decisions) - used_decision_keys):
         issues.append({'path': stale, 'issue': 'decision key matches no shipped asset: use the exact path as shipped'})
+
+    # Without an authoritative set, a partial --assets list would let an
+    # unreviewed donor logo or a heavy video ship under a green report.
+    if args.scan_root:
+        if not args.scan_root.is_dir():
+            ap.error(f'--scan-root is not a directory: {args.scan_root}')
+        reported = {a['path'] for a in assets}
+        for found in sorted(p for p in args.scan_root.rglob('*') if p.is_file() and p.suffix.lower() in ASSET_SUFFIXES):
+            try:
+                rel = found.resolve().relative_to(cwd)
+            except ValueError:
+                rel = found
+            found_key = str(rel).replace('\\', '/')
+            if found_key not in reported:
+                issues.append({'path': found_key, 'issue': f'asset present under --scan-root {args.scan_root} but missing from the report: add it to --assets'})
 
     result = 'pass' if not issues else 'needs-decision'
     report = {

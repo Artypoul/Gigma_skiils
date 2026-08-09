@@ -156,18 +156,7 @@ Required source artifacts:
 - `source/h2d_decoded.json`
 - `source/h2d_tree_index.json`
 
-2. Design system first: wire the fonts and container chain (see Design System First), then generate the manifest from the rendered page:
-
-```bash
-node scripts/font_manifest.js \
-  --candidate h2d-transfer-output/dist/hero.html \
-  --rect-targets h2d-transfer-output/reports/rect_targets.json \
-  --viewports 1440 \
-  --out h2d-transfer-output/reports/font_manifest.json
-```
-
-`font-exact` requires both that the primary families match the donor's and that each one can actually paint its text. A declared brand face that the browser silently replaces reports `font-mismatch-risk`: load the real face, or declare the fallback deliberately so the result is an honest `font-substituted`.
-3. Build viewport-scoped rect targets before final layout validation (the tree index rows carry `text_style` where the donor exposes it — targets inherit it):
+2. Build viewport-scoped rect targets — every later gate reads them, so they come first (the tree index rows carry `text_style`, `rendered_font` and `box_style` where the donor exposes them; targets inherit all three):
 
 ```bash
 python scripts/extract_rect_targets.py \
@@ -177,7 +166,18 @@ python scripts/extract_rect_targets.py \
   --out h2d-transfer-output/reports/rect_targets.json
 ```
 
-4. Implement the candidate: `dist/<scope>.html`, an equivalent React/Tailwind component, or **integration mode** — the live project page itself.
+3. Design system first: wire the fonts and the container chain into the candidate (see Design System First), then prove the typography on the rendered page **before** building blocks:
+
+```bash
+node scripts/font_manifest.js \
+  --candidate h2d-transfer-output/dist/hero.html \
+  --rect-targets h2d-transfer-output/reports/rect_targets.json \
+  --out h2d-transfer-output/reports/font_manifest.json
+```
+
+Every recorded viewport is measured by default, because typography is responsive; narrow the run only with `--allow-partial-viewports`. `font-exact` requires both that the primary families match the donor's and that each one can actually paint its text — a declared brand face the browser silently replaces reports `font-mismatch-risk`. A deliberate replacement needs recorded approval via `--substitutions` (`{"<donor family>": {"approved": true, "reason": "…", "approved_by": "…"}}`); without it the result is `manual-review`, so an accidental fallback never passes as a decision.
+
+4. Implement the candidate blocks: `dist/<scope>.html`, an equivalent React/Tailwind component, or **integration mode** — the live project page itself.
 5. Validate geometry and text styles on the active viewport branch only. The candidate is either a file or a URL; when the project's markup cannot carry `data-h2d-path` markers, pass a selector map instead:
 
 ```bash
@@ -211,11 +211,14 @@ node scripts/asset_paint_audit.js \
 
 ```bash
 python scripts/asset_provenance.py \
-  --assets public/hero-orb-1440.png public/hero-showreel.mp4 \
+  --assets public \
+  --scan-root public \
   --raw-asset-inventory h2d-transfer-output/reports/raw_asset_inventory.json \
   --decisions h2d-transfer-output/reports/asset_decisions.json \
   --out h2d-transfer-output/reports/asset_provenance.json
 ```
+
+Pass `--scan-root` with the directory the candidate actually ships: anything found under it that is missing from the report is an issue, so a partial `--assets` list cannot quietly leave a donor logo or a heavy video unreviewed.
 
 An `unknown` origin means the shipped bytes are in neither the donor inventory nor the decisions file — find out what that file really is instead of declaring it by hand. Canvas/WebGL frames re-captured in a later unpack will not hash-match an earlier extraction: capture them once and reuse that file.
 8. Capture live comparison and produce a real `pass` or `fail` verdict:
