@@ -25,7 +25,10 @@ async function main(){
     for(const side of ['candidate','original']){
       const url = side==='candidate' ? candidate : original;
       if(!url) continue;
-      const page=await browser.newPage({viewport:{width:vp,height:Number(heightMap[vp] || arg('height','1600'))}, deviceScaleFactor:1, locale:arg('locale','en-US'), timezoneId:arg('timezone','Europe/Berlin')});
+      const resolvedHeight=Number(heightMap[vp] || arg('height','1600'));
+      const page=await browser.newPage({viewport:{width:vp,height:resolvedHeight}, deviceScaleFactor:1, locale:arg('locale','en-US'), timezoneId:arg('timezone','Europe/Berlin')});
+      row.viewport_height=resolvedHeight;
+      row.height_source=heightMap[vp] ? 'height-map' : 'default';
       await page.emulateMedia({reducedMotion: arg('reduced-motion','reduce')});
       await page.goto(toUrl(url),{waitUntil:'networkidle'});
       if(side==='original' && hideOriginalSelector){
@@ -98,7 +101,7 @@ async function main(){
     issues.push(`original page was normalized before capture via --hide-original-selector='${hideOriginalSelector}'; the live-diff gate requires manual confirmation that the hidden element is an approved deviation`);
     if(result === 'pass'){ result='manual-review'; }
   }
-  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio,hideOriginalSelector:hideOriginalSelector||null,originalNormalized:Boolean(hideOriginalSelector)}, viewports: rows, issues};
+  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio,defaultHeight:Number(arg('height','1600')),heightMap:heightMapRaw ? heightMap : null,hideOriginalSelector:hideOriginalSelector||null,originalNormalized:Boolean(hideOriginalSelector)}, viewports: rows, issues};
   fs.mkdirSync(path.join(outDir,'reports'),{recursive:true}); fs.writeFileSync(path.join(outDir,'reports','diff_summary.json'),JSON.stringify(report,null,2));
   console.log(`screenshots=${rows.length} report=reports/diff_summary.json`);
 }
