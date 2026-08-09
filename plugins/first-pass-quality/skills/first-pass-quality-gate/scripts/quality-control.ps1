@@ -54,7 +54,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $script:SchemaVersion = 3
-$script:PolicyVersion = '0.4.0'
+$script:PolicyVersion = '0.4.1'
 $script:ListSeparator = '~~'
 
 function Get-UtcNow {
@@ -1280,12 +1280,13 @@ function Invoke-PostToolUse {
         $state.tools.count = [int]$state.tools.count + 1
         if (-not $success) { $state.tools.failures = [int]$state.tools.failures + 1 }
         $responseHash = Get-Hash (($HookData.tool_response | ConvertTo-Json -Depth 12 -Compress))
+        $observedAt = Get-UtcNow
         $state.lastTool = @{
             toolUseId = [string]$HookData.tool_use_id
             toolName = $toolName
             kind = $classification.kind
             success = $success
-            observedAt = Get-UtcNow
+            observedAt = $observedAt
             responseHash = $responseHash
         }
         $mutationKinds = @('write', 'unclassified-shell', 'vcs-stage', 'commit', 'push', 'pr-write', 'external-write', 'production-shell')
@@ -1296,7 +1297,7 @@ function Invoke-PostToolUse {
         }
         if ($classification.kind -in @('write', 'unclassified-shell', 'external-write', 'production-shell')) {
             $state.lastWriteToolUseId = [string]$HookData.tool_use_id
-            $state.lastWriteAt = Get-UtcNow
+            $state.lastWriteAt = $observedAt
             if ([string]$state.status -eq 'active') {
                 # Гейты пересбрасываются только у живого замка; advisory-активность после terminal его не трогает.
                 $state.gates.publish = if ($state.task -and $state.task.mode -eq 'pr') { 'pending' } else { 'not_required' }

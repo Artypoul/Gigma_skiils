@@ -610,6 +610,8 @@ try {
     )
     $freshWrite = New-BaseEvent $freshness 't2' 'PostToolUse'; $freshWrite.tool_name = 'apply_patch'; $freshWrite.tool_input = $preWrite.tool_input; $freshWrite.tool_response = @{ success = $true }; $freshWrite.tool_use_id = 'fresh-write-1'
     $null = Invoke-HookCase $freshWrite
+    $freshWriteState = Invoke-StateCase $freshness @('-Action', 'ShowStatus')
+    Assert-True ($freshWriteState.lastTool.observedAt -eq $freshWriteState.lastWriteAt) 'One write event must use one timestamp for tool evidence and freshness.'
     $null = Invoke-StateCase $freshness @('-Action', 'AddEvidence', '-CriterionId', 'C1', '-Validator', 'patch', '-EvidenceStatus', 'passed', '-Subject', 'file', '-ExpectedToolName', 'apply_patch')
     $freshTest = New-BaseEvent $freshness 't2' 'PostToolUse'; $freshTest.tool_name = 'Bash'; $freshTest.tool_input = @{ command = '.\tests\run-contract-tests.ps1'; workdir = $workspace }; $freshTest.tool_response = @{ exit_code = 0 }; $freshTest.tool_use_id = 'fresh-test-1'
     $null = Invoke-HookCase $freshTest
@@ -911,7 +913,7 @@ try {
     [pscustomobject]@{
         status = 'passed'
         assertions = $script:Assertions
-        policyVersion = '0.4.0'
+        policyVersion = '0.4.1'
         codexContract = '0.144.3'
     } | ConvertTo-Json
 } finally {
