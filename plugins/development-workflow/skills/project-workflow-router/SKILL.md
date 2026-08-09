@@ -9,7 +9,7 @@ Use this skill to decide which workflow chain to run. It is a router, not a repl
 
 ## Always Start
 
-1. Before starting any new task, ask Art one concise clarifying question about the expected result and wait for his answer. Do not inspect, edit, commit, push, create a PR, merge, deploy, or call external APIs until he answers. The only exception is a direct answer to that clarification: continue from the answer without asking the same question again.
+1. Before starting a new task whose expected result is not already explicit, ask Art one concise clarifying question and wait for his answer. Do not edit, commit, push, create a PR, merge, deploy, or call external APIs until he answers. Skip the question when the request is already fully specified (outcome, scope and completion criteria are explicit with no open product choice), when the message is an answer or continuation of an already clarified task, when a single unambiguous fact is requested, or for automated one-shot invocations that carry their own full specification (for example a review run with PR number and checklist). Reading project context to ask a better question is allowed.
 2. Use `project-context-bootstrap` first when it is available.
 3. Read the project-local `AGENTS.md` and memory files before choosing a workflow.
 4. Prefer local project skills over generic global skills.

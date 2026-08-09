@@ -1,6 +1,6 @@
 {
   "name": "h2d-transfer",
-  "version": "0.2.2+codex.20260713082225",
+  "version": "0.2.3+codex.20260713082225",
   "description": "Frontend transfer skills for reconstructing .h2d snapshots or live websites into clean Tailwind HTML/React, with mandatory proof gates or practical dev-mode rebuild guidance plus source-of-truth and recovery guardrails.",
   "author": {
     "name": "Artypoul"

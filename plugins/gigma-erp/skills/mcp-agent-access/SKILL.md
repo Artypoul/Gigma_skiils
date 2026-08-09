@@ -12,7 +12,7 @@ allowed-tools: Bash Read Grep
 
 - Для обычного помощника проекта по умолчанию использовать профиль `V0 + V1 Project Assistant Readonly`: `["view-orders", "view-tasks", "view-counterparties", "view-users", "view-applications"]`. После выдачи проверить разрешённый read endpoint и запрет agent-admin endpoint (`GET /api/agents` должен дать `403`).
 - Не выдавать обычному помощнику V5/system права: `create-users`, `edit-users`, `view-admins`, `create-admins`, `edit-admins`, `create-permissions`, `edit-permissions`, `create-roles`, `edit-roles`, `view-agents`, `create-agents`, `edit-agents`, `manage-agent-tokens`.
-- V2/V3/V4, write, finance, webhook, catalog/storefront и agent-admin профили держать отдельными токенами и включать только после явного решения владельца и exact `method + path` allowlist.
+- V2/V3/V4, write, finance, webhook, catalog/storefront и agent-admin профили держать на **отдельных agent-пользователях** с минимальными правами, а не на дополнительных токенах одного пользователя: права живут на пользователе (роль + direct permissions), поэтому повышение прав ради второго токена автоматически повышает и все прежние «read-only» токены того же пользователя. Включать только после явного решения владельца и exact `method + path` allowlist.
 
 ## Главная модель
 

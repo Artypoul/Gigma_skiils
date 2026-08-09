@@ -82,13 +82,23 @@ async function main(){
       row.total_pixels=metrics.total_pixels;
       row.diff_bbox=metrics.diff_bbox;
       row.verdict=metrics.pixel_mismatch_ratio <= maxMismatchRatio ? 'pass' : 'fail';
-      if(row.verdict !== 'pass'){
+      if(hideOriginalSelector){
+        // Оригинал был изменён перед сравнением: чистый pass недопустим — нужен ручной разбор.
+        row.original_normalized=true;
+        row.hide_original_selector=hideOriginalSelector;
+        if(row.verdict === 'pass'){ row.verdict='pass-with-normalization'; }
+      }
+      if(row.verdict === 'fail'){
         issues.push(`viewport ${row.viewport}: pixel mismatch ratio ${metrics.pixel_mismatch_ratio} exceeds ${maxMismatchRatio}`);
         result='fail';
       }
     }
   }
-  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio}, viewports: rows, issues};
+  if(hideOriginalSelector){
+    issues.push(`original page was normalized before capture via --hide-original-selector='${hideOriginalSelector}'; the live-diff gate requires manual confirmation that the hidden element is an approved deviation`);
+    if(result === 'pass'){ result='manual-review'; }
+  }
+  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio,hideOriginalSelector:hideOriginalSelector||null,originalNormalized:Boolean(hideOriginalSelector)}, viewports: rows, issues};
   fs.mkdirSync(path.join(outDir,'reports'),{recursive:true}); fs.writeFileSync(path.join(outDir,'reports','diff_summary.json'),JSON.stringify(report,null,2));
   console.log(`screenshots=${rows.length} report=reports/diff_summary.json`);
 }
