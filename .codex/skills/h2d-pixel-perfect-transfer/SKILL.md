@@ -147,6 +147,11 @@ node scripts/capture_visual_diff.js \
   --out-dir h2d-transfer-output
 ```
 
+Дополнительные флаги сравнения:
+
+- `--height-map '{"390":2400,"1440":1800}'` — высота вьюпорта для конкретной ширины, когда рендер зависит от высоты. Разрешённая высота и её источник пишутся в каждую строку отчёта (`viewport_height`, `height_source`), сама карта — в `environment.heightMap`.
+- `--hide-original-selector '<css>'` — скрыть элемент только на оригинале перед съёмкой (например, фиксированный оверлей, которого нет в кандидате). Это **изменение эталона**: отчёт помечается `original_normalized`, вердикт вьюпорта становится `pass-with-normalization`, общий `result` понижается до `manual-review`, а в `issues` добавляется требование подтвердить, что скрытый элемент — согласованное отклонение. Строгий гейт `run_all_gates.py` требует `result == "pass"`, поэтому такой прогон не закрывает обязательную живую сверку автоматически.
+
 7. If the scope is interactive, run the behavior pipeline.
 8. If the original has runtime surfaces, run the liveness/WebGL pipeline.
 9. Run the final runner and only then report final readiness.

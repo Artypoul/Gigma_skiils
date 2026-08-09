@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,8 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run(cmd: list[str]) -> tuple[bool, str]:
     try:
+        executable = shutil.which(cmd[0]) or cmd[0]
         completed = subprocess.run(
-            cmd,
+            [executable, *cmd[1:]],
             cwd=ROOT,
             capture_output=True,
             text=True,

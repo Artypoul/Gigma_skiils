@@ -12,6 +12,9 @@ function toBool(v, d=true){
 }
 async function main(){
   const original=arg('original'); const candidate=arg('candidate'); const outDir=arg('out-dir','h2d-transfer-output'); const viewports=String(arg('viewports','390')).split(',').map(Number).filter(v=>!Number.isNaN(v));
+  const heightMapRaw=arg('height-map');
+  const heightMap=heightMapRaw ? JSON.parse(heightMapRaw) : {};
+  const hideOriginalSelector=arg('hide-original-selector');
   const maxMismatchRatio=Number(arg('max-pixel-mismatch-ratio','0.005'));
   const pythonBin=arg('python','python');
   if(!candidate) throw new Error('Usage: --candidate file --original url optional --viewports 390,768 --out-dir dir');
@@ -22,9 +25,16 @@ async function main(){
     for(const side of ['candidate','original']){
       const url = side==='candidate' ? candidate : original;
       if(!url) continue;
-      const page=await browser.newPage({viewport:{width:vp,height:Number(arg('height','1600'))}, deviceScaleFactor:1, locale:arg('locale','en-US'), timezoneId:arg('timezone','Europe/Berlin')});
+      const resolvedHeight=Number(heightMap[vp] || arg('height','1600'));
+      const page=await browser.newPage({viewport:{width:vp,height:resolvedHeight}, deviceScaleFactor:1, locale:arg('locale','en-US'), timezoneId:arg('timezone','Europe/Berlin')});
+      row.viewport_height=resolvedHeight;
+      row.height_source=heightMap[vp] ? 'height-map' : 'default';
       await page.emulateMedia({reducedMotion: arg('reduced-motion','reduce')});
       await page.goto(toUrl(url),{waitUntil:'networkidle'});
+      if(side==='original' && hideOriginalSelector){
+        await page.addStyleTag({content:`${hideOriginalSelector}{display:none!important}`});
+        await page.locator(hideOriginalSelector).evaluateAll(nodes => nodes.forEach(node => node.remove()));
+      }
       const finalUrl=page.url(); const file=path.join(outDir,'screenshots',`${side}_${vp}.png`);
       await page.screenshot({path:file, fullPage:toBool(arg('full-page','true'), true)});
       row[side]=path.relative(outDir,file);
@@ -75,13 +85,23 @@ async function main(){
       row.total_pixels=metrics.total_pixels;
       row.diff_bbox=metrics.diff_bbox;
       row.verdict=metrics.pixel_mismatch_ratio <= maxMismatchRatio ? 'pass' : 'fail';
-      if(row.verdict !== 'pass'){
+      if(hideOriginalSelector){
+        // Оригинал был изменён перед сравнением: чистый pass недопустим — нужен ручной разбор.
+        row.original_normalized=true;
+        row.hide_original_selector=hideOriginalSelector;
+        if(row.verdict === 'pass'){ row.verdict='pass-with-normalization'; }
+      }
+      if(row.verdict === 'fail'){
         issues.push(`viewport ${row.viewport}: pixel mismatch ratio ${metrics.pixel_mismatch_ratio} exceeds ${maxMismatchRatio}`);
         result='fail';
       }
     }
   }
-  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio}, viewports: rows, issues};
+  if(hideOriginalSelector){
+    issues.push(`original page was normalized before capture via --hide-original-selector='${hideOriginalSelector}'; the live-diff gate requires manual confirmation that the hidden element is an approved deviation`);
+    if(result === 'pass'){ result='manual-review'; }
+  }
+  const report={result, environment:{locale:arg('locale','en-US'),timezone:arg('timezone','Europe/Berlin'),reducedMotion:arg('reduced-motion','reduce'),maxPixelMismatchRatio:maxMismatchRatio,defaultHeight:Number(arg('height','1600')),heightMap:heightMapRaw ? heightMap : null,hideOriginalSelector:hideOriginalSelector||null,originalNormalized:Boolean(hideOriginalSelector)}, viewports: rows, issues};
   fs.mkdirSync(path.join(outDir,'reports'),{recursive:true}); fs.writeFileSync(path.join(outDir,'reports','diff_summary.json'),JSON.stringify(report,null,2));
   console.log(`screenshots=${rows.length} report=reports/diff_summary.json`);
 }

@@ -2,7 +2,13 @@
   "result": "pass",
   "environment": {
     "timezone": "Europe/Berlin",
-    "reducedMotion": "reduce"
+    "reducedMotion": "reduce",
+    "locale": "en-US",
+    "maxPixelMismatchRatio": 0.005,
+    "defaultHeight": 1600,
+    "heightMap": null,
+    "hideOriginalSelector": null,
+    "originalNormalized": false
   },
   "viewports": [
     {
@@ -11,7 +17,11 @@
       "candidate": "screenshots/candidate_390.png",
       "diff": "screenshots/diff_390.png",
       "pixel_mismatch_ratio": 0.0,
-      "verdict": "pass"
+      "verdict": "pass",
+      "viewport_height": 1600,
+      "height_source": "default",
+      "different_pixels": 0,
+      "total_pixels": 624000
     }
   ],
   "issues": []

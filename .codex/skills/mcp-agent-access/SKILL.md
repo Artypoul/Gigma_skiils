@@ -8,7 +8,11 @@ allowed-tools: Bash Read Grep
 
 Цель: подключить внешний MCP-сервер к Gigma ERP через технического `User` с `is_agent=true` и обычный `Authorization: Bearer <agent_token>`.
 
-Источник деталей: `../../reference/agent-mcp-access.md`. Если нужно менять backend-код, дополнительно используй Graphify hooks ниже и сверяй исходники.
+Источник деталей: `../../reference/agent-mcp-access.md`. Если нужно менять backend-код, дополнительно используй Graphify hooks ниже и сверяй исходники. Если работа идёт в checkout `itecho-erp-backend`, для готовых MCP-профилей и allowlist сначала читай `docs/agent-mcp-tool-profiles.md`.
+
+- Для обычного помощника проекта по умолчанию использовать канонический пресет `read_only_assistant` из `../../reference/agent-permission-profiles.md` (тот же путь, что использует `request-agent-access`): `["view-orders", "view-tasks", "view-counterparties", "view-communications", "view-users", "view-applications"]` — тот же набор, что выдаёт zero-token flow `request-agent-access`, чтобы права не зависели от способа выдачи. Более узкий вариант без `view-communications` применять только по явному решению владельца и называть его отдельно. После выдачи проверить разрешённый read endpoint и запрет agent-admin endpoint (`GET /api/agents` должен дать `403`).
+- Не выдавать обычному помощнику V5/system права: `create-users`, `edit-users`, `view-admins`, `create-admins`, `edit-admins`, `create-permissions`, `edit-permissions`, `create-roles`, `edit-roles`, `view-agents`, `create-agents`, `edit-agents`, `manage-agent-tokens`.
+- V2/V3/V4, write, finance, webhook, catalog/storefront и agent-admin профили держать на **отдельных agent-пользователях** с минимальными правами, а не на дополнительных токенах одного пользователя: права живут на пользователе (роль + direct permissions), поэтому повышение прав ради второго токена автоматически повышает и все прежние «read-only» токены того же пользователя. Включать только после явного решения владельца и exact `method + path` allowlist.
 
 ## Главная модель
 
