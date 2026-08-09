@@ -22,6 +22,8 @@ class BehaviorAndLivenessTests(unittest.TestCase):
             rows = {row["interaction_id"]: row for row in json.loads(out.read_text(encoding="utf-8"))["interactions"]}
             self.assertEqual([step["action"] for step in rows["menu:close-escape"]["sequence"]], ["click", "escape"])
             self.assertEqual([step["action"] for step in rows["menu:close-outside"]["sequence"]], ["click", "outside-click"])
+            self.assertEqual(rows["menu:close-escape"]["prerequisite_count"], 1)
+            self.assertEqual(rows["menu:close-outside"]["prerequisite_count"], 1)
 
     def test_matrix_actions_keep_reachable_state_prerequisites(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

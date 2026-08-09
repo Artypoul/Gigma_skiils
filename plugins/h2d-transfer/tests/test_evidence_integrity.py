@@ -23,6 +23,7 @@ from evidence_integrity import (  # noqa: E402
     verify_contract,
     verify_current_evidence,
     require_local_candidate_urls,
+    validate_dynamic_artifact_source,
     validate_dynamic_manifest,
 )
 from create_transfer_contract import responsive_matrix  # noqa: E402
@@ -203,6 +204,18 @@ class EvidenceIntegrityTests(unittest.TestCase):
             completed = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(completed.returncode, 2)
             self.assertIn("valid JSON", completed.stdout)
+
+    def test_webgl_dynamic_artifact_rejects_non_object_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            artifact = Path(temp) / "webgl.json"
+            self.write_json(artifact, {
+                "result": "pass",
+                "coverage_complete": True,
+                "generator_sha256": sha256_file(SKILL / "scripts" / "webgl_capture.js"),
+                "contexts": ["not-a-captured-context"],
+            })
+            with self.assertRaisesRegex(EvidenceError, "WebGL capture is incomplete"):
+                validate_dynamic_artifact_source("webgl-capture", artifact)
 
     def test_command_executable_resolution_is_bound_to_lifecycle_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

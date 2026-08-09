@@ -99,6 +99,9 @@ class CurrentRunnerTests(unittest.TestCase):
                 artifacts.append({"role":role,"path":f"reports/{name}","sha256":sha256_file(path),"matrix_completed":[matrix_key]})
             with self.assertRaisesRegex(EvidenceError, "bundled specialist invocation"):
                 verify_matrix_artifacts(output, {"artifacts":artifacts}, {}, [matrix_key], [[sys.executable, "generate_reports.py"]], output)
+            disguised = [[sys.executable, "generate_reports.py", str(SKILL / "scripts" / name)] for name in scripts.values()]
+            with self.assertRaisesRegex(EvidenceError, "specialist"):
+                verify_matrix_artifacts(output, {"artifacts":artifacts}, {}, [matrix_key], disguised, output)
 
     def test_webgl_inventory_rejects_not_present_capture(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

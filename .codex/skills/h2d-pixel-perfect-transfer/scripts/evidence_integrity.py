@@ -282,7 +282,28 @@ def validate_dynamic_artifact_source(kind: str, source: Path) -> dict[str, Any]:
         raise EvidenceError("liveness inventory is incomplete")
     if kind == "webgl-capture":
         contexts = report.get("contexts") or []
-        if report.get("result") != "pass" or report.get("coverage_complete") is not True or not contexts or any(len(row.get("frame_hashes") or []) < 3 or int(row.get("non_blank_samples") or 0) < 1 for row in contexts if isinstance(row, dict)):
+        if (
+            report.get("result") != "pass"
+            or report.get("coverage_complete") is not True
+            or not isinstance(contexts, list)
+            or not contexts
+            or report.get("issues") != []
+            or any(
+                not isinstance(row, dict)
+                or not isinstance(row.get("canvas_selector"), str)
+                or row.get("context_type") not in {"webgl", "webgl2"}
+                or not isinstance(row.get("rect"), dict)
+                or not isinstance(row.get("context_attributes"), dict)
+                or not isinstance(row.get("vendor"), str)
+                or not isinstance(row.get("renderer"), str)
+                or not isinstance(row.get("frame_hashes"), list)
+                or len(row.get("frame_hashes") or []) < 3
+                or any(not is_sha256(value) for value in (row.get("frame_hashes") or []))
+                or type(row.get("non_blank_samples")) is not int
+                or row["non_blank_samples"] < 1
+                for row in contexts
+            )
+        ):
             raise EvidenceError("WebGL capture is incomplete")
     return evidence
 

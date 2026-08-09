@@ -12,16 +12,16 @@ function main() {
   for (const component of inventory.components || []) {
     const base = { component_id: component.component_id, selector: component.selector, frame_path: component.frame_path || 'main', criticality: component.criticality || 'critical' };
     const prerequisite = component.prerequisite_sequence || [];
-    const push = (suffix, sequence, expectedTransition = false, expected = null) => interactions.push({ ...base, interaction_id: `${component.component_id}:${suffix}`, prerequisite_count: prerequisite.length, sequence: [...prerequisite, ...sequence], expected_transition: expectedTransition, expected });
+    const push = (suffix, sequence, expectedTransition = false, expected = null, actionPrerequisites = 0) => interactions.push({ ...base, interaction_id: `${component.component_id}:${suffix}`, prerequisite_count: prerequisite.length + actionPrerequisites, sequence: [...prerequisite, ...sequence], expected_transition: expectedTransition, expected });
     const events = new Set(component.listeners || []);
     if (component.kind === 'disclosure') {
       push('open-click', [action('click', component.selector)], true, 'opened');
-      push('close-escape', [action('click', component.selector), action('escape', component.selector)], true, 'closed');
-      push('close-outside', [action('click', component.selector), action('outside-click', component.selector)], true, 'closed');
-      push('keyboard-enter', [action('focus', component.selector), action('keyboard-enter', component.selector)], true, 'toggled');
-      push('keyboard-space', [action('focus', component.selector), action('keyboard-space', component.selector)], true, 'toggled');
+      push('close-escape', [action('click', component.selector), action('escape', component.selector)], true, 'closed', 1);
+      push('close-outside', [action('click', component.selector), action('outside-click', component.selector)], true, 'closed', 1);
+      push('keyboard-enter', [action('focus', component.selector), action('keyboard-enter', component.selector)], true, 'toggled', 1);
+      push('keyboard-space', [action('focus', component.selector), action('keyboard-space', component.selector)], true, 'toggled', 1);
     } else if (component.kind === 'input') {
-      push('input', [action('focus', component.selector), action('input', component.selector, 'h2d-probe')], true, 'value-changed');
+      push('input', [action('focus', component.selector), action('input', component.selector, 'h2d-probe')], true, 'value-changed', 1);
       push('validation', [action('focus', component.selector), action('input', component.selector, ''), action('blur', component.selector)], false, 'validation-observed');
     } else if (component.kind === 'select') {
       push('select', [action('select-next', component.selector)], true, 'value-changed');
