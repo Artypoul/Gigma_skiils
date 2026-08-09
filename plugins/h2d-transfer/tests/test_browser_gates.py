@@ -189,7 +189,7 @@ class BrowserGateTests(unittest.TestCase):
     def test_behavior_pre_state_is_captured_after_prerequisites(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); donor = root / "donor.html"; matrix = root / "matrix.json"; out = root / "reports" / "original.jsonl"
-            donor.write_text("<!doctype html><button id='open'>Open</button><button id='target' hidden aria-checked='false'>Target</button><script>open.onclick=()=>{target.hidden=false;target.setAttribute('aria-checked','mixed')};target.onclick=()=>target.setAttribute('aria-checked','true')</script>", encoding="utf-8")
+            donor.write_text("<!doctype html><button id='open'>Open</button><button id='target' hidden aria-checked='false'>Target</button><script>const opener=document.getElementById('open');const target=document.getElementById('target');opener.onclick=()=>{target.hidden=false;target.setAttribute('aria-checked','mixed')};target.onclick=()=>target.setAttribute('aria-checked','true')</script>", encoding="utf-8")
             matrix.write_text(json.dumps({"interactions":[{"interaction_id":"target:click","component_id":"target","selector":"#target","frame_path":"main","prerequisite_count":1,"sequence":[{"action":"click","selector":"#open"},{"action":"click","selector":"#target"}],"expected_transition":True}]}), encoding="utf-8")
             subprocess.run(["node", str(SKILL / "scripts" / "behavior_capture_trace.js"), "--url", str(donor), "--matrix", str(matrix), "--side", "original", "--out", str(out), "--project-root", str(SKILL)], cwd=SKILL, check=True)
             trace = json.loads(out.read_text(encoding="utf-8").strip())
