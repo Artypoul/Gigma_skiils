@@ -60,7 +60,7 @@ python scripts/run_current_gates.py \
 
 5. A static screenshot clone is a failure when the original has interaction, animation, canvas, WebGL, video, or scroll-linked motion unless the user explicitly accepts a documented static fallback.
 
-Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder, or from `.codex/reference/` after mirror sync, when you need the exact hard-gate wording.
+Read `h2d-transfer-mandatory-invocation.md` from the bundled `reference/` folder (`../../reference/` relative to this SKILL.md), when you need the exact hard-gate wording.
 
 ## Immutable Current-Evidence Contract
 
@@ -206,7 +206,9 @@ python scripts/preflight_env.py
 
 The preflight checks Python packages, Node packages, and whether Playwright can actually launch Chromium.
 
-Read `h2d-transfer-bootstrap.md` from the plugin `reference/` folder, or from `.codex/reference/` after mirror sync, when the agent is on a new machine or the environment is not trusted yet.
+**Run every browser gate from the candidate project root, not from the skill folder.** The bundled JS gates resolve their driver from the working directory: `playwright`, else `playwright-core` plus an installed Chrome/Edge (override with `--browser-executable` or `CHROME_PATH`). A skill folder installed on its own — a personal `skills/` directory, a plugin cache — carries no `node_modules`, so preflight and every browser gate fail there while the same commands pass from a project that has the driver. That is the intended shape: the gates measure a candidate, and the candidate is where its dependencies live. If the project has neither package, install one there before claiming any gate result.
+
+Read `h2d-transfer-bootstrap.md` from the bundled `reference/` folder (`../../reference/` relative to this SKILL.md), when the agent is on a new machine or the environment is not trusted yet.
 
 ## Quick Workflow
 
@@ -337,7 +339,7 @@ Readiness then rests on the node/text-style, asset, provenance, behavior and liv
 
 ## Pick The Right Reference
 
-- Read `h2d-transfer-contracts.md` from the plugin `reference/` folder, or from `.codex/reference/` after mirror sync, for the canonical output contract and final verdict rules.
+- Read `h2d-transfer-contracts.md` from the bundled `reference/` folder (`../../reference/` relative to this SKILL.md), for the canonical output contract and final verdict rules.
 - Read `h2d-transfer-bootstrap.md` when setting up a new machine or recovering from missing runtime dependencies.
 - Read `h2d-transfer-agent-classes.md` when mapping work to discovery, validation, and output roles.
 - Read `h2d-transfer-asset-paint.md` when a canvas, image, fallback asset, or visibility chain looks suspicious.
