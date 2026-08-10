@@ -19,7 +19,10 @@ const TEXT_METRIC_PROPS = ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacin
 // margin belongs here: a candidate can drop the donor's margin and push the
 // element with a parent offset instead, hit the same rect, and silently break
 // the structural contract the no-compensation rule exists to protect.
-const BOX_PROPS = ['maxWidth', 'padding', 'gap', 'margin'];
+// The layout mechanism fields extend the same idea one level up: identical
+// rects laid out by absolute offsets instead of the donor's flex/grid chain
+// are a page that measures right and resizes wrong.
+const BOX_PROPS = ['maxWidth', 'padding', 'gap', 'margin', 'display', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'gridTemplateColumns'];
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -105,6 +108,21 @@ function compareStyle(expected, actual, threshold) {
     return d <= threshold ? {equal: true} : {equal: false, delta: d};
   }
   return {equal: false};
+}
+/**
+ * Grid tracks resolve to used pixel widths in computed style, so the donor's
+ * `repeat(3, 1fr)` and the candidate's equivalent never match textually.
+ * The structural fact worth gating is the track count.
+ */
+function compareGridTemplate(expected, actual) {
+  const tracks = (value) => {
+    const v = normalizeStyleValue(value);
+    if (!v || v === 'none') return v;
+    return String(v.split(' ').filter(Boolean).length);
+  };
+  const e = tracks(expected);
+  const a = tracks(actual);
+  return e === a ? {equal: true} : {equal: false, note: `track count ${e} vs ${a}`};
 }
 /** First family name, unquoted and lowercased — enough to tell a substitution. */
 function primaryFamily(value) {
@@ -285,10 +303,13 @@ async function main() {
       if (t.box_style) {
         for (const prop of BOX_PROPS) {
           if (!(prop in t.box_style)) continue;
-          const cmp = compareStyle(t.box_style[prop], n.style[prop], styleThreshold);
+          const cmp = prop === 'gridTemplateColumns'
+            ? compareGridTemplate(t.box_style[prop], n.style[prop])
+            : compareStyle(t.box_style[prop], n.style[prop], styleThreshold);
           if (cmp.equal) continue;
           const entry = { type: 'box-style', path: p, field: prop, expected: t.box_style[prop], actual: n.style[prop] };
           if (cmp.delta != null) entry.delta = cmp.delta;
+          if (cmp.note) entry.note = cmp.note;
           const ok = acceptedFor(accepted, viewport, p, prop);
           // Failing by default is the teeth of the no-compensation rule: a
           // container constraint replaced by a parent offset reaches the same

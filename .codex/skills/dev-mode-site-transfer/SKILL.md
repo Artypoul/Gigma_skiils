@@ -146,6 +146,8 @@ Prefer:
 - original asset URLs from network/DOM;
 - section-level measurements.
 
+Extract tokens as a system, not as per-block notes. Before rebuilding the first block, write down the page's recurring values — palette, type scale (family/size/weight/line-height pairs), spacing scale, radii, shadows, container widths per breakpoint — and implement them as **one shared layer** (CSS custom properties, Tailwind theme, or the project's token file). Block styles then reference that layer; the same literal pasted into every block is legacy debt with extra steps.
+
 Avoid blindly copying:
 
 - tracking scripts;
@@ -164,7 +166,8 @@ Rules:
 - preserve CTA order and reading flow;
 - preserve images, embeds, and meaningful interactions;
 - simplify DOM depth whenever possible;
-- keep components reusable across similar pages.
+- keep components reusable across similar pages;
+- one repeated pattern = one component: when the block inventory shows the same card, tag, menu item or gallery cell N times, build it once and instantiate it N times with different content — record the pattern → component mapping in the block inventory. Pasting N copies and editing each one imports the builder's debt into the new codebase.
 
 Recovery rules:
 

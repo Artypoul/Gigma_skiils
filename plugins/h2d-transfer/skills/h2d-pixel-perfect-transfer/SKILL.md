@@ -87,11 +87,22 @@ For a genuinely static classification, omit the dynamic-finalizer command and th
 
 ## Design System First
 
-The two expensive failure modes are building geometry on the wrong font and fitting boxes with compensations. Both are forbidden by order of work:
+The donor was built from a system — a palette, a type scale, a spacing scale, shared containers and repeated components. A transfer that copies boxes one by one produces a page of hand-fitted blocks that measures right and maintains wrong. The order of work is fixed:
 
 1. **Fonts before anything.** From the decode, read `platformFont.postScriptName` on text runs and `styles.fontFamily/fontSize/fontWeight/lineHeight/letterSpacing` on elements. Establish: families and weights in use, whether the donor font covers the candidate's script (e.g. Cyrillic), what fallback the donor itself uses, and licensing (do not package proprietary font files without permission — record evidence in `licensing_notes`). Wire the real webfonts or the documented fallback into the candidate **first**, then write `reports/font_manifest.json` from measured computed styles, not by hand. `font-exact` = same family and weights render; `font-substituted` = documented fallback (e.g. missing script coverage) accepted by the owner.
-2. **Containers before blocks.** Extract the per-viewport chain `viewport → page container → section container → content` (widths, gutters, paddings) from the decode and implement it as shared tokens/classes. Block-level rects must inherit from this chain, not carry their own copies of it.
-3. Only then transfer blocks/sections.
+2. **Extract the system, not just values.** Run the extractor and read its report before writing any candidate CSS:
+
+```bash
+python scripts/extract_design_system.py \
+  --decoded h2d-transfer-output/source/h2d_decoded.json \
+  --out h2d-transfer-output/reports/design_system.json
+```
+
+   It returns the donor's recurring colors, type scale, spacing scale, radii and shadows (`tokens`), the shared per-viewport container widths (`containers`), the recurring flex/grid mechanisms (`layouts`) and the repeated subtrees (`components`). Implement the tokens as **one shared layer** — CSS custom properties, a Tailwind theme, or the project's token file — and take block values from that layer. Scattering the same literal per block is the token-level equivalent of a compensation. A snapshot can carry capture artifacts (translation spans like `ya-tr-span`, `YS Text` overlays, builder debris) — exclude them from the token and component maps instead of transferring them.
+3. **Containers and layout mechanisms before blocks.** Implement the container chain `viewport → page container → section container → content` from `design_system.json` as shared classes/tokens; block-level rects must inherit from this chain, not carry their own copies of it. Reproduce each block's layout with the donor's mechanism — the same `display`, flex direction/alignment, grid track count — because these fields are gated: identical rects laid out by absolute offsets instead of the donor's flex/grid chain fail `node_validation`.
+4. **Components, not copies.** Every entry in `design_system.json.components` (a card, a menu item, a tag, a gallery cell repeated N times) becomes **one** component in the candidate — a Svelte/React component, a template partial, or a single class — instantiated N times with different content. Pasting the block N times and editing each copy is a gate-relevant defect: record the pattern → component mapping in `review.md`, and when a repeated pattern is deliberately not componentized, say why there.
+
+Only then transfer blocks/sections.
 
 ## No Compensation Rule
 
@@ -121,10 +132,11 @@ An interactive-looking control that does nothing (e.g. a decorative play button)
 For a whole-page transfer, do not treat the page as one scope:
 
 1. After unpack, enumerate the top-level sections of the donor per viewport from `h2d_tree_index.json` and write the section list into `review.md` as the scope table.
-2. Transfer in order: design system (fonts, tokens, containers) → header → sections top-down.
-3. Each section gets its own scope row and passes rect + text-style + asset gates for its subtree before the next section starts.
-4. `node_validation`, `diff_summary`, behavior and liveness run over the full page after the last section.
-5. No section disappears silently: every donor section is either transferred or listed as an owner-approved exclusion.
+2. Build the component map before any section: match `design_system.json.components` against the section list, name each component (`work-tag`, `gallery-cell`, `nav-link`), and record which sections instantiate it. Components shared by several sections are built once, before the first section that uses them.
+3. Transfer in order: design system (fonts, tokens, containers, shared components) → header → sections top-down.
+4. Each section gets its own scope row and passes rect + text-style + asset gates for its subtree before the next section starts. A section that re-implements an already-built component instead of instantiating it is a defect, not a style choice.
+5. `node_validation`, `diff_summary`, behavior and liveness run over the full page after the last section.
+6. No section disappears silently: every donor section is either transferred or listed as an owner-approved exclusion.
 
 ## Reports Are Generated, Not Written
 
@@ -197,7 +209,7 @@ python scripts/extract_rect_targets.py \
   --out h2d-transfer-output/reports/rect_targets.json
 ```
 
-3. Design system first: wire the fonts and the container chain into the candidate (see Design System First), then prove the typography on the rendered page **before** building blocks:
+3. Design system first: extract the donor's system (`extract_design_system.py` → required report `reports/design_system.json`), wire the fonts, the token layer, the container chain and the shared components into the candidate (see Design System First), then prove the typography on the rendered page **before** building blocks:
 
 ```bash
 node scripts/font_manifest.js \

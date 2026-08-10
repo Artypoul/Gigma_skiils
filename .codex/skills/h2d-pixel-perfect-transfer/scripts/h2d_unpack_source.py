@@ -249,7 +249,11 @@ def text_preview(node: dict[str, Any]) -> str:
 # Keys stay in CSS camelCase: the viewport validator compares them straight
 # against getComputedStyle() on the candidate.
 TEXT_STYLE_KEYS = ("fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textAlign", "textTransform", "color")
-BOX_STYLE_KEYS = ("display", "boxSizing", "maxWidth", "width", "padding", "margin", "gap", "position")
+# Layout mechanism keys travel with the box: the same rect built from absolute
+# offsets instead of the donor's flex/grid chain is a compensation, and only
+# the mechanism fields make that visible to a gate.
+BOX_STYLE_KEYS = ("display", "boxSizing", "maxWidth", "width", "padding", "margin", "gap", "position", "flexDirection", "flexWrap", "justifyContent", "alignItems", "gridTemplateColumns")
+LAYOUT_DISPLAY_VALUES = {"flex", "inline-flex", "grid", "inline-grid"}
 TEXT_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span", "li", "button", "label", "strong", "em", "blockquote", "figcaption", "td", "th", "summary"}
 # A node only carries box_style when it actually constrains its children,
 # otherwise the index would double in size for no diagnostic value.
@@ -297,11 +301,20 @@ def box_style(node: dict[str, Any]) -> dict[str, Any] | None:
     if not styles:
         return None
     picked = {k: styles[k] for k in BOX_STYLE_KEYS if k in styles}
-    meaningful = any(
+    # A flex/grid container is always worth indexing: its display value IS the
+    # layout mechanism, even when every spacing field happens to be trivial.
+    is_layout_container = str(picked.get("display", "")).strip() in LAYOUT_DISPLAY_VALUES
+    meaningful = is_layout_container or any(
         k in ("maxWidth", "padding", "gap", "margin") and str(v).strip() not in _TRIVIAL_BOX_VALUES
         for k, v in picked.items()
     )
-    return picked if meaningful else None
+    if not meaningful:
+        return None
+    if not is_layout_container:
+        # Flex alignment fields on a non-flex box are computed-style noise.
+        for key in ("flexDirection", "flexWrap", "justifyContent", "alignItems", "gridTemplateColumns"):
+            picked.pop(key, None)
+    return picked
 
 
 def build_tree_index(obj: Any, max_nodes: int = 300_000) -> list[dict[str, Any]]:
