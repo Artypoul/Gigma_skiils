@@ -81,6 +81,19 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
+    # The system-transfer gates are current evidence like every other report:
+    # a contract that omits them would let run_current_gates.py regenerate
+    # everything else while a stale design-system report from an earlier donor
+    # keeps passing the legacy check on its old "pass".
+    mandatory_reports = {"reports/design_system.json", "reports/component_reuse.json", "reports/token_reuse.json"}
+    supplied_reports = {value.replace("\\", "/") for value in args.expected_report}
+    missing_reports = sorted(mandatory_reports - supplied_reports)
+    if missing_reports:
+        raise EvidenceError(
+            "expected reports must include the system-transfer gates so the current runner "
+            f"quarantines and regenerates them: missing {', '.join(missing_reports)}"
+        )
+
     workspace = args.workspace_root.resolve()
     candidate_root = args.candidate_root.resolve()
     candidate_root.relative_to(workspace)
@@ -118,6 +131,16 @@ def main() -> int:
             raise EvidenceError("--sidecar must use role=path")
         sidecar_path = Path(raw_path).resolve()
         sidecars.append({"role": role, "path": rel(contract_dir, sidecar_path, f"sidecar {role}"), "sha256": sha256_file(sidecar_path)})
+    sidecar_roles = [entry["role"] for entry in sidecars]
+    if len(sidecar_roles) != len(set(sidecar_roles)):
+        raise EvidenceError("sidecar roles must be unique")
+    mandatory_sidecars = {"component_map", "token_map"}
+    missing_sidecars = sorted(mandatory_sidecars - set(sidecar_roles))
+    if missing_sidecars:
+        raise EvidenceError(
+            "system-transfer declarations must be pinned as hashed contract sidecars: "
+            f"missing {', '.join(missing_sidecars)}"
+        )
     approvals = [load_json(path.resolve()) for path in args.approval]
     commands = []
     for raw in args.current_command:

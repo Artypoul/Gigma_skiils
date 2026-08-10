@@ -23,6 +23,15 @@ Stop with `blocked` when the page does not open, auth/runtime gating prevents me
 
 ## 2. What to collect from dev mode
 
+Before block-by-block notes, create one design-system inventory:
+
+- recurring palette values and every semantic use;
+- typography roles, families, weights, sizes, line-heights and letter spacing;
+- spacing, radii, borders, shadows and icon rules;
+- container widths, gutters and actual breakpoint boundaries;
+- repeated UI patterns, occurrence counts and visible states;
+- candidate token/component name and its single definition file.
+
 For each block collect:
 
 - screenshot of the block;
@@ -73,6 +82,8 @@ Usually risky:
 - keep the visual result, not the builder wrappers;
 - keep naming by component role;
 - convert repeated visual values into tokens/classes;
+- require blocks to consume the shared tokens instead of repeating donor literals;
+- build every source pattern repeated at least twice as one component and instantiate it with data/content;
 - preserve important embeds only when needed by the product.
 
 Do not import:
@@ -110,6 +121,10 @@ Do not import:
 - rebuilt code is cleaner than the source;
 - lightweight evidence was kept: desktop/mobile captures or equivalent per-block notes;
 - desktop and mobile were checked;
+- the design-system inventory is complete for the transferred scope;
+- recurring values resolve through one shared token layer;
+- every repeated pattern resolves to one candidate component definition;
+- shipped sources were searched for scattered donor literals and duplicated component markup;
 - asset and text parity were checked;
 - remaining behavior gaps are named explicitly;
 - status is honest: `clean-transfer`, `close-match`, `needs-polish`, `changed-source`, or `blocked`.

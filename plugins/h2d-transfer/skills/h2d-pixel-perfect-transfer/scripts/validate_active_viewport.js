@@ -19,7 +19,10 @@ const TEXT_METRIC_PROPS = ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacin
 // margin belongs here: a candidate can drop the donor's margin and push the
 // element with a parent offset instead, hit the same rect, and silently break
 // the structural contract the no-compensation rule exists to protect.
-const BOX_PROPS = ['maxWidth', 'padding', 'gap', 'margin'];
+// The layout mechanism fields extend the same idea one level up: identical
+// rects laid out by absolute offsets instead of the donor's flex/grid chain
+// are a page that measures right and resizes wrong.
+const BOX_PROPS = ['maxWidth', 'padding', 'gap', 'margin', 'display', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'gridTemplateColumns'];
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -40,13 +43,13 @@ function delta(a, b) {
 }
 
 /** Selector map accepts a flat {path: selector} or {viewport: {path: selector}}. */
-function selectorsFor(map, viewport) {
+function selectorsFor(map, viewport, allowedPaths) {
   if (!map) return null;
   const scoped = map[String(viewport)];
   const flat = scoped && typeof scoped === 'object' ? scoped : map;
   const out = {};
   for (const [key, value] of Object.entries(flat)) {
-    if (typeof value === 'string') out[key] = value;
+    if (typeof value === 'string' && (!allowedPaths || allowedPaths.has(key))) out[key] = value;
   }
   return out;
 }
@@ -106,6 +109,40 @@ function compareStyle(expected, actual, threshold) {
   }
   return {equal: false};
 }
+/**
+ * Grid tracks resolve to used pixel widths in computed style, so the donor's
+ * `repeat(3, 1fr)` and the candidate's equivalent never match textually.
+ * Gate the structure that survives the resolution: the track count and the
+ * track PROPORTIONS (each track relative to the first). Fixed-pixel columns
+ * that fake the donor's fr-grid at one width still match here only if their
+ * ratios agree — and the other widths of the mandatory matrix catch them,
+ * because fixed tracks stop scaling while fr tracks follow the container.
+ */
+function compareGridTemplate(expected, actual) {
+  const profile = (value) => {
+    const v = normalizeStyleValue(value);
+    if (!v || v === 'none') return v;
+    const px = v.split(' ').map(parseFloat).filter((n) => Number.isFinite(n) && n > 0);
+    if (!px.length) return v;
+    return px.map((n) => (n / px[0]).toFixed(2)).join(':');
+  };
+  const e = profile(expected);
+  const a = profile(actual);
+  return e === a ? {equal: true} : {equal: false, note: `track profile ${e} vs ${a}`};
+}
+// In a flex container the computed initial values and their flex equivalents
+// are the same mechanism; rejecting `normal` vs `flex-start` would fail
+// identical layouts.
+const FLEX_EQUIVALENTS = {
+  justifyContent: { normal: 'flex-start', start: 'flex-start', end: 'flex-end' },
+  alignItems: { normal: 'stretch', start: 'flex-start', end: 'flex-end' },
+  alignContent: { normal: 'stretch' },
+};
+function normalizeFlexValue(prop, value) {
+  const v = normalizeStyleValue(value);
+  const table = FLEX_EQUIVALENTS[prop];
+  return table && table[v] ? table[v] : v;
+}
 /** First family name, unquoted and lowercased — enough to tell a substitution. */
 function primaryFamily(value) {
   return normalizeStyleValue(value).split(',')[0].replace(/["']/g, '').trim().toLowerCase();
@@ -143,6 +180,10 @@ async function main() {
   const browser = await launchChromium({ executablePath: arg('browser-executable') || undefined });
   const results = [];
   let globalMax = 0;
+  // Grid tracks per node per viewport, donor vs candidate. Ratios at one width
+  // cannot tell fr-tracks from fixed pixels that happen to match — but the run
+  // measures several widths, and HOW the tracks change between them can.
+  const gridSamples = new Map();
 
   for (const viewport of viewports) {
     const page = await browser.newPage({ viewport: { width: viewport, height: Number(arg('height', '1200')) }, deviceScaleFactor: 1 });
@@ -153,7 +194,20 @@ async function main() {
     await page.evaluate(() => document.fonts && document.fonts.ready);
     await page.evaluate(require('./font_probe').FONT_PROBE_SOURCE);
 
-    const selectors = selectorsFor(selectorMap, viewport);
+    const targetGroup = byViewport.get(viewport);
+    const targetPaths = new Set(targetGroup.targets.map((target) => target.data_h2d_path));
+    const selectors = selectorsFor(selectorMap, viewport, targetPaths);
+    const selectorMapIssues = [];
+    if (selectors) {
+      const bySelector = new Map();
+      for (const [h2dPath, selector] of Object.entries(selectors)) {
+        if (!bySelector.has(selector)) bySelector.set(selector, []);
+        bySelector.get(selector).push(h2dPath);
+      }
+      for (const [selector, paths] of bySelector) {
+        if (paths.length > 1) selectorMapIssues.push({ type: 'selector-map-non-injective', selector, paths, message: 'one candidate element cannot stand in for several source layout nodes' });
+      }
+    }
     // A live project page may still be hydrating or waiting on its first
     // request, so measuring right after 'load' can catch missing nodes or
     // transient geometry. Wait for the mapped nodes, then for layout to stop
@@ -232,7 +286,6 @@ async function main() {
       return { nodes, unresolved, mode: 'markers' };
     }, { viewport, selectors, styleProps: TEXT_METRIC_PROPS.concat(BOX_PROPS) });
 
-    const targetGroup = byViewport.get(viewport);
     const domMap = new Map((probe.nodes || []).map((n) => [n.data_h2d_path, n]));
     const targetMap = new Map(targetGroup.targets.map((t) => [t.data_h2d_path, t]));
     const missing = [], extra = [], issues = [], warnings = [], acceptedHits = [];
@@ -282,13 +335,30 @@ async function main() {
         }
       }
 
+      if (t.box_style && t.box_style.gridTemplateColumns) {
+        const px = (value) => normalizeStyleValue(value).split(' ').map(parseFloat).filter(Number.isFinite);
+        // The same logical node lives under a different branch prefix per
+        // viewport (`0.…` vs `alt2:0.…`); keying by the raw path would leave
+        // one sample everywhere and quietly disable the elasticity check.
+        const canonical = p.replace(/^alt\d+:/, '');
+        if (!gridSamples.has(canonical)) gridSamples.set(canonical, []);
+        gridSamples.get(canonical).push({ viewport, path: p, donor: px(t.box_style.gridTemplateColumns), candidate: px(n.style.gridTemplateColumns) });
+      }
       if (t.box_style) {
         for (const prop of BOX_PROPS) {
           if (!(prop in t.box_style)) continue;
-          const cmp = compareStyle(t.box_style[prop], n.style[prop], styleThreshold);
+          // The `normal` aliases are flex semantics; in a grid, `normal` and
+          // `flex-start` are different mechanisms and must not be equated.
+          const donorIsFlex = /flex/.test(String(t.box_style.display || ''));
+          const cmp = prop === 'gridTemplateColumns'
+            ? compareGridTemplate(t.box_style[prop], n.style[prop])
+            : (donorIsFlex && prop in FLEX_EQUIVALENTS
+              ? compareStyle(normalizeFlexValue(prop, t.box_style[prop]), normalizeFlexValue(prop, n.style[prop]), styleThreshold)
+              : compareStyle(t.box_style[prop], n.style[prop], styleThreshold));
           if (cmp.equal) continue;
           const entry = { type: 'box-style', path: p, field: prop, expected: t.box_style[prop], actual: n.style[prop] };
           if (cmp.delta != null) entry.delta = cmp.delta;
+          if (cmp.note) entry.note = cmp.note;
           const ok = acceptedFor(accepted, viewport, p, prop);
           // Failing by default is the teeth of the no-compensation rule: a
           // container constraint replaced by a parent offset reaches the same
@@ -305,6 +375,7 @@ async function main() {
     if (!checked) issues.push({ type: 'nothing-measured', message: `no target was resolved on ${viewport}px: the candidate carries neither the expected markers nor a matching selector map` });
     if (probe.error) issues.push({ type: 'branch-root', message: probe.error });
     for (const u of probe.unresolved || []) issues.push({ type: 'selector-unresolved', path: u.path, selector: u.selector, message: u.reason });
+    issues.push(...selectorMapIssues);
 
     results.push({
       viewport,
@@ -323,6 +394,50 @@ async function main() {
   }
   await browser.close();
 
+  // Grid elasticity across the measured widths: for every node sampled at two
+  // or more viewports, each donor track that grows with the container must
+  // grow in the candidate too. Fixed-pixel tracks that fake an fr-grid match
+  // the ratios at each single width but stay frozen between widths — this is
+  // where that shows up.
+  const elasticityIssues = [];
+  const GROWTH_EPSILON = 1;
+  for (const [canonical, samples] of gridSamples) {
+    if (samples.length < 2) continue;
+    samples.sort((a, b) => a.viewport - b.viewport);
+    for (let i = 1; i < samples.length; i += 1) {
+      const prev = samples[i - 1];
+      const curr = samples[i];
+      const tracks = Math.min(prev.donor.length, curr.donor.length, prev.candidate.length, curr.candidate.length);
+      for (let track = 0; track < tracks; track += 1) {
+        const donorGrew = curr.donor[track] - prev.donor[track] > GROWTH_EPSILON;
+        const candidateGrew = curr.candidate[track] - prev.candidate[track] > GROWTH_EPSILON;
+        if (donorGrew === candidateGrew) continue;
+        const entry = {
+          type: 'grid-elasticity',
+          path: curr.path,
+          canonical_path: canonical,
+          field: 'gridTemplateColumns',
+          track,
+          at: curr.viewport,
+          between: `${prev.viewport}px → ${curr.viewport}px`,
+          donor: `${prev.donor[track]} → ${curr.donor[track]}`,
+          candidate: `${prev.candidate[track]} → ${curr.candidate[track]}`,
+          note: donorGrew ? 'donor track scales with the container, candidate track is frozen' : 'candidate track scales, donor track is fixed',
+        };
+        const ok = acceptedFor(accepted, curr.viewport, curr.path, 'gridTemplateColumns');
+        if (!ok) elasticityIssues.push(entry);
+      }
+    }
+  }
+  if (elasticityIssues.length) {
+    const byViewport = new Map(results.map((r) => [r.viewport, r]));
+    for (const entry of elasticityIssues) {
+      const row = byViewport.get(entry.at) || results[results.length - 1];
+      row.issues.push(entry);
+      row.result = 'fail';
+    }
+  }
+
   const overall = {
     result: results.every((r) => r.result === 'pass') ? 'pass' : 'fail',
     generator_sha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
@@ -330,6 +445,7 @@ async function main() {
     style_threshold_px: styleThreshold,
     strict_font_family: strictFontFamily,
     lenient_box_style: lenientBoxStyle,
+    selector_map_injective: results.every((row) => !row.issues.some((issue) => issue.type === 'selector-map-non-injective')),
     global_max_delta: globalMax,
     viewports: results,
     issues: results.flatMap((r) => r.issues.map((i) => ({ ...i, viewport: r.viewport }))),

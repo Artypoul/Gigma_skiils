@@ -25,6 +25,14 @@ SPECIALIST_SCRIPTS = {
     "behavior": "behavior_compare_traces.py",
     "liveness": "liveness_compare_traces.py",
 }
+# System-transfer reports must come from real generator invocations inside the
+# pinned current commands. The generator hash inside a report is publicly
+# computable, so the hash alone proves nothing — the invocation does.
+SYSTEM_GENERATOR_SCRIPTS = {
+    "reports/design_system.json": "extract_design_system.py",
+    "reports/component_reuse.json": "validate_component_reuse.js",
+    "reports/token_reuse.json": "validate_token_reuse.py",
+}
 
 
 def bounded_cwd(root: Path, value: str | None) -> Path:
@@ -129,6 +137,37 @@ def command_invokes_script(commands: list[list[str]], script: Path, cwd: Path) -
         except OSError:
             continue
     return False
+
+
+def command_option_path(command: list[str], option: str, cwd: Path) -> Path | None:
+    for index, value in enumerate(command):
+        if value == option and index + 1 < len(command):
+            raw = command[index + 1]
+            return Path(raw).resolve() if Path(raw).is_absolute() else (cwd / raw).resolve()
+        if value.startswith(option + "="):
+            raw = value.split("=", 1)[1]
+            return Path(raw).resolve() if Path(raw).is_absolute() else (cwd / raw).resolve()
+    return None
+
+
+def require_system_sidecar_inputs(commands: list[list[str]], candidate_root: Path, contract_path: Path, contract: dict) -> None:
+    sidecars = {
+        entry.get("role"): (contract_path.parent / entry.get("path", "")).resolve()
+        for entry in (contract.get("sidecars") or [])
+        if isinstance(entry, dict) and isinstance(entry.get("role"), str)
+    }
+    requirements = (
+        ("validate_component_reuse.js", "--component-map", "component_map"),
+        ("validate_token_reuse.py", "--token-map", "token_map"),
+    )
+    for script_name, option, role in requirements:
+        script = SCRIPT.parent / script_name
+        matches = [command for command in commands if command_invokes_script([command], script, candidate_root)]
+        if len(matches) != 1:
+            raise EvidenceError(f"contract must pin exactly one bundled {script_name} invocation")
+        actual = command_option_path(matches[0], option, candidate_root)
+        if actual != sidecars.get(role):
+            raise EvidenceError(f"{script_name} {option} must read the hashed {role} contract sidecar")
 
 
 def require_specialist_command_suffix(commands: list[list[str]], roles: set[str], cwd: Path) -> None:
@@ -253,6 +292,7 @@ def main() -> int:
     expected_reports = contract.get("expected_reports") or []
     if not commands or not expected_reports:
         raise EvidenceError("contract must pin non-empty current_commands and expected_reports")
+    require_system_sidecar_inputs(commands, verified["candidate_root"], contract_path, contract)
     env = os.environ.copy()
     env.update({
         "H2D_OUTPUT": str(output), "H2D_CONTRACT": str(contract_path),
@@ -312,6 +352,12 @@ def main() -> int:
     completed = sorted(coverage.get("matrix_completed") or [])
     if coverage.get("result") != "pass" or completed != expected_matrix:
         raise EvidenceError("matrix coverage report is non-pass or incomplete")
+    for report_path, script_name in SYSTEM_GENERATOR_SCRIPTS.items():
+        if report_path not in {value.replace("\\", "/") for value in expected_reports}:
+            continue
+        generator = SCRIPT.parent / script_name
+        if not command_invokes_script(commands, generator, candidate_root):
+            raise EvidenceError(f"{report_path} is expected but no pinned current command invokes the bundled {script_name}; a report without its generator invocation is authored, not generated")
     report_entries = []
     for value in expected_reports:
         report = (output / value).resolve()

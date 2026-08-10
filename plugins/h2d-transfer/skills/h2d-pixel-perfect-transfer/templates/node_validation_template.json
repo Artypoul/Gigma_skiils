@@ -1,9 +1,11 @@
 {
   "result": "pass",
+  "generator_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "threshold_px": 0.5,
   "style_threshold_px": 0.5,
   "strict_font_family": false,
-  "strict_box_style": false,
+  "lenient_box_style": false,
+  "selector_map_injective": true,
   "global_max_delta": 0.03,
   "viewports": [
     {

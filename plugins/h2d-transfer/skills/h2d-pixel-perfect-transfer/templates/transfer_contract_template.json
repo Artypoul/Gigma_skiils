@@ -13,9 +13,12 @@
   "candidate": {"mode": "entry", "project_root": "candidate", "include": ["src", "package.json"], "closure_sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
   "classification": {"behavior_required": false, "liveness_required": false, "coverage_complete": true},
   "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
-  "sidecars": [],
+  "sidecars": [
+    {"role": "component_map", "path": "component_map.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+    {"role": "token_map", "path": "token_map.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}
+  ],
   "approvals": [],
   "current_commands": [["python", "scripts/generate-current-evidence.py"]],
   "command_executables": [{"command": "python", "cwd": "/absolute/path/to/candidate", "resolved_path": "/absolute/path/to/python", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}],
-  "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"]
+  "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/design_system.json", "reports/component_reuse.json", "reports/token_reuse.json", "reports/matrix_coverage.json", "reports/review.md"]
 }

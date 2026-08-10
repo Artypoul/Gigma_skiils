@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "design_system",
+  "description": "The donor's design system extracted from the decode: recurring tokens, shared container widths, layout mechanisms and repeated components. The candidate is built from these building blocks — tokens as one shared layer, one component per repeated pattern — instead of per-block literals and pasted copies.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "needs-fix",
+        "not-tested"
+      ]
+    },
+    "generator_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "min_component_repeats": {"const": 2},
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "nodes_seen": {
+      "type": "integer"
+    },
+    "nodes_with_styles": {
+      "type": "integer"
+    },
+    "tokens": {
+      "type": "object",
+      "required": [
+        "colors",
+        "typography",
+        "spacing"
+      ],
+      "properties": {
+        "colors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "value",
+              "count"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "typography": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "fontFamily",
+              "fontSize",
+              "count"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "spacing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "value",
+              "count"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "radii": {
+          "type": "array"
+        },
+        "shadows": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "containers": {
+      "description": "Per viewport: content widths that several distinct wrappers agree on — the donor's container chain.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "viewport",
+          "shared_widths"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "layouts": {
+      "description": "Recurring flex/grid mechanisms with usage counts.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "signature",
+          "count"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "components": {
+      "description": "Repeated subtrees. Each entry is one component in the candidate, never N pasted copies.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "signature",
+          "signature_sha256",
+          "structure_signature",
+          "count",
+          "sample_paths"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "result",
+    "generator_sha256",
+    "min_component_repeats",
+    "tokens",
+    "containers",
+    "layouts",
+    "components"
+  ]
+}

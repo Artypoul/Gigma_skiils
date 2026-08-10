@@ -92,7 +92,17 @@ class ManagedLifecycleTests(unittest.TestCase):
                 "toolchain": {"node": node_version}, "public_env_sha256": {},
                 "health_timeout_seconds": 5,
             }
-            current_commands = [[sys.executable, str(reports)]]
+            component_map = contract_dir / "component_map.json"
+            token_map = contract_dir / "token_map.json"
+            self.write_json(component_map, {"components": {}, "excluded": {}})
+            self.write_json(token_map, {"colors": {}})
+            report_dir = output / "reports"
+            current_commands = [
+                [sys.executable, str(reports)],
+                [sys.executable, str(SKILL / "scripts" / "extract_design_system.py"), "--decoded", str(source / "h2d_decoded.json"), "--out", str(report_dir / "design_system.json")],
+                ["node", str(SKILL / "scripts" / "validate_component_reuse.js"), "--candidate", lifecycle["health_url"], "--candidate-root", str(candidate), "--design-system", str(report_dir / "design_system.json"), "--component-map", str(component_map), "--out", str(report_dir / "component_reuse.json")],
+                [sys.executable, str(SKILL / "scripts" / "validate_token_reuse.py"), "--design-system", str(report_dir / "design_system.json"), "--candidate-root", str(candidate), "--token-map", str(token_map), "--out", str(report_dir / "token_reuse.json")],
+            ]
             lifecycle_commands = [lifecycle["build"], lifecycle["start"]]
             contract = {
                 "schema_version": "2.0", "workspace_root": str(root),
@@ -109,12 +119,14 @@ class ManagedLifecycleTests(unittest.TestCase):
                 "breakpoint_source": {"kind": "generated-reference-classification", "donor_identity": donor_identity, "breakpoints": []},
                 "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": sha256_file(bundle_path)},
                 "sidecars": [
-                    {"path": "build.py", "sha256": sha256_file(build)},
-                    {"path": "reports.py", "sha256": sha256_file(reports)},
+                    {"role": "build-script", "path": "build.py", "sha256": sha256_file(build)},
+                    {"role": "report-script", "path": "reports.py", "sha256": sha256_file(reports)},
+                    {"role": "component_map", "path": "component_map.json", "sha256": sha256_file(component_map)},
+                    {"role": "token_map", "path": "token_map.json", "sha256": sha256_file(token_map)},
                 ],
                 "approvals": [], "current_commands": current_commands,
                 "command_executables": command_executable_records_for_specs([(command, candidate) for command in current_commands + lifecycle_commands]),
-                "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"],
+                "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/design_system.json", "reports/component_reuse.json", "reports/token_reuse.json", "reports/review.md"],
             }
             contract_path = contract_dir / "transfer_contract.json"
             self.write_json(contract_path, contract)

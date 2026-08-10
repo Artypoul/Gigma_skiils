@@ -1,0 +1,45 @@
+{
+  "result": "pass",
+  "generator_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "min_component_repeats": 2,
+  "viewports": [1920, 1440, 390],
+  "nodes_seen": 10651,
+  "nodes_with_styles": 8289,
+  "tokens": {
+    "colors": [
+      {"value": "rgb(6, 7, 10)", "count": 7352, "usage": ["backgroundColor", "borderColor", "color", "fill"]},
+      {"value": "rgb(255, 255, 255)", "count": 2831, "usage": ["backgroundColor", "color"]}
+    ],
+    "typography": [
+      {"fontFamily": "BrandSans-500, Arial, sans-serif", "fontSize": "18px", "fontWeight": "400", "lineHeight": "normal", "count": 2608},
+      {"fontFamily": "BrandSans-740-Headlines, Arial, sans-serif", "fontSize": "74px", "fontWeight": "740", "lineHeight": "81.4px", "count": 12}
+    ],
+    "spacing": [
+      {"value": "12px", "count": 304},
+      {"value": "28px", "count": 240},
+      {"value": "24px", "count": 155}
+    ],
+    "radii": [
+      {"value": "999px", "count": 44}
+    ],
+    "shadows": []
+  },
+  "containers": [
+    {
+      "viewport": 1440,
+      "shared_widths": [
+        {"width": "1290px", "count": 62, "sample_paths": ["alt0:0.0.0.2.0.1.0", "alt0:0.0.0.3.0.0"]},
+        {"width": "588px", "count": 156, "sample_paths": ["alt0:0.0.0.4.1.2"]}
+      ]
+    }
+  ],
+  "layouts": [
+    {"signature": "flex justifyContent:center alignItems:center", "count": 201, "sample_paths": ["0.0.0.2.1.0"]},
+    {"signature": "grid columns:3 gap:24px", "count": 12, "sample_paths": ["0.0.0.5.1"]}
+  ],
+  "components": [
+    {"signature": "li.WorkTags_Tag[::before,span]", "signature_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "structure_signature": "li[span]", "count": 38, "viewport": 1920, "sample_paths": ["0.0.0.5.1.0", "0.0.0.5.1.1"]},
+    {"signature": "div.GalleryFullWidth_ImageContainer[img]", "signature_sha256": "1111111111111111111111111111111111111111111111111111111111111111", "structure_signature": "div[img]", "count": 33, "viewport": 1920, "sample_paths": ["0.0.0.6.2.0"]}
+  ],
+  "issues": []
+}

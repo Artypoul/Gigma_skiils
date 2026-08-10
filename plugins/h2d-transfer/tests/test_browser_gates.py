@@ -109,12 +109,21 @@ class BrowserGateTests(unittest.TestCase):
             h2d = root / "source.h2d"; h2d.write_text(json.dumps({"width":390,"height":844,"frame":{"type":"FRAME","tag":"div","x":0,"y":0,"width":390,"height":844,"children":nodes}}), encoding="utf-8")
             donor = root / "donor.html"; donor.write_text("<!doctype html><h1>Visual donor</h1>", encoding="utf-8")
             matrix = contract_dir / "matrix.json"; profiles = contract_dir / "profiles.json"; heights = contract_dir / "heights.json"; contract_dir.mkdir(parents=True)
+            component_map = contract_dir / "component_map.json"; token_map = contract_dir / "token_map.json"
+            component_map.write_text(json.dumps({"components": {}, "excluded": {}}), encoding="utf-8")
+            token_map.write_text(json.dumps({"colors": {}}), encoding="utf-8")
             matrix.write_text(json.dumps([{"width":390,"height":844,"kind":"decoded"}]), encoding="utf-8")
             profiles.write_text(json.dumps([{"id":"headless","headless":True,"device_scale_factor":1,"is_mobile":False,"has_touch":False,"locale":"en-US","timezone":"UTC","reduced_motion":"reduce"}]), encoding="utf-8")
             heights.write_text(json.dumps({"390":844}), encoding="utf-8")
             subprocess.run([sys.executable, str(SKILL / "scripts" / "freeze_reference_bundle.py"), "--h2d", str(h2d), "--donor", str(donor), "--donor-root", str(root), "--matrix", str(matrix), "--profiles", str(profiles), "--out", str(reference), "--project-root", str(SKILL)], cwd=SKILL, check=True)
             contract = contract_dir / "transfer_contract.json"
-            subprocess.run([sys.executable, str(SKILL / "scripts" / "create_transfer_contract.py"), "--h2d", str(h2d), "--workspace-root", str(root), "--candidate-root", str(candidate), "--candidate-include", "index.html", "--candidate-include", "generate.py", "--profiles", str(profiles), "--height-map", str(heights), "--reference-bundle", str(reference / "reference_bundle.json"), "--current-command", json.dumps([sys.executable, "generate.py"]), "--expected-report", "reports/diff_summary.json", "--expected-report", "reports/node_validation.json", "--expected-report", "reports/font_manifest.json", "--expected-report", "reports/matrix_coverage.json", "--expected-report", "reports/review.md", "--out", str(contract)], cwd=SKILL, check=True)
+            # The system-transfer gates are mandatory expected reports: a
+            # contract without them is rejected before anything is pinned.
+            base_contract_args = [sys.executable, str(SKILL / "scripts" / "create_transfer_contract.py"), "--h2d", str(h2d), "--workspace-root", str(root), "--candidate-root", str(candidate), "--candidate-include", "index.html", "--candidate-include", "generate.py", "--profiles", str(profiles), "--height-map", str(heights), "--reference-bundle", str(reference / "reference_bundle.json"), "--current-command", json.dumps([sys.executable, "generate.py"]), "--expected-report", "reports/diff_summary.json", "--expected-report", "reports/node_validation.json", "--expected-report", "reports/font_manifest.json", "--expected-report", "reports/matrix_coverage.json", "--expected-report", "reports/review.md"]
+            rejected = subprocess.run(base_contract_args + ["--out", str(contract)], cwd=SKILL, capture_output=True, text=True)
+            self.assertEqual(rejected.returncode, 2)
+            self.assertIn("design_system.json", rejected.stderr + rejected.stdout)
+            subprocess.run(base_contract_args + ["--sidecar", f"component_map={component_map}", "--sidecar", f"token_map={token_map}", "--expected-report", "reports/design_system.json", "--expected-report", "reports/component_reuse.json", "--expected-report", "reports/token_reuse.json", "--out", str(contract)], cwd=SKILL, check=True)
             sys.path.insert(0, str(SKILL / "scripts"))
             from evidence_integrity import verify_contract
             verified = verify_contract(contract, output)
