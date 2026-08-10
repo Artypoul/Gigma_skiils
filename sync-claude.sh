@@ -3,64 +3,164 @@
 # Canonical source = plugins/<plugin>/{skills,reference}; Claude читает
 # ~/.claude/skills + ~/.claude/reference (скилы резолвят ../../reference/).
 #
-# Запуск: bash sync-claude.sh [--dest ПУТЬ] [--plugin ИМЯ]...
+# Запуск: bash sync-claude.sh [--dest ПУТЬ] [--plugin ИМЯ]... [--adopt ИМЯ]... [--prune]
 #   --dest    корень Claude (по умолчанию ~/.claude или $CLAUDE_HOME)
 #   --plugin  синхронизировать только указанные плагины; можно повторять
+#   --adopt   взять под управление чужой скил или reference-файл (перезаписать)
+#   --prune   удалить управляемые скилы, которых больше нет в каноне
 #
-# Скрипт трогает ТОЛЬКО скилы, пришедшие из этого репозитория: личные скилы,
-# написанные вручную, не удаляются. Полная пересборка папки была бы опаснее —
-# в ~/.claude/skills лежит и то, чего в репозитории нет.
+# ЛИЧНЫЕ СКИЛЫ НЕПРИКОСНОВЕННЫ. Имена в каноне и в личной папке пересекаются
+# (например `feature`), поэтому скрипт ведёт реестр того, что создал сам, и
+# отказывается перезаписывать директорию, которой в реестре нет. Исключение —
+# директория, побайтно совпадающая с каноном: это результат прежней синхрони-
+# зации, её можно принять молча.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 dest="${CLAUDE_HOME:-$HOME/.claude}"
 plugins=()
+adopt=()
+prune=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dest)   dest="$2"; shift 2 ;;
     --plugin) plugins+=("$2"); shift 2 ;;
+    --adopt)  adopt+=("$2"); shift 2 ;;
+    --prune)  prune=1; shift ;;
     *) echo "Неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
 done
 
-# Без --plugin берём все плагины, у которых есть skills/.
+# Полный канон нужен всегда: --prune сверяется с ним, а не с выборкой,
+# иначе `--plugin X --prune` снёс бы управляемые скилы всех остальных плагинов.
+canon_all=()
+for plugin in plugins/*/; do
+  [ -d "${plugin}skills" ] || continue
+  for skill in "${plugin}skills"/*/; do
+    [ -f "${skill}SKILL.md" ] && canon_all+=("$(basename "$skill")")
+  done
+done
+
+# Все имена плагинов проверяем ДО первой записи: иначе опечатка во втором
+# аргументе оставила бы половину скилов скопированной, но не внесённой в реестр.
 if [ ${#plugins[@]} -eq 0 ]; then
   for plugin in plugins/*/; do
     [ -d "${plugin}skills" ] && plugins+=("$(basename "$plugin")")
   done
+else
+  for name in "${plugins[@]}"; do
+    [ -d "plugins/$name" ] || { echo "Нет такого плагина: $name" >&2; exit 2; }
+  done
 fi
 
+manifest="$dest/.gigma-managed-skills"
+ref_manifest="$dest/.gigma-managed-reference"
 mkdir -p "$dest/skills" "$dest/reference"
+touch "$manifest" "$ref_manifest"
 
-copied_skills=0
+is_managed()     { grep -Fxq "$1" "$manifest"; }
+is_ref_managed() { grep -Fxq "$1" "$ref_manifest"; }
+is_adopted()     { for a in ${adopt+"${adopt[@]}"}; do [ "$a" = "$1" ] && return 0; done; return 1; }
+in_canon()       { for c in ${canon_all+"${canon_all[@]}"}; do [ "$c" = "$1" ] && return 0; done; return 1; }
+
+file_list() { (cd "$1" && find . -type f -not -path '*/__pycache__/*' | sort); }
+
+# Копия прежней синхронизации, а не чужой скил. Совпадения содержимого мало:
+# канон с тех пор мог измениться, и обновление упёрлось бы в отказ на ровном
+# месте. Признак — тот же набор файлов и то же имя скила во frontmatter:
+# личный скил с другим содержимым такую структуру не повторяет.
+looks_like_our_copy() {
+  local canon="$1" target="$2" name="$3"
+  [ -f "$target/SKILL.md" ] || return 1
+  [ "$(file_list "$canon")" = "$(file_list "$target")" ] || return 1
+  grep -Eq "^name:[[:space:]]*${name}[[:space:]]*$" "$target/SKILL.md"
+}
+
+synced=()
 copied_refs=0
+conflicts=()
+ref_conflicts=()
 
 for name in "${plugins[@]}"; do
   plugin="plugins/$name"
-  [ -d "$plugin" ] || { echo "Нет такого плагина: $name" >&2; exit 2; }
 
   if [ -d "$plugin/skills" ]; then
     for skill in "$plugin/skills"/*/; do
       [ -f "${skill}SKILL.md" ] || continue
       skill_name="$(basename "$skill")"
-      # Пересоздаём конкретный скил целиком, чтобы не оставлять файлы,
-      # удалённые в каноне.
-      rm -rf "$dest/skills/$skill_name"
-      cp -r "$skill" "$dest/skills/$skill_name"
-      # Артефакты сборки Python не нужны на стороне Claude.
-      find "$dest/skills/$skill_name" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
-      copied_skills=$((copied_skills + 1))
+      target="$dest/skills/$skill_name"
+
+      if [ -e "$target" ] && ! is_managed "$skill_name" && ! is_adopted "$skill_name" \
+         && ! looks_like_our_copy "$skill" "$target" "$skill_name"; then
+        conflicts+=("$skill_name")
+        continue
+      fi
+
+      # Пересоздаём скил целиком, чтобы не оставлять файлы, удалённые в каноне.
+      rm -rf "$target"
+      cp -r "$skill" "$target"
+      # Артефакты сборки Python на стороне Claude не нужны.
+      find "$target" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+      synced+=("$skill_name")
     done
   fi
 
+  # Reference копируем пофайлово: у части плагинов он разложен по подпапкам, а
+  # рядом может лежать личный файл с тем же путём — рекурсивное `cp -r` затёрло
+  # бы его так же молча, как раньше затирался личный скил.
   if [ -d "$plugin/reference" ]; then
-    for ref in "$plugin/reference"/*; do
-      [ -f "$ref" ] || continue
-      cp "$ref" "$dest/reference/"
+    while IFS= read -r rel; do
+      rel="${rel#./}"
+      src="$plugin/reference/$rel"
+      dst="$dest/reference/$rel"
+      if [ -e "$dst" ] && ! is_ref_managed "$rel" && ! is_adopted "$rel" \
+         && ! cmp -s "$src" "$dst"; then
+        ref_conflicts+=("$rel")
+        continue
+      fi
+      mkdir -p "$(dirname "$dst")"
+      cp "$src" "$dst"
+      echo "$rel" >> "$ref_manifest"
       copied_refs=$((copied_refs + 1))
-    done
+    done < <(cd "$plugin/reference" && find . -type f | sort)
   fi
 done
 
-echo "Claude sync OK: ${copied_skills} skills, ${copied_refs} reference files -> ${dest}"
+if [ ${#conflicts[@]} -gt 0 ] || [ ${#ref_conflicts[@]} -gt 0 ]; then
+  echo "ОТКАЗ: в $dest уже есть чужие файлы, которые этот скрипт не создавал:" >&2
+  for c in ${conflicts+"${conflicts[@]}"};         do echo "  - skills/$c" >&2; done
+  for c in ${ref_conflicts+"${ref_conflicts[@]}"}; do echo "  - reference/$c" >&2; done
+  echo "Перезаписать осознанно: --adopt ИМЯ (повторять для каждого). Остальное синхронизировано." >&2
+fi
+
+# Удаляем только управляемое, чего больше нет в ПОЛНОМ каноне: скил другого
+# плагина, не выбранного через --plugin, из канона никуда не делся.
+removed=0
+if [ "$prune" = "1" ]; then
+  while IFS= read -r known; do
+    [ -n "$known" ] || continue
+    in_canon "$known" && continue
+    if [ -d "$dest/skills/$known" ]; then
+      rm -rf "$dest/skills/$known"
+      removed=$((removed + 1))
+    fi
+  done < "$manifest"
+fi
+
+# Реестр = прежние управляемые (за вычетом удалённых) + синхронизированные сейчас.
+{
+  while IFS= read -r known; do
+    [ -n "$known" ] || continue
+    if [ "$prune" = "1" ] && ! in_canon "$known"; then continue; fi
+    echo "$known"
+  done < "$manifest"
+  for s in ${synced+"${synced[@]}"}; do echo "$s"; done
+} | sort -u > "$manifest.tmp"
+mv "$manifest.tmp" "$manifest"
+sort -u "$ref_manifest" -o "$ref_manifest"
+
+echo "Claude sync OK: ${#synced[@]} skills, ${copied_refs} reference files -> ${dest}"
+[ "$removed" -gt 0 ] && echo "Удалено устаревших управляемых скилов: ${removed}"
+{ [ ${#conflicts[@]} -gt 0 ] || [ ${#ref_conflicts[@]} -gt 0 ]; } && exit 3
+exit 0

@@ -206,7 +206,19 @@ python scripts/preflight_env.py
 
 The preflight checks Python packages, Node packages, and whether Playwright can actually launch Chromium.
 
-**Run every browser gate from the candidate project root, not from the skill folder.** The bundled JS gates resolve their driver from the working directory: `playwright`, else `playwright-core` plus an installed Chrome/Edge (override with `--browser-executable` or `CHROME_PATH`). A skill folder installed on its own — a personal `skills/` directory, a plugin cache — carries no `node_modules`, so preflight and every browser gate fail there while the same commands pass from a project that has the driver. That is the intended shape: the gates measure a candidate, and the candidate is where its dependencies live. If the project has neither package, install one there before claiming any gate result.
+**Two roots, and they are not the same directory.** The bundled JS gates resolve their driver from the working directory: `playwright`, else `playwright-core` plus an installed Chrome/Edge (override with `--browser-executable` or `CHROME_PATH`). An installed skill folder — a personal `skills/` directory, a plugin cache — carries no `node_modules`, so browser gates only work with the **candidate project as the working directory**. The scripts themselves, however, live in the skill. So:
+
+- keep the candidate project as cwd;
+- invoke every bundled script by its absolute path in the skill, never as a relative `scripts/…`, which would resolve inside the candidate and fail;
+- point preflight at the same candidate: it probes Node packages where they actually are.
+
+```bash
+SKILL="$HOME/.claude/skills/h2d-pixel-perfect-transfer"   # or the plugin cache path
+cd /path/to/candidate-project
+python "$SKILL/scripts/preflight_env.py" --candidate-root .
+```
+
+Every `python scripts/…` and `node scripts/…` in this document is written relative to the skill for readability — read them as `"$SKILL/scripts/…"` whenever the skill is installed outside the candidate. If the project has neither `playwright` nor `playwright-core`, install one there before claiming any gate result.
 
 Read `h2d-transfer-bootstrap.md` from the bundled `reference/` folder (`../../reference/` relative to this SKILL.md), when the agent is on a new machine or the environment is not trusted yet.
 

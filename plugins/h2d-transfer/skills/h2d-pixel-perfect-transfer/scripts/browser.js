@@ -275,7 +275,31 @@ async function environmentFingerprint(browser, context, page) {
   return { browser: 'chromium', browser_version: browserVersion, node: process.version, os: `${process.platform}-${process.arch}`, graphics_launch_flags: ['--use-angle=swiftshader', '--use-gl=angle'], ...values };
 }
 
+/**
+ * Load a third-party dependency the way the two-root setup demands.
+ *
+ * A bundled script is launched by its absolute path in the skill, so plain
+ * `require('pngjs')` searches the skill's ancestors and misses the candidate
+ * project where the package actually lives. Try the skill first, then the
+ * working directory — the same order the driver resolution uses, so preflight
+ * and the real consumer can never disagree.
+ */
+function requireDep(name) {
+  for (const attempt of [() => require(name), () => require(require.resolve(name, { paths: [process.cwd()] }))]) {
+    try {
+      return attempt();
+    } catch (err) {
+      if (err.code !== 'MODULE_NOT_FOUND') throw err;
+    }
+  }
+  throw new Error(
+    `"${name}" is not resolvable from this skill or from ${process.cwd()}.\n` +
+    `Install it in the candidate project:  npm install ${name}`
+  );
+}
+
 module.exports = {
+  requireDep,
   resolveChromium, launchChromium, findLocalChrome, executableFromArgv,
   contextOptions, installNetworkSandbox, installRuntimeInstrumentation,
   stableSelectorScript, environmentFingerprint, redactUrl, canonicalUrlHash,
