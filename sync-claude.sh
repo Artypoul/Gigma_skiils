@@ -6,7 +6,7 @@
 # Запуск: bash sync-claude.sh [--dest ПУТЬ] [--plugin ИМЯ]... [--adopt ИМЯ]... [--prune]
 #   --dest    корень Claude (по умолчанию ~/.claude или $CLAUDE_HOME)
 #   --plugin  синхронизировать только указанные плагины; можно повторять
-#   --adopt   взять под управление изменённый чужой скил (перезаписать)
+#   --adopt   взять под управление чужой скил или reference-файл (перезаписать)
 #   --prune   удалить управляемые скилы, которых больше нет в каноне
 #
 # ЛИЧНЫЕ СКИЛЫ НЕПРИКОСНОВЕННЫ. Имена в каноне и в личной папке пересекаются
@@ -55,20 +55,32 @@ else
 fi
 
 manifest="$dest/.gigma-managed-skills"
+ref_manifest="$dest/.gigma-managed-reference"
 mkdir -p "$dest/skills" "$dest/reference"
-touch "$manifest"
+touch "$manifest" "$ref_manifest"
 
-is_managed() { grep -Fxq "$1" "$manifest"; }
-is_adopted() { for a in ${adopt+"${adopt[@]}"}; do [ "$a" = "$1" ] && return 0; done; return 1; }
-in_canon()   { for c in ${canon_all+"${canon_all[@]}"}; do [ "$c" = "$1" ] && return 0; done; return 1; }
-# Директория, совпадающая с каноном, — наша прежняя копия, а не чужой скил.
-# __pycache__ исключён: копия его не получает, и без этого любая прежняя
-# синхронизация выглядела бы «изменённой чужой».
-same_as_canon() { diff -r -q -x '__pycache__' "$1" "$2" >/dev/null 2>&1; }
+is_managed()     { grep -Fxq "$1" "$manifest"; }
+is_ref_managed() { grep -Fxq "$1" "$ref_manifest"; }
+is_adopted()     { for a in ${adopt+"${adopt[@]}"}; do [ "$a" = "$1" ] && return 0; done; return 1; }
+in_canon()       { for c in ${canon_all+"${canon_all[@]}"}; do [ "$c" = "$1" ] && return 0; done; return 1; }
+
+file_list() { (cd "$1" && find . -type f -not -path '*/__pycache__/*' | sort); }
+
+# Копия прежней синхронизации, а не чужой скил. Совпадения содержимого мало:
+# канон с тех пор мог измениться, и обновление упёрлось бы в отказ на ровном
+# месте. Признак — тот же набор файлов и то же имя скила во frontmatter:
+# личный скил с другим содержимым такую структуру не повторяет.
+looks_like_our_copy() {
+  local canon="$1" target="$2" name="$3"
+  [ -f "$target/SKILL.md" ] || return 1
+  [ "$(file_list "$canon")" = "$(file_list "$target")" ] || return 1
+  grep -Eq "^name:[[:space:]]*${name}[[:space:]]*$" "$target/SKILL.md"
+}
 
 synced=()
 copied_refs=0
 conflicts=()
+ref_conflicts=()
 
 for name in "${plugins[@]}"; do
   plugin="plugins/$name"
@@ -80,7 +92,7 @@ for name in "${plugins[@]}"; do
       target="$dest/skills/$skill_name"
 
       if [ -e "$target" ] && ! is_managed "$skill_name" && ! is_adopted "$skill_name" \
-         && ! same_as_canon "$skill" "$target"; then
+         && ! looks_like_our_copy "$skill" "$target" "$skill_name"; then
         conflicts+=("$skill_name")
         continue
       fi
@@ -94,17 +106,32 @@ for name in "${plugins[@]}"; do
     done
   fi
 
+  # Reference копируем пофайлово: у части плагинов он разложен по подпапкам, а
+  # рядом может лежать личный файл с тем же путём — рекурсивное `cp -r` затёрло
+  # бы его так же молча, как раньше затирался личный скил.
   if [ -d "$plugin/reference" ]; then
-    # Рекурсивно: у части плагинов reference разложен по подпапкам.
-    cp -r "$plugin/reference/." "$dest/reference/"
-    copied_refs=$((copied_refs + $(find "$plugin/reference" -type f | wc -l | tr -d ' ')))
+    while IFS= read -r rel; do
+      rel="${rel#./}"
+      src="$plugin/reference/$rel"
+      dst="$dest/reference/$rel"
+      if [ -e "$dst" ] && ! is_ref_managed "$rel" && ! is_adopted "$rel" \
+         && ! cmp -s "$src" "$dst"; then
+        ref_conflicts+=("$rel")
+        continue
+      fi
+      mkdir -p "$(dirname "$dst")"
+      cp "$src" "$dst"
+      echo "$rel" >> "$ref_manifest"
+      copied_refs=$((copied_refs + 1))
+    done < <(cd "$plugin/reference" && find . -type f | sort)
   fi
 done
 
-if [ ${#conflicts[@]} -gt 0 ]; then
-  echo "ОТКАЗ: в $dest/skills уже есть изменённые скилы, которые этот скрипт не создавал:" >&2
-  for c in "${conflicts[@]}"; do echo "  - $c" >&2; done
-  echo "Перезаписать осознанно: --adopt ИМЯ (повторять для каждого). Остальные скилы синхронизированы." >&2
+if [ ${#conflicts[@]} -gt 0 ] || [ ${#ref_conflicts[@]} -gt 0 ]; then
+  echo "ОТКАЗ: в $dest уже есть чужие файлы, которые этот скрипт не создавал:" >&2
+  for c in ${conflicts+"${conflicts[@]}"};         do echo "  - skills/$c" >&2; done
+  for c in ${ref_conflicts+"${ref_conflicts[@]}"}; do echo "  - reference/$c" >&2; done
+  echo "Перезаписать осознанно: --adopt ИМЯ (повторять для каждого). Остальное синхронизировано." >&2
 fi
 
 # Удаляем только управляемое, чего больше нет в ПОЛНОМ каноне: скил другого
@@ -131,8 +158,9 @@ fi
   for s in ${synced+"${synced[@]}"}; do echo "$s"; done
 } | sort -u > "$manifest.tmp"
 mv "$manifest.tmp" "$manifest"
+sort -u "$ref_manifest" -o "$ref_manifest"
 
 echo "Claude sync OK: ${#synced[@]} skills, ${copied_refs} reference files -> ${dest}"
 [ "$removed" -gt 0 ] && echo "Удалено устаревших управляемых скилов: ${removed}"
-[ ${#conflicts[@]} -gt 0 ] && exit 3
+{ [ ${#conflicts[@]} -gt 0 ] || [ ${#ref_conflicts[@]} -gt 0 ]; } && exit 3
 exit 0

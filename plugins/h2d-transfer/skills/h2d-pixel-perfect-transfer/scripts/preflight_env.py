@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -130,11 +131,14 @@ def main() -> int:
         "checks": checks,
         # Node dependencies belong to the project being measured, so the fixes
         # are run there — not inside the installed skill.
+        # Пакеты названы явно: голый `npm install` переустановит лишь то, что
+        # кандидат уже объявил, и ни одну из упавших проверок не починит.
+        # Каждый путь экранирован — в каталоге кандидата бывают пробелы.
         "next_steps": [] if not failed else [
-            f'python -m pip install -r "{ROOT / "requirements.txt"}"',
-            f"cd {probe_root} && npm install",
-            f"cd {probe_root} && npx playwright install chromium",
-            f"python {ROOT / 'scripts' / 'preflight_env.py'} --candidate-root {probe_root}",
+            f"python -m pip install -r {shlex.quote(str(ROOT / 'requirements.txt'))}",
+            f"cd {shlex.quote(str(probe_root))} && npm install playwright pngjs",
+            f"cd {shlex.quote(str(probe_root))} && npx playwright install chromium",
+            f"python {shlex.quote(str(ROOT / 'scripts' / 'preflight_env.py'))} --candidate-root {shlex.quote(str(probe_root))}",
         ],
     }
 
