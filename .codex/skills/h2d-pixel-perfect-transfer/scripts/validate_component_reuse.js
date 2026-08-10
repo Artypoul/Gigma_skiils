@@ -51,12 +51,26 @@ function donorHashCollision(donorComponents, component) {
   return donorComponents.some((other) => other !== component && other.signature === component.signature);
 }
 
-/** Words from the selector that the definition file must mention: class names and tags. */
+/**
+ * An exclusion is self-serve only for machine-recognizable capture artifacts:
+ * a custom-element tag (hyphenated, like `ya-tr-span`) injected by browser
+ * extensions and translators, which no donor authored as page UI. Anything
+ * else the agent wants to exclude needs an `approval_ref` into the contract's
+ * externally verified approvals — a free-text reason is not a decision.
+ */
+function isCaptureArtifactSignature(signature) {
+  const tag = String(signature).split(/[.\[]/)[0];
+  return tag.includes('-');
+}
+
+/** Identifiers from the selector that the definition file must mention: classes, tags, attribute values. */
 function selectorIdentifiers(selector) {
   const classes = [...selector.matchAll(/\.([A-Za-z0-9_-]+)/g)].map((m) => m[1]);
-  if (classes.length) return classes;
-  const tags = [...selector.matchAll(/(?:^|[\s>+~])([a-z][a-z0-9-]*)/g)].map((m) => m[1]);
-  return tags;
+  const attrValues = [...selector.matchAll(/\[[^\]=]+=\s*["']?([A-Za-z0-9_-]+)["']?\s*\]/g)].map((m) => m[1]);
+  const ids = [...selector.matchAll(/#([A-Za-z0-9_-]+)/g)].map((m) => m[1]);
+  const found = [...classes, ...attrValues, ...ids];
+  if (found.length) return found;
+  return [...selector.matchAll(/(?:^|[\s>+~])([a-z][a-z0-9-]*)/g)].map((m) => m[1]);
 }
 
 function checkDefinition(candidateRoot, entry, name, issues) {
@@ -78,8 +92,13 @@ function checkDefinition(candidateRoot, entry, name, issues) {
   }
   const source = fs.readFileSync(definitionPath, 'utf8');
   const identifiers = selectorIdentifiers(entry.selector || '');
+  if (!identifiers.length) {
+    // With nothing to check the source layer would silently pass any file.
+    issues.push({ component: name, issue: `selector "${entry.selector}" has no verifiable identifiers (class, id, tag or attribute value) — use a selector the definition file can be checked against` });
+    return false;
+  }
   const mentioned = identifiers.some((id) => source.includes(id));
-  if (identifiers.length && !mentioned) {
+  if (!mentioned) {
     issues.push({ component: name, issue: `definition ${entry.definition} never mentions ${identifiers.slice(0, 3).join('/')} from the selector — it does not define what the selector matches` });
     return false;
   }
@@ -117,18 +136,40 @@ async function main() {
   // and two large patterns may share a 240-char prefix.
   const mappedSignatures = new Set(Object.values(entries).map((e) => e && e.donor_signature).filter(Boolean));
   const mappedHashes = new Set(Object.values(entries).map((e) => e && e.donor_signature_sha256).filter(Boolean));
+  let mappedCount = 0;
+  let realExcludedCount = 0;
   for (const component of donorComponents) {
     const covered = component.signature_sha256
       ? mappedHashes.has(component.signature_sha256) || (mappedSignatures.has(component.signature) && !donorHashCollision(donorComponents, component))
       : mappedSignatures.has(component.signature);
-    if (covered) continue;
-    const reason = excluded[component.signature_sha256] || excluded[component.signature];
-    if (typeof reason === 'string' && reason.trim().length >= 10) continue;
+    if (covered) { mappedCount += 1; continue; }
+    const exclusion = excluded[component.signature_sha256] || excluded[component.signature];
+    if (exclusion != null) {
+      const reason = typeof exclusion === 'string' ? exclusion : String(exclusion.reason || '');
+      const approvalRef = typeof exclusion === 'object' && exclusion ? exclusion.approval_ref : null;
+      if (reason.trim().length < 10) {
+        issues.push({ component: component.signature.slice(0, 120), issue: 'exclusion has no substantive reason' });
+        continue;
+      }
+      if (isCaptureArtifactSignature(component.signature)) continue;
+      if (approvalRef) { realExcludedCount += 1; continue; }
+      // A donor-authored pattern cannot be waved off with free text.
+      issues.push({
+        component: component.signature.slice(0, 120),
+        issue: 'excluding a donor-authored repeated pattern needs an approval_ref into the contract approvals — a free-text reason is a self-approval',
+      });
+      continue;
+    }
     issues.push({
       component: component.signature.slice(0, 120),
       signature_sha256: component.signature_sha256,
       issue: `repeated donor pattern (x${component.count}) is neither mapped to a candidate component nor excluded with a reason`,
     });
+  }
+  // A map that excludes everything and maps nothing is not a reuse proof.
+  const donorAuthored = donorComponents.filter((c) => !isCaptureArtifactSignature(c.signature));
+  if (donorAuthored.length && mappedCount === 0) {
+    issues.push({ issue: `all ${donorAuthored.length} donor-authored repeated pattern(s) are excluded or unmapped; a transfer with zero reused components cannot pass the reuse gate` });
   }
 
   // Group mapped components by the viewport they exist at: a mobile-only
@@ -174,16 +215,19 @@ async function main() {
       let expectation = donor ? `donor count ${donor.count}` : `min_instances ${expected}`;
       if (entry.instances_expected != null) {
         const reason = String(entry.instances_reason || '');
-        if (reason.trim().length < 10) {
-          issues.push({ component: name, issue: 'instances_expected without a substantive instances_reason is not a recorded decision' });
+        // A count override is a content decision: it needs the owner's
+        // approval reference, not just prose the map author wrote alone.
+        if (reason.trim().length < 10 || !entry.approval_ref) {
+          issues.push({ component: name, issue: 'instances_expected needs both a substantive instances_reason and an approval_ref into the contract approvals; a self-authored override is not the owner\'s decision' });
           checks.push({ ...check, result: 'fail' });
           continue;
         }
         expected = Number(entry.instances_expected);
-        expectation = `owner-recorded ${expected} (${reason.trim().slice(0, 80)})`;
+        expectation = `owner-approved ${expected} (${reason.trim().slice(0, 60)}; approval ${entry.approval_ref})`;
+        check.approval_ref = entry.approval_ref;
       }
 
-      const probe = await page.evaluate(({ selector }) => {
+      const probe = await page.evaluate(({ selector, skipProps }) => {
         const signatureOf = (el, depth) => {
           const classes = [...el.classList].sort().join('.');
           let sig = el.tagName.toLowerCase() + (classes ? '.' + classes : '');
@@ -192,6 +236,23 @@ async function main() {
             if (kids.length) sig += '[' + kids.join(',') + ']';
           }
           return sig;
+        };
+        // Tokens are profiled over the SUBTREE, not just the root: a pasted
+        // copy that restyles a nested heading keeps the root's tokens intact,
+        // and a root-only probe would never see the drift.
+        const PROPS = ['fontFamily', 'fontSize', 'fontWeight', 'color', 'backgroundColor', 'borderTopLeftRadius', 'padding'];
+        const tokensOf = (el, depth) => {
+          const cs = getComputedStyle(el);
+          const own = {};
+          for (const prop of PROPS) {
+            if (!skipProps.includes(prop)) own[prop] = cs[prop];
+          }
+          const node = { tokens: own };
+          if (depth > 0) {
+            const kids = [...el.children].map((child) => tokensOf(child, depth - 1));
+            if (kids.length) node.children = kids;
+          }
+          return node;
         };
         let nodes = [];
         try {
@@ -205,10 +266,11 @@ async function main() {
             return {
               signature: signatureOf(el, 2),
               tokens: { fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight, color: cs.color, backgroundColor: cs.backgroundColor, borderRadius: cs.borderTopLeftRadius, padding: cs.padding },
+              subtree_profile: JSON.stringify(tokensOf(el, 2)),
             };
           }),
         };
-      }, { selector: entry.selector });
+      }, { selector: entry.selector, skipProps: Array.isArray(entry.token_variants) ? entry.token_variants : [] });
 
       if (probe.error) {
         issues.push({ component: name, issue: `selector "${entry.selector}": ${probe.error}` });
@@ -245,6 +307,14 @@ async function main() {
       const divergent = tokenKeys.filter((key) => new Set(instances.map((i) => i.tokens[key])).size > 1);
       if (divergent.length) {
         issues.push({ component: name, issue: `instances diverge in computed tokens: ${divergent.join(', ')}`, sample: divergent.map((key) => ({ [key]: [...new Set(instances.map((i) => i.tokens[key]))].slice(0, 3) })) });
+        checks.push({ ...check, result: 'fail' });
+        continue;
+      }
+      // Same root is not enough: the subtree profile (variant props already
+      // excluded inside the page probe) must agree instance to instance.
+      const subtreeProfiles = new Set(instances.map((i) => i.subtree_profile));
+      if (subtreeProfiles.size > 1) {
+        issues.push({ component: name, issue: `instances diverge in nested computed tokens (${subtreeProfiles.size} distinct subtree style profiles) — a pasted copy restyled a descendant` });
         checks.push({ ...check, result: 'fail' });
         continue;
       }

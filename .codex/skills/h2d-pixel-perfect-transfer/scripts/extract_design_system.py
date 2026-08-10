@@ -123,6 +123,18 @@ def spacing_parts(value: Any) -> list[str]:
     return [part for part in PX_PART.findall(str(value)) if part not in ("0px", "-0px")]
 
 
+# Mirrors the tree indexer: typography belongs to nodes that render text.
+TEXT_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "a", "span", "li", "button", "label", "strong", "em", "blockquote", "figcaption", "td", "th", "summary"}
+
+
+def renders_text(node: dict[str, Any]) -> bool:
+    for key in ("text", "textContent", "innerText", "value", "ariaLabel"):
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            return True
+    return node.get("tag") in TEXT_TAGS
+
+
 def collect_tokens(nodes: list[tuple[dict[str, Any], str, int | None]], limit: int) -> dict[str, Any]:
     colors: Counter = Counter()
     color_usage: dict[str, set[str]] = defaultdict(set)
@@ -141,8 +153,10 @@ def collect_tokens(nodes: list[tuple[dict[str, Any], str, int | None]], limit: i
                 color_usage[value].add(prop)
         family = styles.get("fontFamily")
         size = styles.get("fontSize")
-        # Zero-size text is a hidden/measuring node, not a type-scale member.
-        if family and size and str(size) not in ("0px", "0"):
+        # Wrappers inherit fontFamily without rendering a glyph; counting them
+        # would drown the real type scale in layout noise. Zero-size text is a
+        # hidden/measuring node, not a type-scale member.
+        if family and size and str(size) not in ("0px", "0") and renders_text(node):
             key = json.dumps({
                 "fontFamily": family, "fontSize": size,
                 "fontWeight": styles.get("fontWeight") or "400",
@@ -360,9 +374,16 @@ def main() -> int:
         # silently reporting an emptier system than the donor has.
         issues.append(f"branch {prefix} has no viewport metadata and no frame width; excluded from containers/components")
     components = collect_components(per_viewport, args.min_component_repeats, issues)
+    # An empty token category is legitimate when the donor has no matching
+    # content: an image/canvas-only page has styles and colors but no text, so
+    # an empty type scale there is a fact, not a failure.
+    has_text_nodes = any(renders_text(node) for node, _, _ in all_nodes)
+    typography_ok = bool(tokens["typography"]) or not has_text_nodes
+    if not has_text_nodes and not tokens["typography"]:
+        issues.append("donor renders no text nodes; the type scale is legitimately empty")
     if not styled:
         result = "not-tested"
-    elif tokens["colors"] and tokens["typography"] and not skipped_branches:
+    elif tokens["colors"] and typography_ok and not skipped_branches:
         result = "pass"
     else:
         result = "needs-fix"

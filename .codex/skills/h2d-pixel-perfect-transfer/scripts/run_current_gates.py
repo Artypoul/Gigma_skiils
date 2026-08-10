@@ -25,6 +25,13 @@ SPECIALIST_SCRIPTS = {
     "behavior": "behavior_compare_traces.py",
     "liveness": "liveness_compare_traces.py",
 }
+# System-transfer reports must come from real generator invocations inside the
+# pinned current commands. The generator hash inside a report is publicly
+# computable, so the hash alone proves nothing — the invocation does.
+SYSTEM_GENERATOR_SCRIPTS = {
+    "reports/design_system.json": "extract_design_system.py",
+    "reports/component_reuse.json": "validate_component_reuse.js",
+}
 
 
 def bounded_cwd(root: Path, value: str | None) -> Path:
@@ -312,6 +319,12 @@ def main() -> int:
     completed = sorted(coverage.get("matrix_completed") or [])
     if coverage.get("result") != "pass" or completed != expected_matrix:
         raise EvidenceError("matrix coverage report is non-pass or incomplete")
+    for report_path, script_name in SYSTEM_GENERATOR_SCRIPTS.items():
+        if report_path not in {value.replace("\\", "/") for value in expected_reports}:
+            continue
+        generator = SCRIPT.parent / script_name
+        if not command_invokes_script(commands, generator, candidate_root):
+            raise EvidenceError(f"{report_path} is expected but no pinned current command invokes the bundled {script_name}; a report without its generator invocation is authored, not generated")
     report_entries = []
     for value in expected_reports:
         report = (output / value).resolve()
