@@ -114,7 +114,13 @@ class BrowserGateTests(unittest.TestCase):
             heights.write_text(json.dumps({"390":844}), encoding="utf-8")
             subprocess.run([sys.executable, str(SKILL / "scripts" / "freeze_reference_bundle.py"), "--h2d", str(h2d), "--donor", str(donor), "--donor-root", str(root), "--matrix", str(matrix), "--profiles", str(profiles), "--out", str(reference), "--project-root", str(SKILL)], cwd=SKILL, check=True)
             contract = contract_dir / "transfer_contract.json"
-            subprocess.run([sys.executable, str(SKILL / "scripts" / "create_transfer_contract.py"), "--h2d", str(h2d), "--workspace-root", str(root), "--candidate-root", str(candidate), "--candidate-include", "index.html", "--candidate-include", "generate.py", "--profiles", str(profiles), "--height-map", str(heights), "--reference-bundle", str(reference / "reference_bundle.json"), "--current-command", json.dumps([sys.executable, "generate.py"]), "--expected-report", "reports/diff_summary.json", "--expected-report", "reports/node_validation.json", "--expected-report", "reports/font_manifest.json", "--expected-report", "reports/matrix_coverage.json", "--expected-report", "reports/review.md", "--out", str(contract)], cwd=SKILL, check=True)
+            # The system-transfer gates are mandatory expected reports: a
+            # contract without them is rejected before anything is pinned.
+            base_contract_args = [sys.executable, str(SKILL / "scripts" / "create_transfer_contract.py"), "--h2d", str(h2d), "--workspace-root", str(root), "--candidate-root", str(candidate), "--candidate-include", "index.html", "--candidate-include", "generate.py", "--profiles", str(profiles), "--height-map", str(heights), "--reference-bundle", str(reference / "reference_bundle.json"), "--current-command", json.dumps([sys.executable, "generate.py"]), "--expected-report", "reports/diff_summary.json", "--expected-report", "reports/node_validation.json", "--expected-report", "reports/font_manifest.json", "--expected-report", "reports/matrix_coverage.json", "--expected-report", "reports/review.md"]
+            rejected = subprocess.run(base_contract_args + ["--out", str(contract)], cwd=SKILL, capture_output=True, text=True)
+            self.assertEqual(rejected.returncode, 2)
+            self.assertIn("design_system.json", rejected.stderr + rejected.stdout)
+            subprocess.run(base_contract_args + ["--expected-report", "reports/design_system.json", "--expected-report", "reports/component_reuse.json", "--out", str(contract)], cwd=SKILL, check=True)
             sys.path.insert(0, str(SKILL / "scripts"))
             from evidence_integrity import verify_contract
             verified = verify_contract(contract, output)
