@@ -1,0 +1,13 @@
+{
+  "result": "pass",
+  "viewport": 1440,
+  "min_repeats": 3,
+  "donor_components_considered": 2,
+  "mapped": 2,
+  "excluded": 1,
+  "checks": [
+    {"component": "work-tag", "selector": ".work-tags li", "instances": 38, "result": "pass"},
+    {"component": "gallery-cell", "selector": ".gallery__cell", "instances": 33, "result": "pass"}
+  ],
+  "issues": []
+}

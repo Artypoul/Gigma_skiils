@@ -112,17 +112,36 @@ function compareStyle(expected, actual, threshold) {
 /**
  * Grid tracks resolve to used pixel widths in computed style, so the donor's
  * `repeat(3, 1fr)` and the candidate's equivalent never match textually.
- * The structural fact worth gating is the track count.
+ * Gate the structure that survives the resolution: the track count and the
+ * track PROPORTIONS (each track relative to the first). Fixed-pixel columns
+ * that fake the donor's fr-grid at one width still match here only if their
+ * ratios agree — and the other widths of the mandatory matrix catch them,
+ * because fixed tracks stop scaling while fr tracks follow the container.
  */
 function compareGridTemplate(expected, actual) {
-  const tracks = (value) => {
+  const profile = (value) => {
     const v = normalizeStyleValue(value);
     if (!v || v === 'none') return v;
-    return String(v.split(' ').filter(Boolean).length);
+    const px = v.split(' ').map(parseFloat).filter((n) => Number.isFinite(n) && n > 0);
+    if (!px.length) return v;
+    return px.map((n) => (n / px[0]).toFixed(2)).join(':');
   };
-  const e = tracks(expected);
-  const a = tracks(actual);
-  return e === a ? {equal: true} : {equal: false, note: `track count ${e} vs ${a}`};
+  const e = profile(expected);
+  const a = profile(actual);
+  return e === a ? {equal: true} : {equal: false, note: `track profile ${e} vs ${a}`};
+}
+// In a flex container the computed initial values and their flex equivalents
+// are the same mechanism; rejecting `normal` vs `flex-start` would fail
+// identical layouts.
+const FLEX_EQUIVALENTS = {
+  justifyContent: { normal: 'flex-start', start: 'flex-start', end: 'flex-end' },
+  alignItems: { normal: 'stretch', start: 'flex-start', end: 'flex-end' },
+  alignContent: { normal: 'stretch' },
+};
+function normalizeFlexValue(prop, value) {
+  const v = normalizeStyleValue(value);
+  const table = FLEX_EQUIVALENTS[prop];
+  return table && table[v] ? table[v] : v;
 }
 /** First family name, unquoted and lowercased — enough to tell a substitution. */
 function primaryFamily(value) {
@@ -305,7 +324,9 @@ async function main() {
           if (!(prop in t.box_style)) continue;
           const cmp = prop === 'gridTemplateColumns'
             ? compareGridTemplate(t.box_style[prop], n.style[prop])
-            : compareStyle(t.box_style[prop], n.style[prop], styleThreshold);
+            : (prop in FLEX_EQUIVALENTS
+              ? compareStyle(normalizeFlexValue(prop, t.box_style[prop]), normalizeFlexValue(prop, n.style[prop]), styleThreshold)
+              : compareStyle(t.box_style[prop], n.style[prop], styleThreshold));
           if (cmp.equal) continue;
           const entry = { type: 'box-style', path: p, field: prop, expected: t.box_style[prop], actual: n.style[prop] };
           if (cmp.delta != null) entry.delta = cmp.delta;

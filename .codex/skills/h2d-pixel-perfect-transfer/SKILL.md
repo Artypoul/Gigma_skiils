@@ -37,6 +37,7 @@ After complaint-driven feedback:
 2. Transfer order is fixed: **typography → containers → blocks**. No block markup before the font gate (see Design System First).
 3. Do not call the work `ready`, `done`, `completed`, or `pixel-perfect` until:
    - `reports/font_manifest.json.result` is `font-exact` or `font-substituted`
+   - `reports/design_system.json.result == "pass"` and `reports/component_reuse.json.result` is `pass` or `no-repeated-patterns`
    - `reports/node_validation.json.result == "pass"` (rects **and** text styles)
    - `reports/asset_paint_validation.json.result == "pass"`
    - `reports/asset_provenance.json.result == "pass"`
@@ -64,7 +65,7 @@ Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder,
 Before implementation, freeze the runnable donor and finalize one contract. Do not type viewport lists from the filename or memory.
 
 1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, hashes the transitive local resource closure, captures every explicit viewport/profile under a deny-by-default network sandbox, and runs the bundled reachable-state classifier. The closure includes resources loaded only after interactions. Visual, classification and dynamic evidence must share that exact donor identity. A live URL is not a frozen reference.
-2. Breakpoints come only from the bundled generated classification (CSS/media queries plus runtime `matchMedia`), never from the filename, memory or a handwritten CLI list. Use `derive_reference_matrix.py` for a decoded-width seed matrix, run `freeze_reference_bundle.py --prepare-only`, then derive the final breakpoint/interval matrix from `reference_classification.json` and recapture the final reference. `create_transfer_contract.py` accepts only that pinned matrix/provenance pair.
+2. Breakpoints come only from the bundled generated classification (CSS/media queries plus runtime `matchMedia`), never from the filename, memory or a handwritten CLI list. Use `derive_reference_matrix.py` for a decoded-width seed matrix, run `freeze_reference_bundle.py --prepare-only`, then derive the final breakpoint/interval matrix from `reference_classification.json` and recapture the final reference. `create_transfer_contract.py` accepts only that pinned matrix/provenance pair. Include `reports/design_system.json` and `reports/component_reuse.json` in the contract's `expected_reports` and regenerate both inside `current_commands` — a design-system report left over from an earlier donor must be quarantined and rebuilt like every other current report, not accepted because it still says `pass`.
 3. Every approved deviation/fallback/substitution needs a verified owner-signed or trusted owner-event receipt. A locally authored `approved: true` is invalid.
 4. `run_current_gates.py` pins executable binaries and file inputs against the exact cwd used by each current/build/start/teardown command, quarantines earlier reports, runs the commands, binds the final `source/` copies to the immutable `.h2d`/decode artifacts, and derives matrix completion only from per-row passing visual/geometry/typography/behavior/liveness artifacts produced by direct bundled specialist-script invocations. A copied template or wrapper-authored matrix row has no specialist provenance and is non-final. Managed URL mode requires an unused loopback origin, a live child process and JSON build identity bound to the current candidate/source closure. The candidate closure is re-hashed after generation; the evidence directory is the only allowed self-exclusion.
 5. Missing behavior/liveness classification, truncated discovery, delegated document/window listeners, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Structural ARIA roles alone are not behavior; actionable roles/listeners are. Timers and media playback are liveness. Never infer static scope from a missing report.
@@ -100,7 +101,17 @@ python scripts/extract_design_system.py \
 
    It returns the donor's recurring colors, type scale, spacing scale, radii and shadows (`tokens`), the shared per-viewport container widths (`containers`), the recurring flex/grid mechanisms (`layouts`) and the repeated subtrees (`components`). Implement the tokens as **one shared layer** — CSS custom properties, a Tailwind theme, or the project's token file — and take block values from that layer. Scattering the same literal per block is the token-level equivalent of a compensation. A snapshot can carry capture artifacts (translation spans like `ya-tr-span`, `YS Text` overlays, builder debris) — exclude them from the token and component maps instead of transferring them.
 3. **Containers and layout mechanisms before blocks.** Implement the container chain `viewport → page container → section container → content` from `design_system.json` as shared classes/tokens; block-level rects must inherit from this chain, not carry their own copies of it. Reproduce each block's layout with the donor's mechanism — the same `display`, flex direction/alignment, grid track count — because these fields are gated: identical rects laid out by absolute offsets instead of the donor's flex/grid chain fail `node_validation`.
-4. **Components, not copies.** Every entry in `design_system.json.components` (a card, a menu item, a tag, a gallery cell repeated N times) becomes **one** component in the candidate — a Svelte/React component, a template partial, or a single class — instantiated N times with different content. Pasting the block N times and editing each copy is a gate-relevant defect: record the pattern → component mapping in `review.md`, and when a repeated pattern is deliberately not componentized, say why there.
+4. **Components, not copies.** Every entry in `design_system.json.components` (a card, a menu item, a tag, a gallery cell repeated N times) becomes **one** component in the candidate — a Svelte/React component, a template partial, or a single class — instantiated N times with different content. Write the pattern → selector mapping into `reports/component_map.json` (capture artifacts go under `excluded` with a reason) and prove reuse on the rendered candidate:
+
+```bash
+node scripts/validate_component_reuse.js \
+  --candidate http://127.0.0.1:5005/ \
+  --design-system h2d-transfer-output/reports/design_system.json \
+  --component-map h2d-transfer-output/reports/component_map.json \
+  --out h2d-transfer-output/reports/component_reuse.json
+```
+
+The gate looks at the candidate, not the donor: every repeated donor pattern must be mapped or excluded with a reason, each mapped selector must find its instances, and all instances must share one subtree shape and one set of computed tokens. Pasted copies drift — an edited copy changes its signature or its tokens, and that fails here. `component_reuse.json` is a required report (`no-repeated-patterns` is the honest value for a scope with nothing repeated).
 
 Only then transfer blocks/sections.
 

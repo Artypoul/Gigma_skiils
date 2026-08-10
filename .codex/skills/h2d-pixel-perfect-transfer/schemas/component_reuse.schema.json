@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "component_reuse",
+  "description": "Candidate-side proof that repeated donor patterns are one component each: every mapped selector finds enough instances, and all instances share one subtree shape and one set of computed tokens. Pasted copies drift; a component cannot.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "no-repeated-patterns",
+        "not-tested"
+      ]
+    },
+    "viewport": {
+      "type": "integer"
+    },
+    "min_repeats": {
+      "type": "integer"
+    },
+    "donor_components_considered": {
+      "type": "integer"
+    },
+    "mapped": {
+      "type": "integer"
+    },
+    "excluded": {
+      "type": "integer"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "component",
+          "result"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "result",
+    "checks",
+    "issues"
+  ]
+}

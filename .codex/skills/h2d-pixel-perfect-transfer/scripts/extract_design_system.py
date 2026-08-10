@@ -29,8 +29,11 @@ from pathlib import Path
 from typing import Any
 
 TRANSPARENT = {"rgba(0, 0, 0, 0)", "transparent", ""}
-# CSS-modules and utility hash suffixes: Header_Header__x7Kf2, css-1a2b3c, sc-gsTCUz.
-_HASH_TAIL = re.compile(r"__[A-Za-z0-9_-]{4,}$")
+# Generated-class suffixes: Header_Header__x7Kf2, css-1a2b3c, sc-gsTCUz. A BEM
+# element (`card__title`) uses the same separator, so a suffix only counts as a
+# hash when it looks generated — contains a digit or mixed case — never when it
+# is a plain lowercase word.
+_HASH_TAIL = re.compile(r"__(?=[A-Za-z0-9_-]*\d|[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{4,}$")
 _HASH_CLASS = re.compile(r"^(css|sc)-[A-Za-z0-9]+$")
 
 
@@ -82,13 +85,31 @@ def viewport_of(branch: dict[str, Any]) -> int | None:
     return None
 
 
+def branch_viewport(branch: dict[str, Any], frame: dict[str, Any]) -> int | None:
+    """Branch metadata first; the frame's own width is the honest fallback."""
+    viewport = viewport_of(branch)
+    if viewport:
+        return viewport
+    width = frame.get("width")
+    if isinstance(width, (int, float)) and width > 0:
+        return int(round(width))
+    return None
+
+
 def roots_of(decoded: Any):
+    # Shapes mirror h2d_unpack_source.build_tree_index: a dict with
+    # frame/alternatives, or a top-level list of branches.
     if isinstance(decoded, dict):
         if isinstance(decoded.get("frame"), dict):
-            yield decoded["frame"], "0", viewport_of(decoded)
+            yield decoded["frame"], "0", branch_viewport(decoded, decoded["frame"])
         for i, alt in enumerate(decoded.get("alternatives") or []):
             if isinstance(alt, dict) and isinstance(alt.get("frame"), dict):
-                yield alt["frame"], f"alt{i}:0", viewport_of(alt)
+                yield alt["frame"], f"alt{i}:0", branch_viewport(alt, alt["frame"])
+    elif isinstance(decoded, list):
+        for i, item in enumerate(decoded):
+            if isinstance(item, dict):
+                frame = item.get("frame") if isinstance(item.get("frame"), dict) else item
+                yield frame, f"{i}.0", branch_viewport(item, frame)
 
 
 def top(counter: Counter, limit: int) -> list[dict[str, Any]]:
@@ -280,16 +301,27 @@ def main() -> int:
     decoded = json.loads(args.decoded.read_text(encoding="utf-8"))
     all_nodes: list[tuple[dict[str, Any], str, int | None]] = []
     per_viewport: dict[int, list[tuple[dict[str, Any], str]]] = defaultdict(list)
+    skipped_branches: list[str] = []
     for root, prefix, viewport in roots_of(decoded):
         for node, h2d_path, vp in walk(root, prefix, viewport):
             all_nodes.append((node, h2d_path, vp))
             if vp:
                 per_viewport[vp].append((node, h2d_path))
+        if not viewport:
+            skipped_branches.append(prefix)
 
     styled = sum(1 for node, _, _ in all_nodes if styles_of(node))
     tokens = collect_tokens(all_nodes, args.top)
+    issues = []
+    if not styled:
+        issues.append("decoded tree carries no styles: re-run h2d_unpack_source.py from this skill version")
+    for prefix in skipped_branches:
+        # Tokens and layouts still cover these nodes; only the per-viewport
+        # container/component analysis cannot place them. Saying so beats
+        # silently reporting an emptier system than the donor has.
+        issues.append(f"branch {prefix} has no viewport metadata and no frame width; excluded from containers/components")
     report = {
-        "result": "pass" if styled and tokens["colors"] and tokens["typography"] else "needs-fix",
+        "result": "pass" if styled and tokens["colors"] and tokens["typography"] and not skipped_branches else "needs-fix",
         "viewports": sorted(per_viewport, reverse=True),
         "nodes_seen": len(all_nodes),
         "nodes_with_styles": styled,
@@ -297,7 +329,7 @@ def main() -> int:
         "containers": collect_containers(per_viewport, args.top),
         "layouts": collect_layouts(all_nodes, args.top),
         "components": collect_components(per_viewport, args.top, args.min_component_repeats),
-        "issues": [] if styled else ["decoded tree carries no styles: re-run h2d_unpack_source.py from this skill version"],
+        "issues": issues,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
