@@ -101,14 +101,14 @@ python scripts/extract_design_system.py \
 
    It returns the donor's recurring colors, type scale, spacing scale, radii and shadows (`tokens`), the shared per-viewport container widths (`containers`), the recurring flex/grid mechanisms (`layouts`) and the repeated subtrees (`components`). Implement the tokens as **one shared layer** — CSS custom properties, a Tailwind theme, or the project's token file — and take block values from that layer. Scattering the same literal per block is the token-level equivalent of a compensation. A snapshot can carry capture artifacts (translation spans like `ya-tr-span`, `YS Text` overlays, builder debris) — exclude them from the token and component maps instead of transferring them.
 3. **Containers and layout mechanisms before blocks.** Implement the container chain `viewport → page container → section container → content` from `design_system.json` as shared classes/tokens; block-level rects must inherit from this chain, not carry their own copies of it. Reproduce each block's layout with the donor's mechanism — the same `display`, flex direction/alignment, grid track count — because these fields are gated: identical rects laid out by absolute offsets instead of the donor's flex/grid chain fail `node_validation`.
-4. **Components, not copies.** Every entry in `design_system.json.components` (a card, a menu item, a tag, a gallery cell repeated N times) becomes **one** component in the candidate — a Svelte/React component, a template partial, or a single class — instantiated N times with different content. Write the pattern → selector mapping into `reports/component_map.json` (capture artifacts go under `excluded` with a reason) and prove reuse on the rendered candidate:
+4. **Components, not copies.** Every entry in `design_system.json.components` (a card, a menu item, a tag, a gallery cell repeated N times) becomes **one** component in the candidate — a Svelte/React component, a template partial, or a single class — instantiated N times with different content. Write the pattern → selector mapping into `contract/component_map.json` (capture artifacts go under `excluded` with a reason) and prove reuse on the rendered candidate:
 
 ```bash
 node scripts/validate_component_reuse.js \
   --candidate http://127.0.0.1:5005/ \
   --candidate-root . \
   --design-system h2d-transfer-output/reports/design_system.json \
-  --component-map h2d-transfer-output/reports/component_map.json \
+  --component-map h2d-transfer-output/contract/component_map.json \
   --out h2d-transfer-output/reports/component_reuse.json
 ```
 
@@ -152,7 +152,9 @@ For a whole-page transfer, do not treat the page as one scope:
 
 ## Reports Are Generated, Not Written
 
-Every `reports/*.json` must be produced by a bundled script (or a command recorded in `review.md`). Hand-writing or hand-editing a report so a schema or gate passes is itself a failed gate — regenerate the report instead. When a pipeline genuinely cannot run (e.g. the `.h2d` only stores a closed menu state), record the honest `static-scope`/`not-tested` status through the script's own flags and name the limitation in `review.md` — never fabricate a `pass`.
+Every `reports/*.json` must be produced by a bundled script (or a command recorded in `review.md`). Hand-writing or hand-editing a report so a schema or gate passes is itself a failed gate — regenerate the report instead; `design_system.json` and `component_reuse.json` additionally carry a `generator_sha256` that the final runner verifies against the bundled script. When a pipeline genuinely cannot run (e.g. the `.h2d` only stores a closed menu state), record the honest `static-scope`/`not-tested` status through the script's own flags and name the limitation in `review.md` — never fabricate a `pass`.
+
+Declarative **inputs** are a different thing from reports and live under `contract/`, not `reports/`: `contract/component_map.json` (pattern → selector/definition), `contract/selector_map.json` (donor path → project selector), `contract/asset_decisions.json` (owner decisions on assets). The agent writes these by hand — they are declarations to be verified, and the gates judge the candidate against them.
 
 ## Scope Lock Before Repair
 
@@ -242,7 +244,7 @@ node scripts/validate_active_viewport.js \
   --viewports 390,768,1024,1440,1536,1920 \
   --out h2d-transfer-output/reports/node_validation.json
 # integration mode (a live project page):
-#   --candidate http://127.0.0.1:5005/ --selector-map h2d-transfer-output/reports/selector_map.json
+#   --candidate http://127.0.0.1:5005/ --selector-map h2d-transfer-output/contract/selector_map.json
 #   optional readiness: --ready-selector '.hero__media' --ready-timeout-ms 10000 --wait-ms 300
 # selector map format: {"<data_h2d_path>": "<css selector>"} or {"<viewport>": {"<path>": "<selector>"}}
 ```
@@ -269,7 +271,7 @@ python scripts/asset_provenance.py \
   --assets public \
   --scan-root public \
   --raw-asset-inventory h2d-transfer-output/reports/raw_asset_inventory.json \
-  --decisions h2d-transfer-output/reports/asset_decisions.json \
+  --decisions h2d-transfer-output/contract/asset_decisions.json \
   --out h2d-transfer-output/reports/asset_provenance.json
 ```
 

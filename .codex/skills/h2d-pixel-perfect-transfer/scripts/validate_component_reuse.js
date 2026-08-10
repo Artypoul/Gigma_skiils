@@ -32,6 +32,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -43,6 +44,11 @@ function readJson(p) {
 function toTargetUrl(p) {
   if (/^https?:\/\//.test(p) || /^file:/.test(p)) return p;
   return 'file://' + path.resolve(p);
+}
+
+/** Truncated display signatures can collide; the hash never does. */
+function donorHashCollision(donorComponents, component) {
+  return donorComponents.some((other) => other !== component && other.signature === component.signature);
 }
 
 /** Words from the selector that the definition file must mention: class names and tags. */
@@ -59,7 +65,10 @@ function checkDefinition(candidateRoot, entry, name, issues) {
     return false;
   }
   const definitionPath = path.resolve(candidateRoot, entry.definition);
-  if (!definitionPath.startsWith(path.resolve(candidateRoot))) {
+  // Separator-aware containment: a raw prefix check would accept a sibling
+  // like /tmp/site-backup next to /tmp/site.
+  const relative = path.relative(path.resolve(candidateRoot), definitionPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     issues.push({ component: name, issue: `definition escapes the candidate root: ${entry.definition}` });
     return false;
   }
@@ -91,23 +100,33 @@ async function main() {
 
   const designSystem = readJson(designSystemPath);
   const map = readJson(mapPath);
-  const entries = map.components || map;
-  const excluded = map.excluded || {};
+  // Flat form has no `components` wrapper; `excluded` there is metadata, not
+  // a component entry, or a valid exclusion-only map could never pass.
+  const { excluded: excludedMeta, components: wrappedComponents, ...flat } = map;
+  const entries = wrappedComponents || flat;
+  const excluded = excludedMeta || {};
   const issues = [];
   const checks = [];
 
   const donorComponents = (designSystem.components || []).filter((c) => (c.count || 0) >= minRepeats);
   const donorBySignature = new Map(donorComponents.map((c) => [c.signature, c]));
+  const donorByHash = new Map(donorComponents.filter((c) => c.signature_sha256).map((c) => [c.signature_sha256, c]));
 
   // Coverage: every repeated donor pattern is mapped or explicitly excluded.
+  // Hashes are authoritative when present — displayed signatures are truncated
+  // and two large patterns may share a 240-char prefix.
   const mappedSignatures = new Set(Object.values(entries).map((e) => e && e.donor_signature).filter(Boolean));
+  const mappedHashes = new Set(Object.values(entries).map((e) => e && e.donor_signature_sha256).filter(Boolean));
   for (const component of donorComponents) {
-    const signature = component.signature;
-    if (mappedSignatures.has(signature)) continue;
-    const reason = excluded[signature];
+    const covered = component.signature_sha256
+      ? mappedHashes.has(component.signature_sha256) || (mappedSignatures.has(component.signature) && !donorHashCollision(donorComponents, component))
+      : mappedSignatures.has(component.signature);
+    if (covered) continue;
+    const reason = excluded[component.signature_sha256] || excluded[component.signature];
     if (typeof reason === 'string' && reason.trim().length >= 10) continue;
     issues.push({
-      component: signature.slice(0, 120),
+      component: component.signature.slice(0, 120),
+      signature_sha256: component.signature_sha256,
       issue: `repeated donor pattern (x${component.count}) is neither mapped to a candidate component nor excluded with a reason`,
     });
   }
@@ -120,9 +139,11 @@ async function main() {
       issues.push({ component: name, issue: 'component map entry has no selector' });
       continue;
     }
-    const donor = entry.donor_signature ? donorBySignature.get(entry.donor_signature) : null;
-    if (entry.donor_signature && !donor) {
-      issues.push({ component: name, issue: `donor_signature not found among the donor's repeated components: ${String(entry.donor_signature).slice(0, 100)}` });
+    const donor = entry.donor_signature_sha256
+      ? donorByHash.get(entry.donor_signature_sha256)
+      : (entry.donor_signature ? donorBySignature.get(entry.donor_signature) : null);
+    if ((entry.donor_signature || entry.donor_signature_sha256) && !donor) {
+      issues.push({ component: name, issue: `donor signature not found among the donor's repeated components: ${String(entry.donor_signature_sha256 || entry.donor_signature).slice(0, 100)}` });
       continue;
     }
     const viewport = Number(entry.viewport || (donor && donor.viewport) || defaultViewport);
@@ -208,15 +229,26 @@ async function main() {
         checks.push({ ...check, result: 'fail' });
         continue;
       }
-      const tokenKeys = Object.keys(instances[0].tokens);
+      // Content differs between instances by design; shared visual tokens must
+      // not — unless the donor itself varies them intentionally (nth-child
+      // theming, parent context), which the map records as token_variants.
+      let allowedVariants = [];
+      if (Array.isArray(entry.token_variants) && entry.token_variants.length) {
+        if (String(entry.variant_reason || '').trim().length < 10) {
+          issues.push({ component: name, issue: 'token_variants without a substantive variant_reason is not a recorded donor variant' });
+          checks.push({ ...check, result: 'fail' });
+          continue;
+        }
+        allowedVariants = entry.token_variants;
+      }
+      const tokenKeys = Object.keys(instances[0].tokens).filter((key) => !allowedVariants.includes(key));
       const divergent = tokenKeys.filter((key) => new Set(instances.map((i) => i.tokens[key])).size > 1);
-      // Content differs between instances by design; shared visual tokens must not.
       if (divergent.length) {
         issues.push({ component: name, issue: `instances diverge in computed tokens: ${divergent.join(', ')}`, sample: divergent.map((key) => ({ [key]: [...new Set(instances.map((i) => i.tokens[key]))].slice(0, 3) })) });
         checks.push({ ...check, result: 'fail' });
         continue;
       }
-      checks.push({ ...check, result: 'pass' });
+      checks.push({ ...check, result: 'pass', token_variants: allowedVariants.length ? allowedVariants : undefined });
     }
     await page.close();
   }
@@ -226,6 +258,7 @@ async function main() {
   const result = !hasComponents ? 'no-repeated-patterns' : (issues.length ? 'fail' : 'pass');
   const report = {
     result,
+    generator_sha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
     min_repeats: minRepeats,
     donor_components_considered: donorComponents.length,
     mapped: Object.keys(entries).length,

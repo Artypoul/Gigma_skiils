@@ -325,15 +325,22 @@ async function main() {
 
       if (t.box_style && t.box_style.gridTemplateColumns) {
         const px = (value) => normalizeStyleValue(value).split(' ').map(parseFloat).filter(Number.isFinite);
-        if (!gridSamples.has(p)) gridSamples.set(p, []);
-        gridSamples.get(p).push({ viewport, donor: px(t.box_style.gridTemplateColumns), candidate: px(n.style.gridTemplateColumns) });
+        // The same logical node lives under a different branch prefix per
+        // viewport (`0.…` vs `alt2:0.…`); keying by the raw path would leave
+        // one sample everywhere and quietly disable the elasticity check.
+        const canonical = p.replace(/^alt\d+:/, '');
+        if (!gridSamples.has(canonical)) gridSamples.set(canonical, []);
+        gridSamples.get(canonical).push({ viewport, path: p, donor: px(t.box_style.gridTemplateColumns), candidate: px(n.style.gridTemplateColumns) });
       }
       if (t.box_style) {
         for (const prop of BOX_PROPS) {
           if (!(prop in t.box_style)) continue;
+          // The `normal` aliases are flex semantics; in a grid, `normal` and
+          // `flex-start` are different mechanisms and must not be equated.
+          const donorIsFlex = /flex/.test(String(t.box_style.display || ''));
           const cmp = prop === 'gridTemplateColumns'
             ? compareGridTemplate(t.box_style[prop], n.style[prop])
-            : (prop in FLEX_EQUIVALENTS
+            : (donorIsFlex && prop in FLEX_EQUIVALENTS
               ? compareStyle(normalizeFlexValue(prop, t.box_style[prop]), normalizeFlexValue(prop, n.style[prop]), styleThreshold)
               : compareStyle(t.box_style[prop], n.style[prop], styleThreshold));
           if (cmp.equal) continue;
@@ -381,7 +388,7 @@ async function main() {
   // where that shows up.
   const elasticityIssues = [];
   const GROWTH_EPSILON = 1;
-  for (const [p, samples] of gridSamples) {
+  for (const [canonical, samples] of gridSamples) {
     if (samples.length < 2) continue;
     samples.sort((a, b) => a.viewport - b.viewport);
     for (let i = 1; i < samples.length; i += 1) {
@@ -394,7 +401,8 @@ async function main() {
         if (donorGrew === candidateGrew) continue;
         const entry = {
           type: 'grid-elasticity',
-          path: p,
+          path: curr.path,
+          canonical_path: canonical,
           field: 'gridTemplateColumns',
           track,
           at: curr.viewport,
@@ -403,7 +411,7 @@ async function main() {
           candidate: `${prev.candidate[track]} → ${curr.candidate[track]}`,
           note: donorGrew ? 'donor track scales with the container, candidate track is frozen' : 'candidate track scales, donor track is fixed',
         };
-        const ok = acceptedFor(accepted, curr.viewport, p, 'gridTemplateColumns');
+        const ok = acceptedFor(accepted, curr.viewport, curr.path, 'gridTemplateColumns');
         if (!ok) elasticityIssues.push(entry);
       }
     }

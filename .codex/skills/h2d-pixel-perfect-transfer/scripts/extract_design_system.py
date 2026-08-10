@@ -23,7 +23,7 @@ Sections of the report:
     candidate, never N pasted copies.
 """
 from __future__ import annotations
-import argparse, json, re
+import argparse, hashlib, json, re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -178,12 +178,16 @@ def collect_containers(per_viewport: dict[int, list[tuple[dict[str, Any], str]]]
     """Shared content widths per viewport — the donor's container chain.
 
     A width is a container signal when several distinct wrappers agree on it
-    exactly and it is narrower than the viewport itself.
+    exactly and it is narrower than the viewport itself. Repeated cards agree
+    on a width too, but as siblings of ONE parent; a page/section container
+    recurs under DIFFERENT parents across the page, so the parent spread is
+    what separates the chain from a card grid.
     """
     out = []
     for viewport, entries in sorted(per_viewport.items(), reverse=True):
         widths: Counter = Counter()
         samples: dict[str, list[str]] = defaultdict(list)
+        parents: dict[str, set[str]] = defaultdict(set)
         for node, h2d_path in entries:
             width = node.get("width")
             # Content containers live in the hundreds of pixels; recurring small
@@ -195,12 +199,13 @@ def collect_containers(per_viewport: dict[int, list[tuple[dict[str, Any], str]]]
                 continue
             key = f"{round(float(width), 1):g}px"
             widths[key] += 1
+            parents[key].add(h2d_path.rsplit(".", 1)[0])
             if len(samples[key]) < 5:
                 samples[key].append(h2d_path)
         shared = [
-            {"width": value, "count": count, "sample_paths": samples[value]}
+            {"width": value, "count": count, "distinct_parents": len(parents[value]), "sample_paths": samples[value]}
             for value, count in widths.most_common(limit)
-            if count >= 3
+            if count >= 3 and len(parents[value]) >= 2
         ]
         out.append({"viewport": viewport, "shared_widths": shared})
     return out
@@ -254,11 +259,35 @@ def node_signature(node: dict[str, Any], depth: int = 2) -> str | None:
     return "".join(parts)
 
 
-def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]], limit: int, min_repeats: int) -> list[dict[str, Any]]:
+def outermost(paths: list[str]) -> list[str]:
+    """Drop paths nested inside another path from the same group, in O(n log n).
+
+    After sorting, a nested path always follows its ancestor immediately in
+    lexicographic order (the ancestor plus a `.`), so one linear scan with the
+    last accepted outer path is enough — no pairwise comparison.
+    """
+    result: list[str] = []
+    last_outer: str | None = None
+    for path in sorted(paths):
+        if last_outer is not None and path.startswith(last_outer + "."):
+            continue
+        result.append(path)
+        last_outer = path
+    return result
+
+
+# Component identity must survive display truncation: two large subtrees that
+# agree on the first 240 characters are still different components.
+COMPONENT_HARD_CAP = 512
+
+
+def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]], min_repeats: int, issues: list[str]) -> list[dict[str, Any]]:
     """Repeated subtrees = component candidates.
 
     Grouping runs per viewport so a card repeated across breakpoints does not
     fake a higher count; the report keeps the viewport with the most repeats.
+    The list is exhaustive: the reuse gate can only demand what is reported,
+    so truncating it would exempt every dropped pattern from the gate.
     """
     best: dict[str, dict[str, Any]] = {}
     for viewport, entries in per_viewport.items():
@@ -275,19 +304,26 @@ def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]]
             if len(paths) < min_repeats:
                 continue
             # Nested repetition inflates counts: keep only the outermost instances.
-            outer = [p for p in paths if not any(p != q and p.startswith(q + ".") for q in paths)]
+            outer = outermost(paths)
             if len(outer) < min_repeats:
                 continue
             current = best.get(signature)
             if current is None or len(outer) > current["count"]:
                 best[signature] = {
                     "signature": signature[:240],
+                    "signature_sha256": hashlib.sha256(signature.encode("utf-8")).hexdigest(),
                     "count": len(outer),
                     "viewport": viewport,
                     "sample_paths": outer[:5],
                 }
     ranked = sorted(best.values(), key=lambda item: item["count"], reverse=True)
-    return ranked[:limit]
+    if len(ranked) > COMPONENT_HARD_CAP:
+        issues.append(
+            f"component inventory truncated to {COMPONENT_HARD_CAP} of {len(ranked)} repeated patterns; "
+            "the reuse gate cannot cover the dropped ones — raise the cap or narrow the scope"
+        )
+        ranked = ranked[:COMPONENT_HARD_CAP]
+    return ranked
 
 
 def main() -> int:
@@ -314,21 +350,32 @@ def main() -> int:
     tokens = collect_tokens(all_nodes, args.top)
     issues = []
     if not styled:
-        issues.append("decoded tree carries no styles: re-run h2d_unpack_source.py from this skill version")
+        # A geometry-only snapshot is a valid decode with no styles to extract:
+        # nothing to re-run, nothing to fix. `not-tested` keeps the transfer
+        # honest without making a styleless donor permanently unfinishable.
+        issues.append("decoded tree carries no per-node styles; the design system cannot be extracted from this snapshot — derive tokens from the runnable donor reference instead and document that in review.md")
     for prefix in skipped_branches:
         # Tokens and layouts still cover these nodes; only the per-viewport
         # container/component analysis cannot place them. Saying so beats
         # silently reporting an emptier system than the donor has.
         issues.append(f"branch {prefix} has no viewport metadata and no frame width; excluded from containers/components")
+    components = collect_components(per_viewport, args.min_component_repeats, issues)
+    if not styled:
+        result = "not-tested"
+    elif tokens["colors"] and tokens["typography"] and not skipped_branches:
+        result = "pass"
+    else:
+        result = "needs-fix"
     report = {
-        "result": "pass" if styled and tokens["colors"] and tokens["typography"] and not skipped_branches else "needs-fix",
+        "result": result,
+        "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "viewports": sorted(per_viewport, reverse=True),
         "nodes_seen": len(all_nodes),
         "nodes_with_styles": styled,
         "tokens": tokens,
         "containers": collect_containers(per_viewport, args.top),
         "layouts": collect_layouts(all_nodes, args.top),
-        "components": collect_components(per_viewport, args.top, args.min_component_repeats),
+        "components": components,
         "issues": issues,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -337,7 +384,7 @@ def main() -> int:
         f"result={report['result']} colors={len(tokens['colors'])} typography={len(tokens['typography'])} "
         f"spacing={len(tokens['spacing'])} layouts={len(report['layouts'])} components={len(report['components'])} out={args.out}"
     )
-    return 0 if report["result"] == "pass" else 2
+    return 0 if report["result"] in ("pass", "not-tested") else 2
 
 
 if __name__ == "__main__":
