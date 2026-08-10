@@ -1,0 +1,14 @@
+{
+  "colors": {
+    "rgb(6, 7, 10)": {
+      "definition": "src/styles/tokens.css",
+      "token": "--color-ink",
+      "usage": "var(--color-ink)"
+    },
+    "rgb(255, 255, 255)": {
+      "definition": "src/styles/tokens.css",
+      "token": "--color-surface",
+      "usage": "var(--color-surface)"
+    }
+  }
+}

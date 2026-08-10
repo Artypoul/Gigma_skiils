@@ -1,9 +1,11 @@
 ---
 name: dev-mode-site-transfer
-description: "Transfer a live website or page block by block from browser dev mode into clean HTML, Tailwind, or React when the source is a public URL or existing frontend rather than a .h2d snapshot. Use when the user asks to copy a site from dev mode, inspect a live page, rebuild a WordPress/Elementor or legacy marketing site section by section, extract layout/assets/styles from DOM and CSS, or recreate a website quickly without dragging legacy markup into the new codebase. Prefer this skill over `h2d-pixel-perfect-transfer` when speed and clean reconstruction matter more than formal H2D proof gates, and switch back to H2D when the task requires strict pixel-proof, complex runtime motion, canvas/WebGL, or source-intake evidence."
+description: "Transfer a live website or page block by block from browser dev mode into clean frontend code using a measured design-system inventory, complete responsive container map, shared tokens, and reusable components. Use when copying a public or existing live site, inspecting DOM/CSS, rebuilding WordPress/Elementor or legacy marketing sections, or recreating a site without importing legacy markup. Prefer this route for clean practical reconstruction; switch to H2D when strict pixel-proof, complex motion, canvas/WebGL, or immutable source evidence is required."
 ---
 
 # Dev Mode Site Transfer
+
+Read `../../reference/layout-container-contract.md` before implementation. Use its complete container chain and design-system inventory even on this faster, non-proof route.
 
 Use this skill when the source of truth is a live site and the practical move is:
 
@@ -146,7 +148,7 @@ Prefer:
 - original asset URLs from network/DOM;
 - section-level measurements.
 
-Extract tokens as a system, not as per-block notes. Before rebuilding the first block, write down the page's recurring values — palette, type scale (family/size/weight/line-height pairs), spacing scale, radii, shadows, container widths per breakpoint — and implement them as **one shared layer** (CSS custom properties, Tailwind theme, or the project's token file). Block styles then reference that layer; the same literal pasted into every block is legacy debt with extra steps.
+Extract tokens as a system, not as per-block notes. Before rebuilding the first block, create a design-system inventory with one row per recurring source value: category, computed source value, source selectors/usages, responsive state, candidate token, and candidate definition file. Cover palette, type scale (family/size/weight/line-height pairs), spacing scale, radii, shadows, icon rules, container widths and breakpoints. Implement the inventory as **one shared layer** (CSS custom properties, Tailwind theme, or the project's token file). Block styles then reference that layer; the same literal pasted into every block is legacy debt with extra steps.
 
 Avoid blindly copying:
 
@@ -167,7 +169,8 @@ Rules:
 - preserve images, embeds, and meaningful interactions;
 - simplify DOM depth whenever possible;
 - keep components reusable across similar pages;
-- one repeated pattern = one component: when the block inventory shows the same card, tag, menu item or gallery cell N times, build it once and instantiate it N times with different content — record the pattern → component mapping in the block inventory. Pasting N copies and editing each one imports the builder's debt into the new codebase.
+- one repeated pattern = one component: when the block inventory shows the same card, tag, menu item or gallery cell at least twice, build it once and instantiate it with different content — record source selector, count, states, candidate component and its single definition file. Pasting copies and editing each one imports the builder's debt into the new codebase;
+- before `clean-transfer`, search the shipped candidate sources for repeated donor literals and duplicated component markup. A repeated source value must resolve through the recorded token; every recorded pattern must resolve to its single component definition. If this cannot be demonstrated, use `needs-polish`, not `clean-transfer`.
 
 Recovery rules:
 

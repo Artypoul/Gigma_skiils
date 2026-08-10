@@ -1,6 +1,6 @@
 ---
 name: h2d-pixel-perfect-transfer
-description: "Transfer pages or components from .h2d snapshots into Tailwind HTML/React with hard validation gates for source intake, typography, geometry, asset paint, provenance, live comparison, behavior replay, and liveness/WebGL motion. Use when the user asks for H2D transfer, html.to.design reconstruction, pixel-perfect frontend recreation, a full-page transfer from a .h2d donor, or a live clone that must prove runtime fidelity instead of shipping a static screenshot."
+description: "Transfer pages or components from .h2d snapshots into clean frontend code with a source-derived design system, complete layout/container chain, reusable components, and hard validation gates for typography, responsive geometry, tokens, assets, provenance, live comparison, behavior, and liveness/WebGL motion. Use for H2D or html.to.design reconstruction, pixel-perfect frontend recreation, full-page transfer, or any clone that must prove structural and runtime fidelity instead of fitting a screenshot."
 ---
 
 # H2D Pixel-Perfect Transfer
@@ -8,6 +8,8 @@ description: "Transfer pages or components from .h2d snapshots into Tailwind HTM
 Use this skill for `.h2d` to code work where "looks close enough" is not acceptable.
 
 Resolve bundled paths relative to this `SKILL.md`.
+
+Read `../../reference/layout-container-contract.md` before implementation. Its complete ancestor chain, design-system inventory, responsive ownership map, independent-reference and no-compensation rules are mandatory for every scope.
 
 If the user says the result is wrong, not from the source, not pixel-perfect, or nothing changed, stop the previous fix path, rebuild the active scope row, and only then continue implementation.
 
@@ -34,7 +36,7 @@ After complaint-driven feedback:
 ## Non-Negotiable Gates
 
 1. Start with source intake and H2D decode before writing final HTML.
-2. Transfer order is fixed: **typography → containers → blocks**. No block markup before the font gate (see Design System First).
+2. Transfer order is fixed: **typography → design-system inventory → complete container chain → reusable components → blocks**. No production block layout before the source-derived maps exist (see Design System First).
 3. Do not call the work `ready`, `done`, `completed`, or `pixel-perfect` until:
    - `reports/font_manifest.json.result` is `font-exact` or `font-substituted`
    - `reports/design_system.json.result == "pass"`, `reports/component_reuse.json.result` is `pass` or `no-repeated-patterns`, and `reports/token_reuse.json.result` is `pass` or `no-donor-palette`
@@ -65,7 +67,7 @@ Read `h2d-transfer-mandatory-invocation.md` from the plugin `reference/` folder,
 Before implementation, freeze the runnable donor and finalize one contract. Do not type viewport lists from the filename or memory.
 
 1. `freeze_reference_bundle.py` accepts a pinned local runnable donor, hashes the transitive local resource closure, captures every explicit viewport/profile under a deny-by-default network sandbox, and runs the bundled reachable-state classifier. The closure includes resources loaded only after interactions. Visual, classification and dynamic evidence must share that exact donor identity. A live URL is not a frozen reference.
-2. Breakpoints come only from the bundled generated classification (CSS/media queries plus runtime `matchMedia`), never from the filename, memory or a handwritten CLI list. Use `derive_reference_matrix.py` for a decoded-width seed matrix, run `freeze_reference_bundle.py --prepare-only`, then derive the final breakpoint/interval matrix from `reference_classification.json` and recapture the final reference. `create_transfer_contract.py` accepts only that pinned matrix/provenance pair. Include `reports/design_system.json`, `reports/component_reuse.json` and `reports/token_reuse.json` in the contract's `expected_reports` and regenerate all three inside `current_commands` — a design-system report left over from an earlier donor must be quarantined and rebuilt like every other current report, not accepted because it still says `pass`. Hand-authored contract inputs that current commands read (`contract/component_map.json`, `contract/selector_map.json`, `contract/asset_decisions.json`) are pinned as hashed sidecars: `create_transfer_contract.py --sidecar component_map=h2d-transfer-output/contract/component_map.json …` — evidence integrity accepts command inputs outside the candidate closure only when they are sidecars.
+2. Breakpoints come only from the bundled generated classification (CSS/media queries plus runtime `matchMedia`), never from the filename, memory or a handwritten CLI list. Use `derive_reference_matrix.py` for a decoded-width seed matrix, run `freeze_reference_bundle.py --prepare-only`, then derive the final breakpoint/interval matrix from `reference_classification.json` and recapture the final reference. `create_transfer_contract.py` accepts only that pinned matrix/provenance pair. Include `reports/design_system.json`, `reports/component_reuse.json` and `reports/token_reuse.json` in the contract's `expected_reports` and regenerate all three inside `current_commands` — a design-system report left over from an earlier donor must be quarantined and rebuilt like every other current report, not accepted because it still says `pass`. Pin `contract/component_map.json` and `contract/token_map.json` as mandatory hashed sidecars: `create_transfer_contract.py --sidecar component_map=h2d-transfer-output/contract/component_map.json --sidecar token_map=h2d-transfer-output/contract/token_map.json …`. The current runner requires both validators to read those exact files.
 3. Every approved deviation/fallback/substitution needs a verified owner-signed or trusted owner-event receipt. A locally authored `approved: true` is invalid.
 4. `run_current_gates.py` pins executable binaries and file inputs against the exact cwd used by each current/build/start/teardown command, quarantines earlier reports, runs the commands, binds the final `source/` copies to the immutable `.h2d`/decode artifacts, and derives matrix completion only from per-row passing visual/geometry/typography/behavior/liveness artifacts produced by direct bundled specialist-script invocations. A copied template or wrapper-authored matrix row has no specialist provenance and is non-final. Managed URL mode requires an unused loopback origin, a live child process and JSON build identity bound to the current candidate/source closure. The candidate closure is re-hashed after generation; the evidence directory is the only allowed self-exclusion.
 5. Missing behavior/liveness classification, truncated discovery, delegated document/window listeners, unsupported interactive boundaries, reference action/runtime errors, stale artifacts or incomplete matrix are non-pass. Structural ARIA roles alone are not behavior; actionable roles/listeners are. Timers and media playback are liveness. Never infer static scope from a missing report.
@@ -105,11 +107,11 @@ python scripts/extract_design_system.py \
 python scripts/validate_token_reuse.py \
   --design-system h2d-transfer-output/reports/design_system.json \
   --candidate-root . \
-  --token-file src/styles/tokens.css \
+  --token-map h2d-transfer-output/contract/token_map.json \
   --out h2d-transfer-output/reports/token_reuse.json
 ```
 
-   Each significant donor color must resolve to the token layer; the same literal hardcoded more than a few times outside it fails (`token_reuse.json` is a required report; `no-donor-palette` is the honest value when the donor has no significant palette). A snapshot can carry capture artifacts (translation spans like `ya-tr-span`, `YS Text` overlays, builder debris) — exclude them from the token and component maps instead of transferring them; only known injector tags (Yandex/Google translate, Grammarly, DeepL) are self-serve exclusions, a donor-authored pattern needs an owner approval.
+   Before freezing the contract, map every significant donor color in `contract/token_map.json` to one candidate `definition`, token name, and usage spelling (for example `--color-ink` plus `var(--color-ink)`), then pin that file with `--sidecar token_map=…`. The gate proves that the definition contains the donor literal and token, the usage occurs outside the definition, and repeated raw literals do not. The repeat floor and scatter allowance are bundled invariants, not adjustable CLI flags. `token_reuse.json` is required; `no-donor-palette` is honest only when the donor has no repeated colors. A snapshot can carry capture artifacts (translation spans like `ya-tr-span`, `YS Text` overlays, builder debris) — exclude them from the token and component maps instead of transferring them; only known injector tags (Yandex/Google translate, Grammarly, DeepL) are self-serve exclusions, a donor-authored pattern needs an owner approval.
 3. **Containers and layout mechanisms before blocks.** Implement the container chain `viewport → page container → section container → content` from `design_system.json` as shared classes/tokens; block-level rects must inherit from this chain, not carry their own copies of it. Reproduce each block's layout with the donor's mechanism — the same `display`, flex direction/alignment, grid track count — because these fields are gated: identical rects laid out by absolute offsets instead of the donor's flex/grid chain fail `node_validation`.
 4. **Components, not copies.** Every entry in `design_system.json.components` (a card, a menu item, a tag, a gallery cell repeated N times) becomes **one** component in the candidate — a Svelte/React component, a template partial, or a single class — instantiated N times with different content. Write the pattern → selector mapping into `contract/component_map.json` (capture artifacts go under `excluded` with a reason) and prove reuse on the rendered candidate:
 
@@ -162,9 +164,9 @@ For a whole-page transfer, do not treat the page as one scope:
 
 ## Reports Are Generated, Not Written
 
-Every `reports/*.json` must be produced by a bundled script (or a command recorded in `review.md`). Hand-writing or hand-editing a report so a schema or gate passes is itself a failed gate — regenerate the report instead; `design_system.json` and `component_reuse.json` additionally carry a `generator_sha256` that the final runner verifies against the bundled script. When a pipeline genuinely cannot run (e.g. the `.h2d` only stores a closed menu state), record the honest `static-scope`/`not-tested` status through the script's own flags and name the limitation in `review.md` — never fabricate a `pass`.
+Every `reports/*.json` must be produced by a bundled script (or a command recorded in `review.md`). Hand-writing or hand-editing a report so a schema or gate passes is itself a failed gate — regenerate the report instead; `design_system.json`, `component_reuse.json` and `token_reuse.json` additionally carry a `generator_sha256` that the final runner verifies against the bundled script. When a pipeline genuinely cannot run (e.g. the `.h2d` only stores a closed menu state), record the honest `static-scope`/`not-tested` status through the script's own flags and name the limitation in `review.md` — never fabricate a `pass`.
 
-Declarative **inputs** are a different thing from reports and live under `contract/`, not `reports/`: `contract/component_map.json` (pattern → selector/definition), `contract/selector_map.json` (donor path → project selector), `contract/asset_decisions.json` (owner decisions on assets). The agent writes these by hand — they are declarations to be verified, and the gates judge the candidate against them.
+Declarative **inputs** are a different thing from reports and live under `contract/`, not `reports/`: `contract/component_map.json` (pattern → selector/definition), `contract/token_map.json` (donor token → candidate definition/usage), `contract/selector_map.json` (donor path → project selector), `contract/asset_decisions.json` (owner decisions on assets). The agent writes these by hand — they are declarations to be verified, must be pinned as hashed sidecars before the contract is finalized, and the gates judge the candidate against them.
 
 ## Scope Lock Before Repair
 
@@ -233,6 +235,8 @@ python scripts/extract_rect_targets.py \
   --out h2d-transfer-output/reports/rect_targets.json
 ```
 
+The extractor includes the complete ancestor chain by default and binds the report to the current tree and bundled generator hashes. `--without-ancestors` is diagnostic only and the final runner rejects it.
+
 3. Design system first: extract the donor's system (`extract_design_system.py` → required report `reports/design_system.json`), wire the fonts, the token layer, the container chain and the shared components into the candidate (see Design System First), then prove the typography on the rendered page **before** building blocks:
 
 ```bash
@@ -259,9 +263,9 @@ node scripts/validate_active_viewport.js \
 # selector map format: {"<data_h2d_path>": "<css selector>"} or {"<viewport>": {"<path>": "<selector>"}}
 ```
 
-In integration mode the validator waits for every mapped selector and for the layout to stop changing before measuring, so a hydrating page is not judged mid-flight. Add `--ready-selector` when the meaningful content arrives after an initial request.
+In integration mode the validator waits for every mapped selector and for the layout to stop changing before measuring, so a hydrating page is not judged mid-flight. Add `--ready-selector` when the meaningful content arrives after an initial request. The selector map must be injective for source layout nodes: one candidate element cannot stand in for several containers.
 
-Container mismatches (`maxWidth`, `padding`, `gap`, `margin`) **fail** — that is what gives the no-compensation rule teeth, since a constraint replaced by a parent offset reaches the same rect. Resolve them structurally, or record an owner-approved deviation; `--lenient-box-style` downgrades them to warnings and is a temporary measure, not a way to ship.
+Container mismatches (`maxWidth`, `padding`, `gap`, `margin`, flex/grid mechanism) **fail** — that is what gives the no-compensation rule teeth, since a constraint replaced by a parent offset reaches the same rect. Resolve them structurally, or record an owner-approved deviation; `--lenient-box-style` downgrades them to warnings for diagnosis, but the final runner rejects lenient evidence, a non-injective map, stale targets, missing ancestors and incomplete target counts.
 
 `--accepted-deviations` entries must each name the exact node, viewport, field list and a real reason — a blanket approval is rejected, because an approval that covers everything records nothing.
 

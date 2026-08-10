@@ -18,6 +18,11 @@
     "viewport_key_format": {
       "type": "string"
     },
+    "coverage_mode": {"enum": ["complete-ancestor-chain", "scope-only"]},
+    "includes_ancestors": {"type": "boolean"},
+    "root_map": {"type": "object", "additionalProperties": {"type": "string"}},
+    "source_tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generator_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "viewports": {
       "type": "array",
       "items": {
@@ -26,6 +31,9 @@
           "viewport",
           "root_path",
           "targets"
+          ,"target_count"
+          ,"ancestor_target_count"
+          ,"layout_target_count"
         ],
         "properties": {
           "viewport": {
@@ -42,6 +50,8 @@
                 "key",
                 "data_h2d_path",
                 "rect"
+                ,"parent_path"
+                ,"relation_to_scope"
               ],
               "properties": {
                 "key": {
@@ -86,6 +96,8 @@
                   },
                   "additionalProperties": true
                 },
+                "parent_path": {"type": ["string", "null"]},
+                "relation_to_scope": {"enum": ["scope-ancestor", "scope-root", "scope-descendant"]},
                 "text_style": {
                   "description": "Donor typography in CSS camelCase, compared straight against getComputedStyle on the candidate. Metric props fail the gate; fontFamily is reported as a substitution.",
                   "type": "object",
@@ -137,6 +149,11 @@
   "required": [
     "scope",
     "coordinate_space",
+    "coverage_mode",
+    "includes_ancestors",
+    "root_map",
+    "source_tree_sha256",
+    "generator_sha256",
     "viewports",
     "total_targets"
   ]

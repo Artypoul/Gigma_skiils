@@ -1,4 +1,4 @@
 interface:
   display_name: "Dev mode transfer"
-  short_description: "Transfer live sites from browser dev mode"
-  default_prompt: "Use $dev-mode-site-transfer to rebuild a live website block by block from browser dev mode into clean code without copying legacy markup blindly."
+  short_description: "Transfer live sites as a reusable system"
+  default_prompt: "Use $dev-mode-site-transfer to rebuild a live site from browser dev mode into clean code with a measured design-system inventory, container map, shared tokens, and reusable components."

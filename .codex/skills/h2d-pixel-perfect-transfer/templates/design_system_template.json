@@ -1,5 +1,7 @@
 {
   "result": "pass",
+  "generator_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "min_component_repeats": 2,
   "viewports": [1920, 1440, 390],
   "nodes_seen": 10651,
   "nodes_with_styles": 8289,
@@ -36,8 +38,8 @@
     {"signature": "grid columns:3 gap:24px", "count": 12, "sample_paths": ["0.0.0.5.1"]}
   ],
   "components": [
-    {"signature": "li.WorkTags_Tag[::before,span]", "count": 38, "viewport": 1920, "sample_paths": ["0.0.0.5.1.0", "0.0.0.5.1.1"]},
-    {"signature": "div.GalleryFullWidth_ImageContainer[img]", "count": 33, "viewport": 1920, "sample_paths": ["0.0.0.6.2.0"]}
+    {"signature": "li.WorkTags_Tag[::before,span]", "signature_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "structure_signature": "li[span]", "count": 38, "viewport": 1920, "sample_paths": ["0.0.0.5.1.0", "0.0.0.5.1.1"]},
+    {"signature": "div.GalleryFullWidth_ImageContainer[img]", "signature_sha256": "1111111111111111111111111111111111111111111111111111111111111111", "structure_signature": "div[img]", "count": 33, "viewport": 1920, "sample_paths": ["0.0.0.6.2.0"]}
   ],
   "issues": []
 }

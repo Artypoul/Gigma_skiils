@@ -66,7 +66,15 @@ class EvidenceIntegrityTests(unittest.TestCase):
         }
         bundle_path = reference_dir / "reference_bundle.json"
         self.write_json(bundle_path, bundle)
-        report_names = ["diff_summary.json", "node_validation.json", "font_manifest.json", "matrix_coverage.json"]
+        report_names = [
+            "diff_summary.json",
+            "node_validation.json",
+            "font_manifest.json",
+            "matrix_coverage.json",
+            "design_system.json",
+            "component_reuse.json",
+            "token_reuse.json",
+        ]
         for name in report_names:
             self.write_json(reports / name, {"result": "pass", "matrix_keys": ["390x844@mobile"]})
         (reports / "review.md").write_text("Current fixture review", encoding="utf-8")
@@ -79,6 +87,10 @@ class EvidenceIntegrityTests(unittest.TestCase):
         (output_source / "input.sha256").write_text(f"{source_sha}  input.original\n", encoding="utf-8")
         closure = candidate_closure(candidate, ["index.html"], output)
         decoder = SKILL / "scripts" / "h2d_unpack_source.py"
+        component_map = contract_dir / "component_map.json"
+        token_map = contract_dir / "token_map.json"
+        self.write_json(component_map, {"components": {}, "excluded": {}})
+        self.write_json(token_map, {"colors": {}})
         contract = {
             "schema_version": "2.0", "workspace_root": str(root),
             "source": {"path": "fresh_decode/source/input.h2d", "sha256": source_sha},
@@ -93,9 +105,13 @@ class EvidenceIntegrityTests(unittest.TestCase):
             "classification": bundle["classification"],
             "breakpoint_source": {"kind": "generated-reference-classification", "donor_identity": donor_identity, "breakpoints": []},
             "reference_bundle": {"path": "reference/reference_bundle.json", "sha256": sha256_file(bundle_path)},
-            "sidecars": [], "approvals": [], "current_commands": [[sys.executable, "-c", "pass"]],
+            "sidecars": [
+                {"role": "component_map", "path": "component_map.json", "sha256": sha256_file(component_map)},
+                {"role": "token_map", "path": "token_map.json", "sha256": sha256_file(token_map)},
+            ],
+            "approvals": [], "current_commands": [[sys.executable, "-c", "pass"]],
             "command_executables": command_executable_records([[sys.executable, "-c", "pass"]], candidate),
-            "expected_reports": ["reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/matrix_coverage.json", "reports/review.md"],
+            "expected_reports": [f"reports/{name}" for name in report_names] + ["reports/review.md"],
         }
         contract_path = contract_dir / "transfer_contract.json"
         self.write_json(contract_path, contract)

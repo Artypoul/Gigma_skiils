@@ -43,13 +43,13 @@ function delta(a, b) {
 }
 
 /** Selector map accepts a flat {path: selector} or {viewport: {path: selector}}. */
-function selectorsFor(map, viewport) {
+function selectorsFor(map, viewport, allowedPaths) {
   if (!map) return null;
   const scoped = map[String(viewport)];
   const flat = scoped && typeof scoped === 'object' ? scoped : map;
   const out = {};
   for (const [key, value] of Object.entries(flat)) {
-    if (typeof value === 'string') out[key] = value;
+    if (typeof value === 'string' && (!allowedPaths || allowedPaths.has(key))) out[key] = value;
   }
   return out;
 }
@@ -194,7 +194,20 @@ async function main() {
     await page.evaluate(() => document.fonts && document.fonts.ready);
     await page.evaluate(require('./font_probe').FONT_PROBE_SOURCE);
 
-    const selectors = selectorsFor(selectorMap, viewport);
+    const targetGroup = byViewport.get(viewport);
+    const targetPaths = new Set(targetGroup.targets.map((target) => target.data_h2d_path));
+    const selectors = selectorsFor(selectorMap, viewport, targetPaths);
+    const selectorMapIssues = [];
+    if (selectors) {
+      const bySelector = new Map();
+      for (const [h2dPath, selector] of Object.entries(selectors)) {
+        if (!bySelector.has(selector)) bySelector.set(selector, []);
+        bySelector.get(selector).push(h2dPath);
+      }
+      for (const [selector, paths] of bySelector) {
+        if (paths.length > 1) selectorMapIssues.push({ type: 'selector-map-non-injective', selector, paths, message: 'one candidate element cannot stand in for several source layout nodes' });
+      }
+    }
     // A live project page may still be hydrating or waiting on its first
     // request, so measuring right after 'load' can catch missing nodes or
     // transient geometry. Wait for the mapped nodes, then for layout to stop
@@ -273,7 +286,6 @@ async function main() {
       return { nodes, unresolved, mode: 'markers' };
     }, { viewport, selectors, styleProps: TEXT_METRIC_PROPS.concat(BOX_PROPS) });
 
-    const targetGroup = byViewport.get(viewport);
     const domMap = new Map((probe.nodes || []).map((n) => [n.data_h2d_path, n]));
     const targetMap = new Map(targetGroup.targets.map((t) => [t.data_h2d_path, t]));
     const missing = [], extra = [], issues = [], warnings = [], acceptedHits = [];
@@ -363,6 +375,7 @@ async function main() {
     if (!checked) issues.push({ type: 'nothing-measured', message: `no target was resolved on ${viewport}px: the candidate carries neither the expected markers nor a matching selector map` });
     if (probe.error) issues.push({ type: 'branch-root', message: probe.error });
     for (const u of probe.unresolved || []) issues.push({ type: 'selector-unresolved', path: u.path, selector: u.selector, message: u.reason });
+    issues.push(...selectorMapIssues);
 
     results.push({
       viewport,
@@ -432,6 +445,7 @@ async function main() {
     style_threshold_px: styleThreshold,
     strict_font_family: strictFontFamily,
     lenient_box_style: lenientBoxStyle,
+    selector_map_injective: results.every((row) => !row.issues.some((issue) => issue.type === 'selector-map-non-injective')),
     global_max_delta: globalMax,
     viewports: results,
     issues: results.flatMap((r) => r.issues.map((i) => ({ ...i, viewport: r.viewport }))),

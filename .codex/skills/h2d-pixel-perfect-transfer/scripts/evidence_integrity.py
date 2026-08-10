@@ -199,6 +199,29 @@ def verify_hashed_files(base: Path, entries: Iterable[dict[str, Any]], label: st
     return verified
 
 
+def reject_candidate_reference_code_overlap(closure: dict[str, Any], reference: dict[str, Any]) -> None:
+    """Reject candidate-derived references without blocking one shared utility/reset."""
+    authored = {".html", ".htm", ".css", ".scss", ".less", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".svelte", ".vue"}
+    donor_hashes = {
+        item.get("sha256")
+        for item in (reference.get("donor_closure") or [])
+        if isinstance(item, dict) and Path(str(item.get("path", ""))).suffix.lower() in authored
+    }
+    candidate = [
+        item for item in (closure.get("files") or [])
+        if isinstance(item, dict) and Path(str(item.get("path", ""))).suffix.lower() in authored
+    ]
+    total_bytes = sum(int(item.get("size") or 0) for item in candidate)
+    overlapping = [item for item in candidate if item.get("sha256") in donor_hashes]
+    overlap_bytes = sum(int(item.get("size") or 0) for item in overlapping)
+    if candidate and overlapping and (len(overlapping) == len(candidate) or (total_bytes and overlap_bytes / total_bytes >= 0.5)):
+        sample = ", ".join(str(item.get("path")) for item in overlapping[:3])
+        raise EvidenceError(
+            "candidate authored code substantially overlaps the frozen donor; the reference must be independent "
+            f"instead of candidate-derived (sample: {sample})"
+        )
+
+
 def required_dynamic_roles(classification: dict[str, Any]) -> set[str]:
     roles: set[str] = set()
     if classification.get("behavior_required"):
@@ -533,14 +556,33 @@ def verify_contract(contract_path: Path, evidence_dir: Path | None = None) -> di
         decoder_path = resolve_inside(contract_path.parent, decoder_value, "decoder")
     if not decoder_path.is_file() or sha256_file(decoder_path) != require_sha256(decoder.get("sha256"), "decoder.sha256"):
         raise EvidenceError("decoder identity changed")
-    verify_hashed_files(contract_path.parent, contract.get("decoded_artifacts") or [], "decoded artifacts")
-    verified_sidecars = verify_hashed_files(contract_path.parent, contract.get("sidecars") or [], "sidecars")
+    verified_decoded = verify_hashed_files(contract_path.parent, contract.get("decoded_artifacts") or [], "decoded artifacts")
+    sidecar_entries = contract.get("sidecars") or []
+    verified_sidecars = verify_hashed_files(contract_path.parent, sidecar_entries, "sidecars")
+    sidecar_by_role: dict[str, Path] = {}
+    for index, entry in enumerate(sidecar_entries):
+        role = entry.get("role") if isinstance(entry, dict) else None
+        if not isinstance(role, str) or not role or role in sidecar_by_role:
+            raise EvidenceError(f"sidecars[{index}].role must be a unique non-empty string")
+        sidecar_by_role[role] = resolve_inside(contract_path.parent, entry["path"], f"sidecar role {role}")
+    missing_system_sidecars = {"component_map", "token_map"} - set(sidecar_by_role)
+    if missing_system_sidecars:
+        raise EvidenceError(f"system-transfer sidecars are missing: {sorted(missing_system_sidecars)}")
     verify_approval_records(contract.get("approvals") or [])
     matrix_keys(contract)
     expected_reports = contract.get("expected_reports")
     if not isinstance(expected_reports, list) or not expected_reports or len(expected_reports) != len(set(expected_reports)):
         raise EvidenceError("expected_reports must be a non-empty unique list")
-    required_matrix_reports = {"reports/matrix_coverage.json", "reports/diff_summary.json", "reports/node_validation.json", "reports/font_manifest.json", "reports/review.md"}
+    required_matrix_reports = {
+        "reports/matrix_coverage.json",
+        "reports/diff_summary.json",
+        "reports/node_validation.json",
+        "reports/font_manifest.json",
+        "reports/review.md",
+        "reports/design_system.json",
+        "reports/component_reuse.json",
+        "reports/token_reuse.json",
+    }
     classification = contract.get("classification") or {}
     if classification.get("behavior_required"):
         required_matrix_reports.add("reports/behavior_validation.json")
@@ -576,6 +618,7 @@ def verify_contract(contract_path: Path, evidence_dir: Path | None = None) -> di
     closure = candidate_closure(root, includes, evidence_dir)
     if closure["digest"] != candidate.get("closure_sha256"):
         raise EvidenceError("candidate file closure is stale")
+    reject_candidate_reference_code_overlap(closure, reference)
     if candidate.get("mode") == "managed-url":
         lifecycle = candidate.get("lifecycle")
         required_lifecycle = {"build", "start", "cwd", "health_url", "build_identity_url", "build_identity_sha256", "toolchain", "public_env_sha256"}
@@ -593,27 +636,42 @@ def verify_contract(contract_path: Path, evidence_dir: Path | None = None) -> di
             require_sha256(digest, f"candidate.lifecycle.public_env_sha256.{key}")
     candidate_files = {(root / entry["path"]).resolve() for entry in closure["files"]}
     sidecar_files = {(contract_path.parent / rel).resolve() for rel in verified_sidecars}
+    decoded_files = {(contract_path.parent / rel).resolve() for rel in verified_decoded}
+    bundled_system_generators = {
+        (Path(__file__).resolve().parent / name).resolve()
+        for name in ("extract_design_system.py", "validate_component_reuse.js", "validate_token_reuse.py")
+    }
+    expected_report_files = {
+        (contract_path.parents[1] / value).resolve()
+        for value in expected_reports
+        if isinstance(value, str) and value.startswith("reports/")
+    }
     command_specs: list[tuple[list[str], Path]] = [(command, root) for command in (contract.get("current_commands") or [])]
     lifecycle = candidate.get("lifecycle") or {}
     lifecycle_cwd = resolve_inside(root, lifecycle.get("cwd") or ".", "candidate lifecycle cwd")
     for key in ("build", "start", "teardown"):
         if lifecycle.get(key):
             command_specs.append((lifecycle[key], lifecycle_cwd))
+
     actual_executables = command_executable_records_for_specs(command_specs)
     pinned_executables = contract.get("command_executables")
     if not isinstance(pinned_executables, list) or pinned_executables != actual_executables:
         raise EvidenceError("command executable identities are missing, stale, or incomplete")
     known_input_suffixes = {".py", ".js", ".mjs", ".cjs", ".sh", ".ps1", ".cmd", ".bat", ".json", ".yaml", ".yml", ".toml", ".html", ".css", ".svg", ".txt"}
     for command, execution_cwd in command_specs:
-        for value in command[1:]:
+        for index, value in enumerate(command[1:], start=1):
             if not isinstance(value, str):
                 continue
+            if (index > 0 and command[index - 1] == "--out") or value.startswith("--out="):
+                continue
             raw_value = value.split("=", 1)[1] if value.startswith("--") and "=" in value else value
+            if raw_value.startswith(("http://", "https://")):
+                continue
             path = Path(raw_value)
             path = path.resolve() if path.is_absolute() else (execution_cwd / path).resolve()
-            if not path.exists() and Path(raw_value).suffix.lower() in known_input_suffixes:
+            if not path.exists() and path not in expected_report_files and Path(raw_value).suffix.lower() in known_input_suffixes:
                 raise EvidenceError(f"pinned command input is missing: {path}")
-            if path.is_file() and path not in candidate_files and path not in sidecar_files:
+            if path.is_file() and path not in candidate_files and path not in sidecar_files and path not in decoded_files and path not in bundled_system_generators and path not in expected_report_files:
                 raise EvidenceError(f"command input is outside candidate closure/hashed sidecars: {path}")
     return {"contract": contract, "contract_path": contract_path, "candidate_root": root, "closure": closure, "reference": reference}
 

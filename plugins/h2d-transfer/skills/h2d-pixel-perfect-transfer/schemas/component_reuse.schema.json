@@ -14,11 +14,12 @@
         "not-tested"
       ]
     },
+    "generator_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "viewport": {
       "type": "integer"
     },
     "min_repeats": {
-      "type": "integer"
+      "const": 2
     },
     "donor_components_considered": {
       "type": "integer"
@@ -46,6 +47,8 @@
   },
   "required": [
     "result",
+    "generator_sha256",
+    "min_repeats",
     "checks",
     "issues"
   ]

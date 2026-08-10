@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "token_map",
+  "description": "Pinned declaration mapping significant donor colors to one candidate token definition and one verifiable usage spelling.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["colors"],
+  "properties": {
+    "colors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["definition", "token", "usage"],
+        "properties": {
+          "definition": {"type": "string", "minLength": 1},
+          "token": {"type": "string", "minLength": 2},
+          "usage": {"type": "string", "minLength": 2}
+        }
+      }
+    }
+  }
+}

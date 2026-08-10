@@ -13,6 +13,7 @@
         "manual-review"
       ]
     },
+    "generator_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "threshold_px": {
       "type": "number"
     },
@@ -81,14 +82,15 @@
     "strict_font_family": {
       "type": "boolean"
     },
-    "strict_box_style": {
+    "lenient_box_style": {
       "type": "boolean"
     },
+    "selector_map_injective": {"type": "boolean"},
     "issues": {
       "type": "array"
     },
     "warnings": {
-      "description": "Non-failing findings that must still be resolved in review.md: font substitutions and unmatched container constraints.",
+      "description": "Non-failing findings that must still be resolved in review.md, such as font substitutions. Final proof rejects lenient container checks.",
       "type": "array"
     },
     "accepted_deviations": {
@@ -98,6 +100,9 @@
   },
   "required": [
     "result",
-    "viewports"
+    "generator_sha256",
+    "viewports",
+    "lenient_box_style",
+    "selector_map_injective"
   ]
 }

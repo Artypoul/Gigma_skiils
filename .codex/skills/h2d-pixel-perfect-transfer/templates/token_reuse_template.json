@@ -1,12 +1,14 @@
 {
   "result": "pass",
-  "min_donor_count": 10,
-  "max_scatter": 3,
+  "generator_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "token_map_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "min_donor_count": 3,
+  "max_scatter": 1,
   "sources_scanned": 42,
   "token_files": ["src/styles/tokens.css"],
   "checks": [
-    {"color": "rgb(6, 7, 10)", "donor_count": 7352, "token_layer_occurrences": 1, "scattered_occurrences": 0, "result": "pass"},
-    {"color": "rgb(255, 255, 255)", "donor_count": 2831, "token_layer_occurrences": 1, "scattered_occurrences": 2, "result": "pass"}
+    {"color": "rgb(6, 7, 10)", "donor_count": 7352, "definition": "src/styles/tokens.css", "token": "--color-ink", "usage": "var(--color-ink)", "token_layer_occurrences": 1, "candidate_token_usages": 12, "scattered_occurrences": 0, "result": "pass"},
+    {"color": "rgb(255, 255, 255)", "donor_count": 2831, "definition": "src/styles/tokens.css", "token": "--color-surface", "usage": "var(--color-surface)", "token_layer_occurrences": 1, "candidate_token_usages": 8, "scattered_occurrences": 1, "result": "pass"}
   ],
   "issues": []
 }

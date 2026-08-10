@@ -1,7 +1,8 @@
 {
   "result": "pass",
+  "generator_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "viewport": 1440,
-  "min_repeats": 3,
+  "min_repeats": 2,
   "donor_components_considered": 2,
   "mapped": 2,
   "excluded": 1,

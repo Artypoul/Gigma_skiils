@@ -131,6 +131,16 @@ def main() -> int:
             raise EvidenceError("--sidecar must use role=path")
         sidecar_path = Path(raw_path).resolve()
         sidecars.append({"role": role, "path": rel(contract_dir, sidecar_path, f"sidecar {role}"), "sha256": sha256_file(sidecar_path)})
+    sidecar_roles = [entry["role"] for entry in sidecars]
+    if len(sidecar_roles) != len(set(sidecar_roles)):
+        raise EvidenceError("sidecar roles must be unique")
+    mandatory_sidecars = {"component_map", "token_map"}
+    missing_sidecars = sorted(mandatory_sidecars - set(sidecar_roles))
+    if missing_sidecars:
+        raise EvidenceError(
+            "system-transfer declarations must be pinned as hashed contract sidecars: "
+            f"missing {', '.join(missing_sidecars)}"
+        )
     approvals = [load_json(path.resolve()) for path in args.approval]
     commands = []
     for raw in args.current_command:

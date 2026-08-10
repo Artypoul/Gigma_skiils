@@ -273,6 +273,24 @@ def node_signature(node: dict[str, Any], depth: int = 2) -> str | None:
     return "".join(parts)
 
 
+def node_structure_signature(node: dict[str, Any], depth: int = 2) -> str | None:
+    """Class-agnostic DOM shape used to bind a mapped candidate to the donor."""
+    tag = node.get("tag")
+    if not isinstance(tag, str) or not tag or tag in {"::before", "::after"}:
+        return None
+    parts = [tag.lower()]
+    if depth > 0:
+        children = []
+        for child in (node.get("children") or []):
+            if isinstance(child, dict):
+                shape = node_structure_signature(child, depth - 1)
+                if shape:
+                    children.append(shape)
+        if children:
+            parts.append("[" + ",".join(children) + "]")
+    return "".join(parts)
+
+
 def outermost(paths: list[str]) -> list[str]:
     """Drop paths nested inside another path from the same group, in O(n log n).
 
@@ -293,9 +311,10 @@ def outermost(paths: list[str]) -> list[str]:
 # Component identity must survive display truncation: two large subtrees that
 # agree on the first 240 characters are still different components.
 COMPONENT_HARD_CAP = 512
+MIN_COMPONENT_REPEATS = 2
 
 
-def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]], min_repeats: int, issues: list[str]) -> list[dict[str, Any]]:
+def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]], issues: list[str]) -> list[dict[str, Any]]:
     """Repeated subtrees = component candidates.
 
     Grouping runs per viewport so a card repeated across breakpoints does not
@@ -306,6 +325,7 @@ def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]]
     best: dict[str, dict[str, Any]] = {}
     for viewport, entries in per_viewport.items():
         groups: dict[str, list[str]] = defaultdict(list)
+        structures: dict[str, str] = {}
         for node, h2d_path in entries:
             children = node.get("children")
             has_children = isinstance(children, list) and children
@@ -314,18 +334,22 @@ def collect_components(per_viewport: dict[int, list[tuple[dict[str, Any], str]]]
             signature = node_signature(node)
             if signature and len(signature) > 8:
                 groups[signature].append(h2d_path)
+                structure = node_structure_signature(node)
+                if structure:
+                    structures[signature] = structure
         for signature, paths in groups.items():
-            if len(paths) < min_repeats:
+            if len(paths) < MIN_COMPONENT_REPEATS:
                 continue
             # Nested repetition inflates counts: keep only the outermost instances.
             outer = outermost(paths)
-            if len(outer) < min_repeats:
+            if len(outer) < MIN_COMPONENT_REPEATS:
                 continue
             current = best.get(signature)
             if current is None or len(outer) > current["count"]:
                 best[signature] = {
                     "signature": signature[:240],
                     "signature_sha256": hashlib.sha256(signature.encode("utf-8")).hexdigest(),
+                    "structure_signature": structures.get(signature, ""),
                     "count": len(outer),
                     "viewport": viewport,
                     "sample_paths": outer[:5],
@@ -344,11 +368,6 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--decoded", type=Path, required=True, help="source/h2d_decoded.json from the unpack step")
     ap.add_argument("--top", type=int, default=24, help="Max entries per token/layout table")
-    # Bounded on purpose: a huge threshold would empty the component inventory,
-    # and an empty inventory turns the reuse gate into an automatic
-    # `no-repeated-patterns` pass. The threshold also travels in the report so
-    # downstream gates can see what the inventory was built with.
-    ap.add_argument("--min-component-repeats", type=int, default=3, choices=range(2, 6), metavar="[2-5]")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
@@ -377,7 +396,7 @@ def main() -> int:
         # container/component analysis cannot place them. Saying so beats
         # silently reporting an emptier system than the donor has.
         issues.append(f"branch {prefix} has no viewport metadata and no frame width; excluded from containers/components")
-    components = collect_components(per_viewport, args.min_component_repeats, issues)
+    components = collect_components(per_viewport, issues)
     # An empty token category is legitimate when the donor has no matching
     # content: an image/canvas-only page has styles and colors but no text, so
     # an empty type scale there is a fact, not a failure.
@@ -394,7 +413,7 @@ def main() -> int:
     report = {
         "result": result,
         "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        "min_component_repeats": args.min_component_repeats,
+        "min_component_repeats": MIN_COMPONENT_REPEATS,
         "viewports": sorted(per_viewport, reverse=True),
         "nodes_seen": len(all_nodes),
         "nodes_with_styles": styled,

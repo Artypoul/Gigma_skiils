@@ -11,15 +11,14 @@ spacing values like `12px` appear for too many unrelated reasons to grep for.
   python scripts/validate_token_reuse.py \
     --design-system h2d-transfer-output/reports/design_system.json \
     --candidate-root . \
-    --token-file src/styles/tokens.css \
+    --token-map h2d-transfer-output/contract/token_map.json \
     --out h2d-transfer-output/reports/token_reuse.json
 
-Rules:
-  - a donor color with fewer donor usages than --min-donor-count is ignored;
-  - occurrences inside token files (named like tokens/theme/variables/palette,
-    a tailwind config, or passed via --token-file) are the shared layer;
-  - up to --max-scatter literal occurrences outside the token layer are
-    tolerated (one-off utilities); more is a scattered palette and fails.
+The repeat floor and literal-scatter allowance are bundled invariants, not CLI
+knobs. Each significant donor color must be mapped to one definition and one
+usage spelling. The definition must contain the donor literal and token name;
+the usage must appear outside the definition; repeated literals outside the
+definition fail.
 """
 from __future__ import annotations
 import argparse, hashlib, json, re
@@ -28,7 +27,8 @@ from typing import Any
 
 SOURCE_EXTENSIONS = {".css", ".scss", ".less", ".styl", ".svelte", ".vue", ".jsx", ".tsx", ".js", ".ts", ".html"}
 EXCLUDED_DIRS = {"node_modules", "dist", "build", "build-ssr", "vendor", "output", ".git", ".artifacts", ".svelte-kit", ".next", "coverage"}
-TOKEN_FILE_HINTS = ("token", "theme", "variables", "palette", "tailwind.config")
+MIN_DONOR_COUNT = 3
+MAX_SCATTER = 1
 
 RGB_PATTERN = re.compile(r"^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)$")
 
@@ -51,13 +51,6 @@ def color_needles(value: str) -> list[str] | None:
     return needles
 
 
-def is_token_file(path: Path, explicit: set[Path]) -> bool:
-    if path in explicit:
-        return True
-    name = path.name.lower()
-    return any(hint in name for hint in TOKEN_FILE_HINTS)
-
-
 def iter_sources(root: Path) -> list[Path]:
     out: list[Path] = []
     for path in root.rglob("*"):
@@ -78,26 +71,21 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--design-system", type=Path, required=True)
     ap.add_argument("--candidate-root", type=Path, required=True)
-    ap.add_argument("--token-file", action="append", type=Path, default=[], help="File(s) where palette literals legitimately live; repeatable")
-    ap.add_argument("--min-donor-count", type=int, default=10, help="Ignore donor colors used fewer times than this")
-    ap.add_argument("--max-scatter", type=int, default=3, help="Tolerated literal occurrences outside the token layer per color")
+    ap.add_argument("--token-map", type=Path, required=True, help="Pinned donor-color to candidate-token declaration")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
     design = json.loads(args.design_system.read_text(encoding="utf-8"))
+    token_map = json.loads(args.token_map.read_text(encoding="utf-8"))
     root = args.candidate_root.resolve()
-    explicit_tokens = {(root / p).resolve() if not p.is_absolute() else p.resolve() for p in args.token_file}
-    for path in explicit_tokens:
-        try:
-            path.relative_to(root)
-        except ValueError:
-            raise SystemExit(f"--token-file must live inside the candidate root: {path}")
+    mappings = token_map.get("colors") if isinstance(token_map, dict) else None
+    if not isinstance(mappings, dict):
+        raise SystemExit("--token-map must contain a colors object")
 
-    palette = [c for c in (design.get("tokens", {}).get("colors") or []) if (c.get("count") or 0) >= args.min_donor_count]
+    palette = [c for c in (design.get("tokens", {}).get("colors") or []) if (c.get("count") or 0) >= MIN_DONOR_COUNT]
     sources = iter_sources(root)
-    token_files = [p for p in sources if is_token_file(p, explicit_tokens)]
-    other_files = [p for p in sources if not is_token_file(p, explicit_tokens)]
     texts = {p: p.read_text(encoding="utf-8", errors="replace").lower() for p in sources}
+    token_files: set[Path] = set()
 
     checks: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
@@ -106,26 +94,65 @@ def main() -> int:
         if not needles:
             continue
         needles = [n.lower() for n in needles]
-        token_count = sum(count_occurrences(texts[p], needles) for p in token_files)
+        value = str(color.get("value", ""))
+        mapping = mappings.get(value)
+        entry: dict[str, Any] = {"color": value, "donor_count": color.get("count")}
+        if not isinstance(mapping, dict):
+            entry["result"] = "fail"
+            checks.append(entry)
+            issues.append({"color": value, "issue": "significant donor color is missing from the pinned token map"})
+            continue
+        definition_value = mapping.get("definition")
+        token_name = mapping.get("token")
+        usage = mapping.get("usage")
+        if not all(isinstance(item, str) and item.strip() for item in (definition_value, token_name, usage)):
+            entry["result"] = "fail"
+            checks.append(entry)
+            issues.append({"color": value, "issue": "token map entry needs non-empty definition, token and usage strings"})
+            continue
+        definition = (root / definition_value).resolve()
+        try:
+            definition.relative_to(root)
+        except ValueError:
+            entry["result"] = "fail"
+            checks.append(entry)
+            issues.append({"color": value, "issue": f"token definition escapes candidate root: {definition_value}"})
+            continue
+        if definition not in texts:
+            entry["result"] = "fail"
+            checks.append(entry)
+            issues.append({"color": value, "issue": f"token definition is missing or not a source file: {definition_value}"})
+            continue
+        token_files.add(definition)
+        definition_text = texts[definition]
+        literal_in_definition = count_occurrences(definition_text, needles)
+        token_in_definition = definition_text.count(token_name.lower())
+        usage_count = sum(text.count(usage.lower()) for path, text in texts.items() if path != definition)
         scattered: list[str] = []
         scatter_count = 0
-        for path in other_files:
+        for path in sources:
+            if path == definition:
+                continue
             found = count_occurrences(texts[path], needles)
             if found:
                 scatter_count += found
                 if len(scattered) < 5:
                     scattered.append(f"{path.relative_to(root).as_posix()} (x{found})")
-        entry: dict[str, Any] = {
-            "color": color["value"],
-            "donor_count": color.get("count"),
-            "token_layer_occurrences": token_count,
+        entry.update({
+            "definition": Path(definition_value).as_posix(),
+            "token": token_name,
+            "usage": usage,
+            "token_layer_occurrences": literal_in_definition,
+            "candidate_token_usages": usage_count,
             "scattered_occurrences": scatter_count,
-        }
-        if scatter_count > args.max_scatter:
+        })
+        if literal_in_definition < 1 or token_in_definition < 1 or usage_count < 1:
+            entry["result"] = "fail"
+            issues.append({"color": value, "issue": "token definition must contain the donor literal and token name, and the declared usage must occur outside that definition"})
+        elif scatter_count > MAX_SCATTER:
             entry["result"] = "fail"
             entry["scattered_in"] = scattered
-            detail = "no token layer defines it" if token_count == 0 else "a token exists but blocks keep hardcoding the literal"
-            issues.append({"color": color["value"], "issue": f"palette literal appears {scatter_count} times outside the token layer ({detail}); route it through one shared token", "files": scattered})
+            issues.append({"color": value, "issue": f"palette literal appears {scatter_count} times outside its token definition; route it through the shared token", "files": scattered})
         else:
             entry["result"] = "pass"
         checks.append(entry)
@@ -139,15 +166,16 @@ def main() -> int:
     report = {
         "result": result,
         "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        "min_donor_count": args.min_donor_count,
-        "max_scatter": args.max_scatter,
+        "token_map_sha256": hashlib.sha256(args.token_map.read_bytes()).hexdigest(),
+        "min_donor_count": MIN_DONOR_COUNT,
+        "max_scatter": MAX_SCATTER,
         "sources_scanned": len(sources),
-        "token_files": [p.relative_to(root).as_posix() for p in token_files],
+        "token_files": sorted(p.relative_to(root).as_posix() for p in token_files),
         "checks": checks,
         "issues": issues,
     }
     if not token_files and palette:
-        report["issues"].append({"issue": "no token layer found (no --token-file and no tokens/theme/variables/palette/tailwind.config source); the palette has nowhere shared to live"})
+        report["issues"].append({"issue": "no valid token definition from the pinned token map was found in the candidate"})
         report["result"] = "fail"
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

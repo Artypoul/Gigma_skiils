@@ -2,16 +2,33 @@
   "scope": "hero",
   "coordinate_space": "page",
   "viewport_key_format": "<viewport>::<data-h2d-path>",
+  "coverage_mode": "complete-ancestor-chain",
+  "includes_ancestors": true,
+  "root_map": {"1440": "0.0.0.2.0"},
+  "source_tree_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "generator_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "viewports": [
     {
       "viewport": 1440,
       "root_path": "0.0.0.2.0",
       "targets": [
         {
+          "key": "1440::0.0.0.2",
+          "data_h2d_path": "0.0.0.2",
+          "type": "FRAME",
+          "tag": "main",
+          "parent_path": "0.0.0",
+          "relation_to_scope": "scope-ancestor",
+          "rect": {"x": 0, "y": 0, "width": 1440, "height": 2400},
+          "box_style": {"display": "block", "maxWidth": "none"}
+        },
+        {
           "key": "1440::0.0.0.2.0",
           "data_h2d_path": "0.0.0.2.0",
           "type": "FRAME",
           "tag": "section",
+          "parent_path": "0.0.0.2",
+          "relation_to_scope": "scope-root",
           "rect": {
             "x": 0,
             "y": 0,
@@ -24,6 +41,8 @@
           "data_h2d_path": "0.0.0.2.0.0.0.1",
           "type": "FRAME",
           "tag": "h1",
+          "parent_path": "0.0.0.2.0.0.0",
+          "relation_to_scope": "scope-descendant",
           "rect": {
             "x": 72,
             "y": 260,
@@ -50,8 +69,10 @@
           }
         }
       ],
-      "target_count": 2
+      "target_count": 3,
+      "ancestor_target_count": 1,
+      "layout_target_count": 2
     }
   ],
-  "total_targets": 2
+  "total_targets": 3
 }

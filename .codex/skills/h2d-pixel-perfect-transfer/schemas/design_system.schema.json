@@ -13,6 +13,8 @@
         "not-tested"
       ]
     },
+    "generator_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "min_component_repeats": {"const": 2},
     "viewports": {
       "type": "array",
       "items": {
@@ -107,6 +109,8 @@
         "type": "object",
         "required": [
           "signature",
+          "signature_sha256",
+          "structure_signature",
           "count",
           "sample_paths"
         ],
@@ -119,6 +123,8 @@
   },
   "required": [
     "result",
+    "generator_sha256",
+    "min_component_repeats",
     "tokens",
     "containers",
     "layouts",

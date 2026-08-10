@@ -52,21 +52,6 @@ function donorHashCollision(donorComponents, component) {
 }
 
 /**
- * Structural skeleton of a donor signature that survives the transfer: the
- * candidate legitimately renames every class, but a card stays the tag it is
- * and keeps having children. Without this check a map could point a donor
- * card at any unrelated repeated element with a matching instance count.
- */
-function donorSkeleton(signature) {
-  const value = String(signature || '');
-  const tag = value.split(/[.\[]/)[0].toLowerCase();
-  return {
-    tag: /^[a-z][a-z0-9-]*$/.test(tag) ? tag : null,
-    hasChildren: value.includes('['),
-  };
-}
-
-/**
  * An exclusion is self-serve only for machine-recognizable capture artifacts:
  * elements injected by browser extensions and translators, which no donor
  * authored as page UI. "Any hyphenated tag" would be wrong — donors legitimately
@@ -138,9 +123,8 @@ async function main() {
   const mapPath = arg('component-map');
   const outPath = arg('out', 'reports/component_reuse.json');
   const defaultViewport = Number(arg('viewport', '1440'));
-  const minRepeats = Number(arg('min-repeats', '3'));
   if (!candidate || !designSystemPath || !mapPath) {
-    throw new Error('Usage: --candidate <file|url> --candidate-root <dir> --design-system <file> --component-map <file> --out <file> [--viewport 1440] [--min-repeats 3]');
+    throw new Error('Usage: --candidate <file|url> --candidate-root <dir> --design-system <file> --component-map <file> --out <file> [--viewport 1440]');
   }
 
   const designSystem = readJson(designSystemPath);
@@ -152,6 +136,10 @@ async function main() {
   const excluded = excludedMeta || {};
   const issues = [];
   const checks = [];
+  const minRepeats = Number(designSystem.min_component_repeats);
+  if (minRepeats !== 2) {
+    issues.push({ issue: `design-system component inventory must use the bundled repeat floor 2; got ${designSystem.min_component_repeats}` });
+  }
 
   const donorComponents = (designSystem.components || []).filter((c) => (c.count || 0) >= minRepeats);
   const donorBySignature = new Map(donorComponents.map((c) => [c.signature, c]));
@@ -263,6 +251,14 @@ async function main() {
           }
           return sig;
         };
+        const structureOf = (el, depth) => {
+          let sig = el.tagName.toLowerCase();
+          if (depth > 0) {
+            const kids = [...el.children].map((child) => structureOf(child, depth - 1));
+            if (kids.length) sig += '[' + kids.join(',') + ']';
+          }
+          return sig;
+        };
         // Tokens are profiled over the SUBTREE, not just the root: a pasted
         // copy that restyles a nested heading keeps the root's tokens intact,
         // and a root-only probe would never see the drift.
@@ -291,6 +287,7 @@ async function main() {
             const cs = getComputedStyle(el);
             return {
               signature: signatureOf(el, 2),
+              structure_signature: structureOf(el, 2),
               tokens: { fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight, color: cs.color, backgroundColor: cs.backgroundColor, borderRadius: cs.borderTopLeftRadius, padding: cs.padding },
               subtree_profile: JSON.stringify(tokensOf(el, 2)),
             };
@@ -318,18 +315,18 @@ async function main() {
         continue;
       }
       // The mapped nodes must BE the donor pattern, not merely be identical to
-      // each other: classes are renamed in a transfer, but the root tag and
-      // the presence of children survive it.
+      // each other. Classes may change, but the class-agnostic DOM shape at the
+      // same depth must match the source-derived structure signature.
       if (donor) {
-        const skeleton = donorSkeleton(donor.signature);
-        const candidate = donorSkeleton(instances[0].signature);
-        if (skeleton.tag && candidate.tag && skeleton.tag !== candidate.tag) {
-          issues.push({ component: name, issue: `mapped selector matches <${candidate.tag}> while the donor pattern is <${skeleton.tag}> — the map points at a different element than the donor component` });
-          checks.push({ ...check, result: 'fail' });
-          continue;
-        }
-        if (skeleton.hasChildren && !candidate.hasChildren) {
-          issues.push({ component: name, issue: 'donor pattern has child structure but the mapped candidate instances are leaf elements — the map points at a different element than the donor component' });
+        const expectedStructure = String(donor.structure_signature || '');
+        const candidateStructures = new Set(instances.map((instance) => instance.structure_signature));
+        if (!expectedStructure || candidateStructures.size !== 1 || !candidateStructures.has(expectedStructure)) {
+          issues.push({
+            component: name,
+            issue: 'mapped selector structure differs from the donor component — the map points at an unrelated repeated candidate pattern',
+            expected_structure: expectedStructure || '(missing from design-system report)',
+            candidate_structures: [...candidateStructures].slice(0, 3),
+          });
           checks.push({ ...check, result: 'fail' });
           continue;
         }
@@ -368,7 +365,7 @@ async function main() {
   await browser.close();
 
   const hasComponents = donorComponents.length > 0 || Object.keys(entries).length > 0;
-  const result = !hasComponents ? 'no-repeated-patterns' : (issues.length ? 'fail' : 'pass');
+  const result = issues.length ? 'fail' : (!hasComponents ? 'no-repeated-patterns' : 'pass');
   const report = {
     result,
     generator_sha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
