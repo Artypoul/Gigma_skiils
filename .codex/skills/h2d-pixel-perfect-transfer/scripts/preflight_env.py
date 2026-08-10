@@ -97,7 +97,14 @@ def main() -> int:
     ok, message = run(["node", "-e", driver_probe], probe_root)
     checks.append({"name": "node-package:playwright", "result": "pass" if ok else "fail", "message": message})
 
-    ok, message = run(["node", "-e", "console.log(require.resolve('pngjs'))"], probe_root)
+    # Probe pngjs exactly as asset_paint_audit.js loads it: through the shared
+    # requireDep helper, so a passing probe cannot mean a failing gate.
+    browser_js = str(ROOT / "scripts" / "browser.js").replace(chr(92), "/")
+    pngjs_probe = (
+        f"const {{ requireDep }} = require({browser_js!r});"
+        "requireDep('pngjs');console.log('pngjs resolvable');"
+    )
+    ok, message = run(["node", "-e", pngjs_probe], probe_root)
     checks.append({"name": "node-package:pngjs", "result": "pass" if ok else "fail", "message": message})
 
     launch_script = (
@@ -124,7 +131,7 @@ def main() -> int:
         # Node dependencies belong to the project being measured, so the fixes
         # are run there — not inside the installed skill.
         "next_steps": [] if not failed else [
-            "python -m pip install -r requirements.txt",
+            f'python -m pip install -r "{ROOT / "requirements.txt"}"',
             f"cd {probe_root} && npm install",
             f"cd {probe_root} && npx playwright install chromium",
             f"python {ROOT / 'scripts' / 'preflight_env.py'} --candidate-root {probe_root}",

@@ -9,7 +9,7 @@ function ensureDir(p){ fs.mkdirSync(p,{recursive:true}); }
 
 function pixelStatsPng(buffer){
   try {
-    const { PNG } = require('pngjs');
+    const { PNG } = require('./browser').requireDep('pngjs');
     const png = PNG.sync.read(buffer);
     let nonTransparent=0, minX=Infinity, minY=Infinity, maxX=-1, maxY=-1;
     for(let y=0;y<png.height;y++){
