@@ -106,12 +106,13 @@ python scripts/extract_design_system.py \
 ```bash
 node scripts/validate_component_reuse.js \
   --candidate http://127.0.0.1:5005/ \
+  --candidate-root . \
   --design-system h2d-transfer-output/reports/design_system.json \
   --component-map h2d-transfer-output/reports/component_map.json \
   --out h2d-transfer-output/reports/component_reuse.json
 ```
 
-The gate looks at the candidate, not the donor: every repeated donor pattern must be mapped or excluded with a reason, each mapped selector must find its instances, and all instances must share one subtree shape and one set of computed tokens. Pasted copies drift — an edited copy changes its signature or its tokens, and that fails here. `component_reuse.json` is a required report (`no-repeated-patterns` is the honest value for a scope with nothing repeated).
+The gate looks at the candidate, not the donor, and proves reuse on three layers: **source** — each mapped entry names its single `definition` file (the component/partial/class that defines the pattern; N pasted copies have none to name); **count** — the expected instance count comes from the donor's design-system report, and a different count is legitimate only as a recorded owner decision (`instances_expected` + `instances_reason`); **render** — at the component's own donor viewport, every instance the selector finds must share one subtree shape and one set of computed tokens, so an edited pasted copy fails the moment it drifts. `component_reuse.json` is a required report (`no-repeated-patterns` is the honest value for a scope with nothing repeated).
 
 Only then transfer blocks/sections.
 

@@ -81,6 +81,19 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
+    # The system-transfer gates are current evidence like every other report:
+    # a contract that omits them would let run_current_gates.py regenerate
+    # everything else while a stale design-system report from an earlier donor
+    # keeps passing the legacy check on its old "pass".
+    mandatory_reports = {"reports/design_system.json", "reports/component_reuse.json"}
+    supplied_reports = {value.replace("\\", "/") for value in args.expected_report}
+    missing_reports = sorted(mandatory_reports - supplied_reports)
+    if missing_reports:
+        raise EvidenceError(
+            "expected reports must include the system-transfer gates so the current runner "
+            f"quarantines and regenerates them: missing {', '.join(missing_reports)}"
+        )
+
     workspace = args.workspace_root.resolve()
     candidate_root = args.candidate_root.resolve()
     candidate_root.relative_to(workspace)

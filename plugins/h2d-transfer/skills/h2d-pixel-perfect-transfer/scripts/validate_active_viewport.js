@@ -180,6 +180,10 @@ async function main() {
   const browser = await launchChromium({ executablePath: arg('browser-executable') || undefined });
   const results = [];
   let globalMax = 0;
+  // Grid tracks per node per viewport, donor vs candidate. Ratios at one width
+  // cannot tell fr-tracks from fixed pixels that happen to match — but the run
+  // measures several widths, and HOW the tracks change between them can.
+  const gridSamples = new Map();
 
   for (const viewport of viewports) {
     const page = await browser.newPage({ viewport: { width: viewport, height: Number(arg('height', '1200')) }, deviceScaleFactor: 1 });
@@ -319,6 +323,11 @@ async function main() {
         }
       }
 
+      if (t.box_style && t.box_style.gridTemplateColumns) {
+        const px = (value) => normalizeStyleValue(value).split(' ').map(parseFloat).filter(Number.isFinite);
+        if (!gridSamples.has(p)) gridSamples.set(p, []);
+        gridSamples.get(p).push({ viewport, donor: px(t.box_style.gridTemplateColumns), candidate: px(n.style.gridTemplateColumns) });
+      }
       if (t.box_style) {
         for (const prop of BOX_PROPS) {
           if (!(prop in t.box_style)) continue;
@@ -364,6 +373,49 @@ async function main() {
     await page.close();
   }
   await browser.close();
+
+  // Grid elasticity across the measured widths: for every node sampled at two
+  // or more viewports, each donor track that grows with the container must
+  // grow in the candidate too. Fixed-pixel tracks that fake an fr-grid match
+  // the ratios at each single width but stay frozen between widths — this is
+  // where that shows up.
+  const elasticityIssues = [];
+  const GROWTH_EPSILON = 1;
+  for (const [p, samples] of gridSamples) {
+    if (samples.length < 2) continue;
+    samples.sort((a, b) => a.viewport - b.viewport);
+    for (let i = 1; i < samples.length; i += 1) {
+      const prev = samples[i - 1];
+      const curr = samples[i];
+      const tracks = Math.min(prev.donor.length, curr.donor.length, prev.candidate.length, curr.candidate.length);
+      for (let track = 0; track < tracks; track += 1) {
+        const donorGrew = curr.donor[track] - prev.donor[track] > GROWTH_EPSILON;
+        const candidateGrew = curr.candidate[track] - prev.candidate[track] > GROWTH_EPSILON;
+        if (donorGrew === candidateGrew) continue;
+        const entry = {
+          type: 'grid-elasticity',
+          path: p,
+          field: 'gridTemplateColumns',
+          track,
+          at: curr.viewport,
+          between: `${prev.viewport}px → ${curr.viewport}px`,
+          donor: `${prev.donor[track]} → ${curr.donor[track]}`,
+          candidate: `${prev.candidate[track]} → ${curr.candidate[track]}`,
+          note: donorGrew ? 'donor track scales with the container, candidate track is frozen' : 'candidate track scales, donor track is fixed',
+        };
+        const ok = acceptedFor(accepted, curr.viewport, p, 'gridTemplateColumns');
+        if (!ok) elasticityIssues.push(entry);
+      }
+    }
+  }
+  if (elasticityIssues.length) {
+    const byViewport = new Map(results.map((r) => [r.viewport, r]));
+    for (const entry of elasticityIssues) {
+      const row = byViewport.get(entry.at) || results[results.length - 1];
+      row.issues.push(entry);
+      row.result = 'fail';
+    }
+  }
 
   const overall = {
     result: results.every((r) => r.result === 'pass') ? 'pass' : 'fail',
