@@ -52,15 +52,41 @@ function donorHashCollision(donorComponents, component) {
 }
 
 /**
- * An exclusion is self-serve only for machine-recognizable capture artifacts:
- * a custom-element tag (hyphenated, like `ya-tr-span`) injected by browser
- * extensions and translators, which no donor authored as page UI. Anything
- * else the agent wants to exclude needs an `approval_ref` into the contract's
- * externally verified approvals — a free-text reason is not a decision.
+ * Structural skeleton of a donor signature that survives the transfer: the
+ * candidate legitimately renames every class, but a card stays the tag it is
+ * and keeps having children. Without this check a map could point a donor
+ * card at any unrelated repeated element with a matching instance count.
  */
+function donorSkeleton(signature) {
+  const value = String(signature || '');
+  const tag = value.split(/[.\[]/)[0].toLowerCase();
+  return {
+    tag: /^[a-z][a-z0-9-]*$/.test(tag) ? tag : null,
+    hasChildren: value.includes('['),
+  };
+}
+
+/**
+ * An exclusion is self-serve only for machine-recognizable capture artifacts:
+ * elements injected by browser extensions and translators, which no donor
+ * authored as page UI. "Any hyphenated tag" would be wrong — donors legitimately
+ * ship Web Components like `<product-card>` — so only tags with a known
+ * injector prefix qualify. Anything else the agent wants to exclude needs an
+ * `approval_ref` into the contract's externally verified approvals — a
+ * free-text reason is not a decision.
+ */
+const CAPTURE_ARTIFACT_TAG_PREFIXES = [
+  'ya-tr-',              // Yandex translator spans
+  'grammarly-',          // Grammarly injection
+  'deepl-',              // DeepL extension
+  'immersive-translate', // Immersive Translate extension
+  'gt-',                 // Google Translate widgets
+  'lingvanex-',
+  'mate-translate-',
+];
 function isCaptureArtifactSignature(signature) {
-  const tag = String(signature).split(/[.\[]/)[0];
-  return tag.includes('-');
+  const tag = String(signature).split(/[.\[]/)[0].toLowerCase();
+  return CAPTURE_ARTIFACT_TAG_PREFIXES.some((prefix) => tag.startsWith(prefix));
 }
 
 /** Identifiers from the selector that the definition file must mention: classes, tags, attribute values. */
@@ -290,6 +316,23 @@ async function main() {
         issues.push({ component: name, issue: `instances diverge structurally (${signatures.size} distinct subtree shapes) — pasted copies drifted instead of one component`, shapes: [...signatures].slice(0, 3).map((s) => s.slice(0, 120)) });
         checks.push({ ...check, result: 'fail' });
         continue;
+      }
+      // The mapped nodes must BE the donor pattern, not merely be identical to
+      // each other: classes are renamed in a transfer, but the root tag and
+      // the presence of children survive it.
+      if (donor) {
+        const skeleton = donorSkeleton(donor.signature);
+        const candidate = donorSkeleton(instances[0].signature);
+        if (skeleton.tag && candidate.tag && skeleton.tag !== candidate.tag) {
+          issues.push({ component: name, issue: `mapped selector matches <${candidate.tag}> while the donor pattern is <${skeleton.tag}> — the map points at a different element than the donor component` });
+          checks.push({ ...check, result: 'fail' });
+          continue;
+        }
+        if (skeleton.hasChildren && !candidate.hasChildren) {
+          issues.push({ component: name, issue: 'donor pattern has child structure but the mapped candidate instances are leaf elements — the map points at a different element than the donor component' });
+          checks.push({ ...check, result: 'fail' });
+          continue;
+        }
       }
       // Content differs between instances by design; shared visual tokens must
       // not — unless the donor itself varies them intentionally (nth-child

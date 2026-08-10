@@ -85,7 +85,7 @@ def main() -> int:
     # a contract that omits them would let run_current_gates.py regenerate
     # everything else while a stale design-system report from an earlier donor
     # keeps passing the legacy check on its old "pass".
-    mandatory_reports = {"reports/design_system.json", "reports/component_reuse.json"}
+    mandatory_reports = {"reports/design_system.json", "reports/component_reuse.json", "reports/token_reuse.json"}
     supplied_reports = {value.replace("\\", "/") for value in args.expected_report}
     missing_reports = sorted(mandatory_reports - supplied_reports)
     if missing_reports:

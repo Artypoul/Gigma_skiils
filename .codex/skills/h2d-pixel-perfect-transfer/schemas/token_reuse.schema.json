@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "token_reuse",
+  "description": "Candidate-side proof that the donor's palette lives in one shared token layer: each significant donor color is checked against the candidate's sources, and literals scattered outside the token files fail the gate.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "no-donor-palette",
+        "not-tested"
+      ]
+    },
+    "min_donor_count": {
+      "type": "integer"
+    },
+    "max_scatter": {
+      "type": "integer"
+    },
+    "sources_scanned": {
+      "type": "integer"
+    },
+    "token_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "color",
+          "result"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "issues": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "result",
+    "checks",
+    "issues"
+  ]
+}

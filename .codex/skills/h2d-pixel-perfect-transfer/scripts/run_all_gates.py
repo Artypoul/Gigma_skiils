@@ -51,6 +51,7 @@ SCHEMA_BY_TEMPLATE = {
     'asset_provenance_template.json':'asset_provenance.schema.json',
     'design_system_template.json':'design_system.schema.json',
     'component_reuse_template.json':'component_reuse.schema.json',
+    'token_reuse_template.json':'token_reuse.schema.json',
     'transfer_contract_template.json':'transfer_contract.schema.json',
     'reference_bundle_template.json':'reference_bundle.schema.json',
     'current_evidence_template.json':'current_evidence.schema.json',
@@ -279,6 +280,7 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         ('font_manifest.json','font_manifest.schema.json',{'font-exact','font-substituted'}),
         ('design_system.json','design_system.schema.json',{'pass','not-tested'}),
         ('component_reuse.json','component_reuse.schema.json',{'pass','no-repeated-patterns'}),
+        ('token_reuse.json','token_reuse.schema.json',{'pass','no-donor-palette'}),
         ('rect_targets.json','rect_targets.schema.json',None),
         ('asset_map.json','asset_map.schema.json',None),
         ('asset_bitmap_audit.json','asset_bitmap_audit.schema.json',{'pass','manual-review'}),
@@ -322,6 +324,7 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
     font_data = None
     design_system_data = None
     component_reuse_data = None
+    token_reuse_data = None
     for fn, schema, allowed in required:
         c,d=check_report(reports/fn,schema,allowed); checks.append(c)
         if fn == 'h2d_unpack_report.json': unpack_data = d
@@ -333,8 +336,10 @@ def check_output(out: Path, behavior_required_arg: str, liveness_required_arg: s
         if fn == 'font_manifest.json': font_data = d
         if fn == 'design_system.json': design_system_data = d
         if fn == 'component_reuse.json': component_reuse_data = d
+        if fn == 'token_reuse.json': token_reuse_data = d
     add_generator_provenance_check(checks, 'design_system.json', design_system_data, 'extract_design_system.py')
     add_generator_provenance_check(checks, 'component_reuse.json', component_reuse_data, 'validate_component_reuse.js')
+    add_generator_provenance_check(checks, 'token_reuse.json', token_reuse_data, 'validate_token_reuse.py')
     if liveness_required and liveness_inventory_data:
         webgl_surfaces = [row for row in (liveness_inventory_data.get('surfaces') or []) if isinstance(row, dict) and 'webgl' in str(row.get('kind', '')).lower()]
         has_webgl = bool(webgl_surfaces)

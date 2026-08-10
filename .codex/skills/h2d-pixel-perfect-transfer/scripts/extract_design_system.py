@@ -344,7 +344,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--decoded", type=Path, required=True, help="source/h2d_decoded.json from the unpack step")
     ap.add_argument("--top", type=int, default=24, help="Max entries per token/layout table")
-    ap.add_argument("--min-component-repeats", type=int, default=3)
+    # Bounded on purpose: a huge threshold would empty the component inventory,
+    # and an empty inventory turns the reuse gate into an automatic
+    # `no-repeated-patterns` pass. The threshold also travels in the report so
+    # downstream gates can see what the inventory was built with.
+    ap.add_argument("--min-component-repeats", type=int, default=3, choices=range(2, 6), metavar="[2-5]")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
@@ -390,6 +394,7 @@ def main() -> int:
     report = {
         "result": result,
         "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "min_component_repeats": args.min_component_repeats,
         "viewports": sorted(per_viewport, reverse=True),
         "nodes_seen": len(all_nodes),
         "nodes_with_styles": styled,

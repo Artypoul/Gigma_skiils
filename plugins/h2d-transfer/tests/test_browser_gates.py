@@ -120,7 +120,7 @@ class BrowserGateTests(unittest.TestCase):
             rejected = subprocess.run(base_contract_args + ["--out", str(contract)], cwd=SKILL, capture_output=True, text=True)
             self.assertEqual(rejected.returncode, 2)
             self.assertIn("design_system.json", rejected.stderr + rejected.stdout)
-            subprocess.run(base_contract_args + ["--expected-report", "reports/design_system.json", "--expected-report", "reports/component_reuse.json", "--out", str(contract)], cwd=SKILL, check=True)
+            subprocess.run(base_contract_args + ["--expected-report", "reports/design_system.json", "--expected-report", "reports/component_reuse.json", "--expected-report", "reports/token_reuse.json", "--out", str(contract)], cwd=SKILL, check=True)
             sys.path.insert(0, str(SKILL / "scripts"))
             from evidence_integrity import verify_contract
             verified = verify_contract(contract, output)

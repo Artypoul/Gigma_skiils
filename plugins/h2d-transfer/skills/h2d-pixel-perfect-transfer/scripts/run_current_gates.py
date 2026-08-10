@@ -31,6 +31,7 @@ SPECIALIST_SCRIPTS = {
 SYSTEM_GENERATOR_SCRIPTS = {
     "reports/design_system.json": "extract_design_system.py",
     "reports/component_reuse.json": "validate_component_reuse.js",
+    "reports/token_reuse.json": "validate_token_reuse.py",
 }
 
 
