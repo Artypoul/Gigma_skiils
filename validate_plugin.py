@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parent
 PLUGIN_DIR = ROOT / "plugins"
 CODEX_SKILLS = ROOT / ".codex" / "skills"
 CODEX_REFERENCE = ROOT / ".codex" / "reference"
+IGNORED_GENERATED_DIRS = {"__pycache__"}
+IGNORED_GENERATED_SUFFIXES = {".pyc", ".pyo"}
 
 
 errors: list[str] = []
@@ -57,6 +59,13 @@ def file_hash(path: Path) -> str:
 
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
+
+
+def is_generated_cache(path: Path, base: Path) -> bool:
+    relative = path.relative_to(base)
+    return any(part in IGNORED_GENERATED_DIRS for part in relative.parts) or (
+        path.suffix.lower() in IGNORED_GENERATED_SUFFIXES
+    )
 
 
 def validate_marketplaces(plugin_names: set[str]) -> None:
@@ -272,6 +281,8 @@ def collect_canonical_files(plugin_paths: list[Path], child: str) -> dict[Path, 
         for path in base.rglob("*"):
             if not path.is_file():
                 continue
+            if is_generated_cache(path, base):
+                continue
             relative = path.relative_to(base)
             if relative in result:
                 fail(f"mirror path conflict for {child}/{relative.as_posix()}")
@@ -300,6 +311,8 @@ def validate_codex_mirror(plugin_paths: list[Path]) -> None:
         expected = {relative for relative in canonical}
         for mirror_path in mirror_root.rglob("*"):
             if not mirror_path.is_file():
+                continue
+            if is_generated_cache(mirror_path, mirror_root):
                 continue
             relative = mirror_path.relative_to(mirror_root)
             if relative not in expected:

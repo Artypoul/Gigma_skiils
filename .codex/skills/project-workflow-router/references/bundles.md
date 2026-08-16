@@ -50,9 +50,11 @@ For review/check-up requests, stop after the report. Implement only when Art ask
 Use for HTTP API design or review where the change carries domain risk: contracts, invariants, access rights, money, tariffs, limits, transactions, concurrency, idempotency, migrations, events or outbox.
 
 Chain:
-`project-context-bootstrap` -> `ddd-api-standard` -> implementation -> `ddd-api-standard` review pass before the production gate.
+`project-context-bootstrap` -> `ddd-api-standard` when available -> implementation -> `ddd-api-standard` review pass before the production gate.
 
 `ddd-api-standard` lives in the `backend-workflow` plugin and also serves the `backend-plan` slot that `feature` looks for. It reviews and designs by default and does not edit code until Art moves the task to implementation. For simple CRUD without domain risk it scales itself down — do not force tactical DDD artifacts.
+
+If `backend-workflow` is not installed, use a project-local backend plan/review skill when one exists and report the missing specialist capability. Do not pretend that `ddd-api-standard` ran, and do not block a low-risk task merely because the optional plugin is absent.
 
 ## data-flow-change
 
