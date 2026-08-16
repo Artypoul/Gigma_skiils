@@ -1,0 +1,43 @@
+{
+  "name": "backend-workflow",
+  "version": "0.1.0+codex.20260816130522",
+  "description": "Generic backend engineering skills for designing and reviewing HTTP APIs with domain-driven design on FastAPI, SQLAlchemy, PostgreSQL, and Alembic: bounded contexts, aggregates, transaction boundaries, concurrency and isolation, idempotency contracts, migrations, events and transactional outbox, plus an evidence-based production readiness gate.",
+  "author": {
+    "name": "Artypoul"
+  },
+  "license": "MIT",
+  "keywords": [
+    "backend",
+    "api",
+    "ddd",
+    "fastapi",
+    "sqlalchemy",
+    "postgresql",
+    "alembic",
+    "architecture",
+    "review",
+    "transactions",
+    "concurrency",
+    "idempotency",
+    "migrations",
+    "outbox"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Backend Workflow",
+    "shortDescription": "DDD API design and review",
+    "longDescription": "Generic backend workflow skills for HTTP API work that carries real domain risk: recovering actors, states and invariants before tables, drawing bounded contexts and aggregate boundaries, owning transactions in the application layer, protecting invariants with both the model and PostgreSQL constraints, designing idempotency and concurrency contracts, reviewing migrations and outbox delivery, and gating production readiness on evidence instead of plausible reasoning.",
+    "developerName": "Artypoul",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use $ddd-api-standard to design a new API or service before writing tables and endpoints.",
+      "Use $ddd-api-standard to review an existing API for invariants, authorization, transactions, concurrency, and contract compatibility.",
+      "Use $ddd-api-standard when changing an API contract, business rule, access rights, money, limits, or the data schema.",
+      "Use $ddd-api-standard to check idempotency, migrations, events, and outbox delivery before calling a service production ready."
+    ]
+  }
+}
