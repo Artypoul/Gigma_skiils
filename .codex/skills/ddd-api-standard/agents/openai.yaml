@@ -1,0 +1,4 @@
+interface:
+  display_name: "DDD API Standard"
+  short_description: "Design and review APIs by evidence"
+  default_prompt: "Use $ddd-api-standard to design or review an HTTP API: bounded contexts, aggregates, invariants, transactions, concurrency, idempotency, migrations, and an evidence-based production gate."

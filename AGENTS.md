@@ -4,12 +4,14 @@
 
 - **Claude Code** — через маркетплейс `.claude-plugin/marketplace.json` → плагины в `plugins/`.
 - **Codex** — двумя путями:
-  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`, `frontend-workflow`, `h2d-transfer`, `site-sense`, `codex-toolkit`, `first-pass-quality`). Манифесты проходят `validate_plugin.py`.
+  1. **Codex-маркетплейс**: `.agents/plugins/marketplace.json` + `plugins/<X>/.codex-plugin/plugin.json`. Подключить командами: `codex plugin marketplace add <путь-к-репо>` → `codex plugin add <plugin>@gigma-skills` (плагины: `gigma-erp`, `gigma-consultant`, `vps-support`, `glaim`, `development-workflow`, `frontend-workflow`, `backend-workflow`, `h2d-transfer`, `site-sense`, `codex-toolkit`, `first-pass-quality`). Манифесты проходят `validate_plugin.py`.
   2. **Зеркало** `.codex/skills/` — копии скилов, видны когда Codex запущен в этом репо (фолбэк без установки).
 
 Скилы (`SKILL.md`) общие для Claude и Codex. ⚠ Frontmatter `description`/`when_to_use` со значением, содержащим `: ` (двоеточие-пробел), **обязательно в кавычках** — иначе строгий YAML-парсер Codex отвергает скил.
 
-**Канон — `plugins/`.** `.codex/skills/` и `.codex/reference/` — зеркало; синхронизировать одной командой: **`bash sync-codex.sh`** (пересобирает `.codex` из `plugins/`).
+**Канон — `plugins/`.** `.codex/skills/` и `.codex/reference/` — зеркало; синхронизировать одной командой: **`bash sync-codex.sh`** (пересобирает `.codex` из `plugins/`). Личную папку скилов Claude обновляет отдельная команда **`bash sync-claude.sh`**: ни зеркало, ни установленные плагины её не покрывают.
+
+**Версии плагинов.** При изменении содержимого скила поднимать `version` в обоих манифестах плагина, держа значения в лок-степе (`.claude-plugin/plugin.json` и `.codex-plugin/plugin.json`). Кэш установленного плагина ключуется строкой версии: без бампа правка не доезжает до тех, у кого плагин уже стоит, а `validate_plugin.py` такую рассинхронизацию не ловит.
 
 ## PR / monster review
 
@@ -63,6 +65,13 @@ Generic frontend engineering skills for reusable project work, not tied to Gigma
 - Review: **`rtk-query-review`** — проверяет RTK Query cache tags, invalidation, transforms, races, auth/reauth и type safety.
 - Review: **`affordance-review`** — ловит скрытые UI-регрессии в keyboard/pointer affordance, cleanup, async hydration, conditional forms и form-save orchestration.
 - Финализация: **`pr-finalize`** — собирает repo-aware PR finalization flow: checks, required docs/history, Summary/Test plan и guardrails перед публикацией.
+
+### Backend workflow
+Generic backend engineering skills for API work with real domain risk, not tied to Gigma-only business logic.
+- Вход: **`ddd-api-standard`** — стандарт проектирования и ревью HTTP API (FastAPI, SQLAlchemy, PostgreSQL, Alembic): gates от evidence до verification, bounded contexts и aggregate boundaries, транзакции и конкурентность, idempotency, миграции, события и outbox, production quality gate. Объём работы скил выбирает по режиму (локальная правка / ревью / новый сервис) и по умолчанию не правит код.
+- Нормативный текст: `.codex/skills/ddd-api-standard/references/standard.md`, канон — `plugins/backend-workflow/skills/ddd-api-standard/references/standard.md`. Этот файл и есть источник истины стандарта: версия и дата проверки живут только в его шапке и нигде не дублируются.
+- Backend/API-задачи — домен, инварианты, транзакции, контракты, миграции — ведёт этот скил; он же закрывает слот `backend-plan`, который ищет `feature`.
+- Главное правило: статус `confirmed` только по доказательству из источника истины, `production_ready` объявляет человек-владелец. Формулировки — в самом скиле, здесь не дублируются.
 
 ### First-pass quality
 
