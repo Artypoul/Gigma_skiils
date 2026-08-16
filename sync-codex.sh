@@ -14,6 +14,11 @@ for plugin in plugins/*/; do
   [ -d "${plugin}reference" ] && cp -r "${plugin}reference/." .codex/reference/
 done
 
+# Python может создать служебные кэши прямо рядом со скриптами скилов.
+# Они не являются частью переносимого канона и не должны попадать в зеркало.
+find .codex -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+find .codex -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+
 skills=$(find .codex/skills -name SKILL.md | wc -l | tr -d ' ')
 refs=$(find .codex/reference -type f | wc -l | tr -d ' ')
 echo "Codex sync OK: ${skills} skills, ${refs} reference files."

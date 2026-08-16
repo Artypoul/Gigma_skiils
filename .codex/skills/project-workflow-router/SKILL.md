@@ -27,7 +27,8 @@ Use this skill to decide which workflow chain to run. It is a router, not a repl
 | "ревью", "чек ап", "ошибки агента", "посмотри PR" | `project-context-bootstrap` -> code-review stance -> local review skills -> findings-first report |
 | "смерджил", "merged", "handoff", "чини в PR", "prod ready", deploy state | `project-context-bootstrap` -> `development-handoff` when available |
 | Frontend/UI/forms/responsive/cabinet changes | `project-context-bootstrap` -> local `frontend-plan` or equivalent -> local `frontend-safety-check`/`affordance-review` |
-| Auth/payment/subscription/webhook/user flow | `project-context-bootstrap` -> local flow/data review skills -> `feature` if implementation is needed |
+| Auth/payment/subscription/webhook/user flow | `project-context-bootstrap` -> `ddd-api-standard` when installed and the change touches API contracts, invariants, access rights, money, limits or the data schema -> local flow/data review skills -> `feature` if implementation is needed |
+| Backend/API design or review: domain model, bounded contexts, aggregates, transactions, concurrency, idempotency, migrations, events/outbox | `project-context-bootstrap` -> `ddd-api-standard` when available, otherwise a project-local backend plan/review skill with the missing capability reported -> `feature` if implementation is needed |
 | Website meanings, landing, offer, CTA, page copy | `project-context-bootstrap` -> project-specific context skill if present -> website/copy skill |
 | Third-party system prompt, prompt leak, Fable/Claude/Gemini/Codex prompt transfer, agent instruction audit | `project-context-bootstrap` -> `prompt-architecture-port` -> implementation workflow if edits are explicitly requested |
 | Current/latest/verify/research/recommendation/source-backed question | `research-with-evidence` -> current source reading -> cited answer or bounded uncertainty |
