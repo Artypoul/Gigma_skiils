@@ -45,9 +45,18 @@ Chain:
 
 For review/check-up requests, stop after the report. Implement only when Art asks to change code.
 
+## backend-api-change
+
+Use for HTTP API design or review where the change carries domain risk: contracts, invariants, access rights, money, tariffs, limits, transactions, concurrency, idempotency, migrations, events or outbox.
+
+Chain:
+`project-context-bootstrap` -> `ddd-api-standard` -> implementation -> `ddd-api-standard` review pass before the production gate.
+
+`ddd-api-standard` lives in the `backend-workflow` plugin and also serves the `backend-plan` slot that `feature` looks for. It reviews and designs by default and does not edit code until Art moves the task to implementation. For simple CRUD without domain risk it scales itself down — do not force tactical DDD artifacts.
+
 ## data-flow-change
 
-Use for auth, payment, subscription, webhooks, profile, or load/action changes.
+Use for auth, payment, subscription, webhooks, profile, or load/action changes. When the change touches API contracts, invariants, money, limits or the schema, take `ddd-api-standard` first.
 
 Chain:
 `project-context-bootstrap` -> local `flow-debug-checklist` -> local `data-load-review` -> `feature` if implementation is needed.
