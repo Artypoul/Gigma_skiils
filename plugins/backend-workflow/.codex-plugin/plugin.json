@@ -1,6 +1,6 @@
 {
   "name": "backend-workflow",
-  "version": "0.1.0+codex.20260816130522",
+  "version": "0.1.1+codex.20260816140608",
   "description": "Generic backend engineering skills for designing and reviewing HTTP APIs with domain-driven design on FastAPI, SQLAlchemy, PostgreSQL, and Alembic: bounded contexts, aggregates, transaction boundaries, concurrency and isolation, idempotency contracts, migrations, events and transactional outbox, plus an evidence-based production readiness gate.",
   "author": {
     "name": "Artypoul"
@@ -35,9 +35,7 @@
     ],
     "defaultPrompt": [
       "Use $ddd-api-standard to design a new API or service before writing tables and endpoints.",
-      "Use $ddd-api-standard to review an existing API for invariants, authorization, transactions, concurrency, and contract compatibility.",
-      "Use $ddd-api-standard when changing an API contract, business rule, access rights, money, limits, or the data schema.",
-      "Use $ddd-api-standard to check idempotency, migrations, events, and outbox delivery before calling a service production ready."
+      "Use $ddd-api-standard to review an existing API for invariants, authorization, transactions, concurrency, idempotency, migrations, and contract compatibility."
     ]
   }
 }
